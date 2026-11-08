@@ -6,15 +6,29 @@ Two runs per prompt, same engine, same sampling, same model:
           through /v1/chat/completions.
 
 Before each run the engine is left holding the system prompt and an unrelated message
-(the state after a previous turn), so OFF and ON start from the same cache.
+(the state after a previous turn), so OFF and ON start from the same cache.  That reset only
+works where the cache is per slot, as llama.cpp's is: on an engine that keeps several prefixes
+(Ollama, vLLM, SGLang) nothing evicts the message the OFF run just read, and the ON run would
+find it cached, drafts or no drafts.  There each run gets a short tag of its own in the message
+(`--unique-tag`, on by itself when the probe says the cache is shared), so the two runs share no
+prefix.  The two runs then ask slightly different questions: the texts are no longer comparable
+word for word, and a final number that differs is the model answering two prompts, not the proxy
+(`unique_tag` in the summary says which rules applied).
 
 Read-ahead never changes the prompt, so the final answers must agree; the wording can
 differ when llama.cpp computes a warm prefix in other batches (see engine_stability).
-A different final number makes the run fail loudly.
+A different final number makes the run fail loudly -- without a tag, that is: with one the
+two runs are two prompts, and the counts are reported instead.
+
+Any engine the proxy has an adapter for: `--engine` (default `auto`, which asks the server).
+`cache_prompt` is llama-server's own option and is sent only there, so the cold/warm control
+("engine_stability") is a real cold prefill on llama.cpp and three identical requests elsewhere
+(`cold_forced` in the summary says which).
 
 Example:
     python -m mafdet.proxy.bench --url http://127.0.0.1:8081 --model Qwen3-4B-Q4_K_M \\
         --prompts 24 --typing-cps 12 --append-log research/LOG.md
+    python -m mafdet.proxy.bench --url http://127.0.0.1:11434 --model qwen3:4b --prompts 12
 """
 from __future__ import annotations
 
@@ -26,8 +40,9 @@ import statistics
 import sys
 import threading
 import time
+import uuid
 
-from .adapters import make
+from .adapters import NAMES, make
 from .probe import probe
 from .profile import EngineProfile
 from .server import ProxyState, make_server
@@ -73,10 +88,14 @@ RESET = "Reply with OK."
 # HTTP helpers (http.client, like the rest of the project)
 # --------------------------------------------------------------------------------------
 def _chat_ttft(host: str, port: int, body: dict, *, max_tokens: int, timeout: float = 600.0,
-               cache_prompt: bool = True):
-    """Send a streaming chat request, return (seconds to first token, full text, finish_reason)."""
-    payload = dict(body, stream=True, max_tokens=max_tokens, temperature=0.0, top_p=1.0,
-                   cache_prompt=cache_prompt)
+               cache_prompt: bool | None = True):
+    """Send a streaming chat request, return (seconds to first token, full text, finish_reason).
+
+    `cache_prompt` None leaves the field out: it is llama-server's own, and another engine would
+    either ignore it or refuse the request."""
+    payload = dict(body, stream=True, max_tokens=max_tokens, temperature=0.0, top_p=1.0)
+    if cache_prompt is not None:
+        payload["cache_prompt"] = cache_prompt
     conn = http.client.HTTPConnection(host, port, timeout=timeout)
     # The clock starts at Enter, before the request goes out: a proxy that holds the
     # request back (a warm still running) sends its headers late, and that wait counts.
@@ -107,7 +126,7 @@ def _chat_ttft(host: str, port: int, body: dict, *, max_tokens: int, timeout: fl
                 continue
             delta = ((chunk.get("choices") or [{}])[0].get("delta") or {})
             piece = delta.get("content") or ""
-            think = delta.get("reasoning_content") or ""
+            think = delta.get("reasoning_content") or delta.get("reasoning") or ""
             # A thinking model streams its reasoning before the answer: the first token
             # of either kind is when the wait after Enter ends.
             if (piece or think) and first is None:
@@ -162,8 +181,10 @@ def _type(proxy_host: str, proxy_port: int, conversation_id: str, model: str, te
 # --------------------------------------------------------------------------------------
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="mafdet.proxy.bench", description=__doc__)
-    ap.add_argument("--url", required=True, help="llama-server base URL")
+    ap.add_argument("--url", required=True, help="the engine's base URL")
     ap.add_argument("--model", required=True)
+    ap.add_argument("--engine", default="auto", choices=list(NAMES),
+                    help="which engine is at --url (default: %(default)s, asks the server)")
     ap.add_argument("--prompts", type=int, default=24, help="typed prompts (max 24)")
     ap.add_argument("--typing-cps", type=float, default=12.0, help="characters per second")
     ap.add_argument("--max-tokens", type=int, default=96)
@@ -172,6 +193,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--settle", type=float, default=0.35, help="pause before committing (a human's last key)")
     ap.add_argument("--append-log", default="", help="append a markdown block to this file")
     ap.add_argument("--json-out", default="", help="write the full JSON report here")
+    ap.add_argument("--unique-tag", default="auto", choices=["auto", "on", "off"],
+                    help="give each run its own tag in the message, so that on an engine with a shared "
+                         "cache the OFF run does not leave the prompt cached for the ON run "
+                         "(default: %(default)s, on where the probe found a shared cache)")
     ap.add_argument("--thinking", action="store_true",
                     help="leave the model's thinking on (default: ask the template to skip it, "
                          "so the first token is the first word of the answer)")
@@ -179,14 +204,34 @@ def main(argv: list[str] | None = None) -> int:
 
     host, _, port_s = args.url.replace("http://", "").partition(":")
     engine_host, engine_port = host, int(port_s or 8080)
-    engine = make("llama", args.url)
-    profile = EngineProfile.load(args.url, args.model) or probe(engine, url=args.url, model=args.model)
+    engine = make(args.engine, args.url, model=args.model)
+    llama = engine.dialect == "llama"
+    # llama-server's own option, and the only way to force a cold prefill; left out elsewhere.
+    cache_on = True if llama else None
+    # What tells the template to skip the thinking block, so the first token is the first word of
+    # the answer: the template's option on llama-server and vLLM, `reasoning_effort` on Ollama
+    # (which ignores chat_template_kwargs).  Measured on Ollama 0.40.15 with qwen3:4b.
+    think_off: dict = {"chat_template_kwargs": {"enable_thinking": False}}
+    if getattr(engine, "flavor", "") == "ollama":
+        think_off["reasoning_effort"] = "none"
+    profile = EngineProfile.load(args.url, args.model) or probe(
+        engine, url=args.url, model=args.model, version=str(getattr(engine, "version", "") or ""))
     profile.save()
     state = ProxyState(engine, profile, args.model)
     server = make_server(state, "127.0.0.1", args.proxy_port)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     print(f"proxy up on 127.0.0.1:{args.proxy_port}, tier {profile.tier} "
           f"({profile.spelling}, channel {profile.channel})", file=sys.stderr)
+
+    # A shared cache cannot be reset: without a tag per run the ON column would only show that
+    # the OFF run read the same prompt a moment earlier.
+    tagging = args.unique_tag == "on" or (args.unique_tag == "auto" and profile.caps.shared_cache)
+    if tagging:
+        print("unique tag per run: the cache is shared, so OFF and ON ask slightly different "
+              "questions and their texts are not comparable", file=sys.stderr)
+
+    def tag(text: str) -> str:
+        return f"[note {uuid.uuid4().hex[:6]}] {text}" if tagging else text
 
     typed = PROBLEMS[: max(1, min(args.prompts, len(PROBLEMS)))]
     results = {"typed": [], "long": [], "exactness": []}
@@ -197,15 +242,20 @@ def main(argv: list[str] | None = None) -> int:
                 "messages": [{"role": "system", "content": SYSTEM},
                              {"role": "user", "content": RESET}]}
         if not args.thinking:
-            body["chat_template_kwargs"] = {"enable_thinking": False}
-        _chat_ttft(engine_host, engine_port, body, max_tokens=1)
+            body.update(think_off)
+        _chat_ttft(engine_host, engine_port, body, max_tokens=1, cache_prompt=cache_on)
 
     def run_one(prompt: str, conversation_id: str, typed_mode: bool) -> dict:
-        body = {"model": args.model,
-                "messages": [{"role": "system", "content": SYSTEM},
-                             {"role": "user", "content": prompt}]}
-        if not args.thinking:
-            body["chat_template_kwargs"] = {"enable_thinking": False}
+        def message(text: str) -> dict:
+            body = {"model": args.model,
+                    "messages": [{"role": "system", "content": SYSTEM},
+                                 {"role": "user", "content": text}]}
+            if not args.thinking:
+                body.update(think_off)
+            return body
+
+        off_body, on_body = message(tag(prompt)), message(tag(prompt))
+        body = off_body
         # Both runs start from the same cache: the system prompt held, the message not, as
         # after the previous turn of a chat.  Without this the ON run would find the whole
         # prompt cached by the OFF run just before it, drafts or no drafts.
@@ -216,22 +266,25 @@ def main(argv: list[str] | None = None) -> int:
         # little work, so sending OFF right after the reset would flatter it.
         typing = 0.0
         if typed_mode:
-            posts = -(-len(prompt) // 4)              # one draft per 4 characters, as _type
+            posts = -(-len(on_body["messages"][-1]["content"]) // 4)   # one draft per 4 characters, as _type
             typing = max(0, posts - 1) * 4 / max(args.typing_cps, 0.1)
         time.sleep(typing + args.settle)
         # OFF: straight at the engine.
-        off_ttft, off_text, off_finish = _chat_ttft(engine_host, engine_port, body, max_tokens=args.max_tokens)
+        off_ttft, off_text, off_finish = _chat_ttft(engine_host, engine_port, off_body,
+                                                   max_tokens=args.max_tokens, cache_prompt=cache_on)
         reset()
         # ON: drafts first (typed, or one paste), then commit through the proxy.
+        typed_text = on_body["messages"][-1]["content"]
         if typed_mode:
-            _type("127.0.0.1", args.proxy_port, conversation_id, args.model, prompt, args.typing_cps)
+            _type("127.0.0.1", args.proxy_port, conversation_id, args.model, typed_text, args.typing_cps)
         else:
             _post_json("127.0.0.1", args.proxy_port, "/v1/drafts",
-                       {"conversation_id": conversation_id, "model": args.model, "messages": body["messages"]})
+                       {"conversation_id": conversation_id, "model": args.model,
+                        "messages": on_body["messages"]})
         time.sleep(args.settle)
         on_ttft, on_text, on_finish = _chat_ttft("127.0.0.1", args.proxy_port,
-                                                 dict(body, conversation_id=conversation_id),
-                                                 max_tokens=args.max_tokens)
+                                                 dict(on_body, conversation_id=conversation_id),
+                                                 max_tokens=args.max_tokens, cache_prompt=cache_on)
         return {"off_ttft": off_ttft, "on_ttft": on_ttft,
                 "identical": off_text == on_text,
                 "same_answer": _answer(off_text) == _answer(on_text),
@@ -275,13 +328,14 @@ def main(argv: list[str] | None = None) -> int:
                 "messages": [{"role": "system", "content": SYSTEM},
                              {"role": "user", "content": prompt}]}
         if not args.thinking:
-            body["chat_template_kwargs"] = {"enable_thinking": False}
+            body.update(think_off)
+        cold_flag = False if llama else None       # only llama-server can be told not to reuse
         _, cold1, _f1 = _chat_ttft(engine_host, engine_port, body, max_tokens=args.max_tokens,
-                                   cache_prompt=False)
+                                   cache_prompt=cold_flag)
         _, cold2, _f2 = _chat_ttft(engine_host, engine_port, body, max_tokens=args.max_tokens,
-                                   cache_prompt=False)
+                                   cache_prompt=cold_flag)
         _, warm, _f3 = _chat_ttft(engine_host, engine_port, body, max_tokens=args.max_tokens,
-                                  cache_prompt=True)
+                                  cache_prompt=cache_on)
         return {"cold_vs_cold_identical": cold1 == cold2,
                 "cold_vs_warm_identical": cold1 == warm,
                 "cold_vs_warm_same_answer": _answer(cold1) == _answer(warm)}
@@ -292,7 +346,9 @@ def main(argv: list[str] | None = None) -> int:
         for key in audit:
             audit[key] += sess.get(key, 0) or 0
     summary = {"typed": summarise(results["typed"]), "long": summarise(results["long"]),
-               "engine_stability": controls, "audit": audit,
+               "engine_stability": controls, "cold_forced": llama, "unique_tag": tagging,
+               "audit": audit,
+               "engine": f"{profile.name} {profile.version}".strip(),
                "profile": profile.to_dict(), "typing_cps": args.typing_cps,
                "thinking": args.thinking,
                "max_tokens": args.max_tokens, "model": args.model, "url": args.url,
@@ -302,12 +358,19 @@ def main(argv: list[str] | None = None) -> int:
     # A reply cut at max_tokens has no final answer to compare; count it as inconclusive
     # rather than as a failure of the proxy.
     comparable = [r for r in rows if r.get("off_finish") != "length" and r.get("on_finish") != "length"]
-    ok = all(r["same_answer"] for r in comparable)
+    # With a tag the two runs ask different questions, so a different number is the model's, not
+    # the proxy's: the counts are still reported, but they cannot fail the run.
+    ok = tagging or all(r["same_answer"] for r in comparable)
     identical = sum(1 for r in rows if r["identical"])
     print(json.dumps(summary, indent=1))
     if len(comparable) < len(rows):
         print(f"NOTE: {len(rows) - len(comparable)}/{len(rows)} rows hit max_tokens in at least "
               f"one run (inconclusive on the final answer).", file=sys.stderr)
+    if tagging:
+        print(f"NOTE: a tag per run (shared cache): {sum(1 for r in comparable if r['same_answer'])}"
+              f"/{len(comparable)} comparable rows still agree on the final number, but the two runs "
+              f"asked different questions -- read it as the model's spread, not the proxy's.",
+              file=sys.stderr)
     if identical < len(rows):
         print(f"NOTE: {len(rows) - identical}/{len(rows)} answers differ in wording but "
               f"{sum(1 for r in comparable if r['same_answer'])}/{len(comparable)} comparable rows "
@@ -326,12 +389,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.append_log:
         t, l = summary.get("typed", {}), summary.get("long", {})
         block = (f"\n### proxy read-ahead -- {summary['when']}\n\n"
-                 f"- engine: llama.cpp via `mafdet.proxy` (tier {profile.tier}, {profile.spelling}, "
+                 f"- engine: {summary['engine']} via `mafdet.proxy` (tier {profile.tier}, {profile.spelling}, "
                  f"channel {profile.channel})\n"
                  f"- model: `{args.model}`, `{args.url}`, greedy (`temperature 0`), max_tokens {args.max_tokens}\n"
                  f"- typing: {args.typing_cps} chars/s, one draft every 4 characters, "
-                 f"{args.settle*1000:.0f} ms settle before Enter\n"
-                 f"- typed prompts: n={t.get('n', 0)}, Enter->first token: **{t.get('off_mean_ms', 'n/a')} ms -> "
+                 f"{args.settle*1000:.0f} ms settle before Enter"
+                 + (", a tag per run (the cache is shared: OFF cannot warm ON)\n" if tagging else "\n")
+                 + f"- typed prompts: n={t.get('n', 0)}, Enter->first token: **{t.get('off_mean_ms', 'n/a')} ms -> "
                  f"{t.get('on_mean_ms', 'n/a')} ms** (median {t.get('off_median_ms', 'n/a')} -> "
                  f"{t.get('on_median_ms', 'n/a')} ms), identical answers {t.get('identical', 'n/a')}/{t.get('n', 0)}\n")
         if l:
@@ -339,7 +403,7 @@ def main(argv: list[str] | None = None) -> int:
                       f"**{l.get('off_mean_ms', 'n/a')} ms -> {l.get('on_mean_ms', 'n/a')} ms**, "
                       f"identical answers {l.get('identical', 'n/a')}/{l.get('n', 0)}\n")
         block += ("- run with `python -m mafdet.proxy.bench --url <engine> --model <id> "
-                  f"--prompts {t.get('n', 0)} --typing-cps {args.typing_cps}"
+                  f"--engine {args.engine} --prompts {t.get('n', 0)} --typing-cps {args.typing_cps}"
                   + (f" --long {l.get('n', 0)}" if l else "") + "`\n")
         with open(args.append_log, "a", encoding="utf-8") as f:
             f.write(block)
