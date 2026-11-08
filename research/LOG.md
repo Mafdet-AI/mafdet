@@ -114,15 +114,18 @@ costs 2.4 decoding steps. To speed up the 14B, take work away from the CPU.
    probe with two ways to read ahead (token ids the proxy renders, or the draft through the engine's chat
    endpoint with one token of answer when the engine gives no ids) and four more questions (shared cache, block
    slack, tokenizer agreement, raw ids). Checked only on fakes (`tests/proxy_fake_servers.py`, 18 tests). What
-   each engine is expected to do, and the open rows: PROXY.md, "More engines". Next there: run it against a real
-   Ollama (the cheapest to set up: `OLLAMA_NUM_PARALLEL=2 ollama serve`, `mafdet proxy --url http://127.0.0.1:11434
-   --model qwen3:4b`, then Open WebUI with the user script) and against vLLM with
+   each engine is expected to do, and the open rows: PROXY.md, "More engines". Run against a real Ollama
+   on 2026-11-08 ("Done and measured"): its row is filled (tier T1, channel usage, the drafts through its
+   OpenAI route), the probe's time channel and `bench.py` fixed on the way. Next there: Open WebUI with the
+   user script on Ollama, and vLLM with
    `--enable-prompt-tokens-details`; what to check first: the `engine` line (tier, channel, cache) against the
    table, then Enter → first token with `research/proxy_openwebui.py` if the front end is Open WebUI. Things
-   the code assumes and a real run must confirm: Ollama's `prompt_eval_count` counts the whole prompt (the
-   Go runner's `numPromptInputs`), so only `prompt_eval_duration` shows the reuse; vLLM's `/tokenize` accepts
-   `tools` and `chat_template_kwargs` with the messages; Ollama's slot choice (the slot the prompt extends,
-   else the least recently used one, with the prefix copied) keeps the conversation with two slots.
+   the code assumes and a real run must confirm: on Ollama, confirmed and settled on 2026-11-08 --
+   `prompt_eval_count` does count the whole prompt, so the native route shows the reuse only in
+   `prompt_eval_duration`, and the drafts go through its OpenAI route instead, which reports
+   `cached_tokens` exactly; the prefix survives an unrelated prompt even on one slot (16k context), so the
+   second slot is about queueing, not eviction. Left for vLLM: whether its `/tokenize` accepts `tools` and
+   `chat_template_kwargs` with the messages.
 
 6. Other ideas discussed, not started:
    - **past reasoning out of the history: done (2026-11-04, "Done and measured").** Left: the same conversations
@@ -153,6 +156,56 @@ costs 2.4 decoding steps. To speed up the 14B, take work away from the CPU.
    - The README: a "RTX 3060 12 GB" row (4B, 14B, 30B-A3B) when the user wants these numbers there.
 
 ## Done and measured
+
+- **2026-11-08 · The proxy in front of a real Ollama (roadmap step 4, first row of the table filled):
+  `tier T1, channel usage`, Enter → first token on a pasted prompt of ~1,700 tokens
+  250 → 48 ms, on short typed messages 39 → 27 ms
+  mean (median 27 → 24).** Ollama 0.40.15, qwen3:4b (Q4_K_M, Ollama's own), RTX 5070 Ti 16 GB
+  (Blackwell, GDDR7), Ryzen 7 7700, 32 GB DDR5, Windows 11, `OLLAMA_NUM_PARALLEL=2
+  OLLAMA_CONTEXT_LENGTH=16384`, `mafdet proxy --url http://127.0.0.1:11435 --model qwen3:4b`. Data:
+  `research/data/proxy_ollama_4b_5070ti.json` (latency) and `..._exact.json` (the answers).
+  - **The probe put Ollama in tier T-1 on the first run, with reading ahead silently off.** Its `/api/chat`
+    reports `prompt_eval_count` = the whole prompt whether cached or not, so the only evidence left was
+    `prompt_eval_duration`, the `time` channel. On this card the probe's 395-token filler prefills in
+    45-106 ms cold and 13-16 ms warm, against `TIME_MIN_MS` 40: measured deltas of 30.0 ms (→ T-1),
+    48.4 ms and 91.6 ms (→ T1). Six cold probes in one session: T-1 six times; four in another: T1 four
+    times. A `--reprobe` without restarting Ollama gives T-1 every time (3 of 3): the filler is still in
+    its cache, so the "cold" run is already warm.
+  - **Ollama does report the reuse exactly, on its OpenAI route**: `/v1/chat/completions` with
+    `max_tokens: 1` answers `usage.prompt_tokens_details.cached_tokens` (424-token prompt: 3 cold, 423 the
+    same again, 417 after an edited tail, 403 after an unrelated prompt in between). It is also the route
+    the request on Enter takes, so the drafts warm the prefix of the real prompt by construction. The
+    adapter now decides Ollama's route on the first warm and keeps the one with an exact channel
+    (`_learn_chat_route`), the native route staying as the fallback: 10 probes of 10 give
+    `tier T1, channel usage`.
+  - The audit saw 288 warms, 0 mismatches, all 288 unknown: on the chat route the proxy does not
+    render the prompt, so it has nothing to predict and only reads back what the engine reports.
+  - `shared_cache` is true with `OLLAMA_NUM_PARALLEL=2` **and** with `=1` at 16k context: an unrelated
+    227-token prompt in between left 403 of 426 tokens of the prefix cached. On 0.40.15 the second slot is
+    not what keeps the conversation in the cache; it keeps a front end's titles and follow-ups from
+    queueing behind the answer.
+  - `--think-ahead` on Ollama says `this engine has no raw completion endpoint: reading ahead only`, as
+    step 5 intends. `max_tokens: 0` on its `/v1/completions` is *not* prefill-only (it wrote 292 tokens),
+    and that route refuses token ids as a prompt (`cannot unmarshal array into ... prompt of type
+    string`); no `/metrics`, no `/tokenize`, no `/props`.
+  - **`bench.py` measured only llama.cpp** (`make("llama", ...)`, `cache_prompt` sent to anything, the
+    reasoning delta read as `reasoning_content` while Ollama sends `reasoning`): now `--engine`,
+    `cache_prompt` on llama-server only, both spellings, and thinking turned off the way each engine
+    understands (`reasoning_effort` on Ollama, which ignores `chat_template_kwargs`).
+  - **And its `reset()` assumes a cache per slot**: where the cache keeps several prefixes nothing evicts
+    the message the OFF run just read, so the ON run finds it cached, drafts or no drafts. `--unique-tag`
+    (`auto`: on where the probe found a shared cache) gives each run a tag of its own; the two runs then
+    ask slightly different questions, so a differing final number is the model's spread and no longer
+    fails the run. llama.cpp is untouched (`shared_cache` false there).
+  - Exactness measured separately, identical prompts, `--unique-tag off`, n=8: **5 of 5 comparable
+    rows agree on the final number**, 4 of 8 word for word. Word for word is the wrong question on this engine:
+    the control sent the same prompt twice and got two different texts both times
+    (`engine_stability.cold_vs_cold_identical` false in 2 of 2), so Ollama is not bit-stable between two
+    identical requests, proxy or no proxy. The final number is what can be compared.
+  - The spread of the OFF column on short messages is the GPU's clocks, as on the 2060: the same work took
+    26 to 135 ms. A pasted prompt is where the gain is plain (250 → 48 ms, n=2).
+  - Left: the same through a real Open WebUI with the user script on this engine, and the other rows of
+    the table (vLLM, SGLang, LM Studio).
 
 - **2026-11-06 · The app: delete a model, the disk, the answer ahead shown live, where Enter fell, a thinking
   budget, waits on the user's own typing; an answer lost to a broken emoji fixed.** Built and checked on the 14B here

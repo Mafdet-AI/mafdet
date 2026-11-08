@@ -1,0 +1,154 @@
+{
+ "summary": {
+  "typed": {
+   "n": 8,
+   "off_mean_ms": 35.0,
+   "on_mean_ms": 44.0,
+   "off_median_ms": 34.0,
+   "on_median_ms": 35.0,
+   "identical": 4,
+   "same_answer": 5,
+   "on_slower": 5
+  },
+  "long": {},
+  "engine_stability": [
+   {
+    "cold_vs_cold_identical": false,
+    "cold_vs_warm_identical": false,
+    "cold_vs_warm_same_answer": true
+   },
+   {
+    "cold_vs_cold_identical": false,
+    "cold_vs_warm_identical": false,
+    "cold_vs_warm_same_answer": false
+   }
+  ],
+  "cold_forced": false,
+  "unique_tag": false,
+  "audit": {
+   "warms": 168,
+   "mismatches": 0,
+   "estimates": 0,
+   "unknown": 168
+  },
+  "engine": "Ollama",
+  "profile": {
+   "name": "Ollama",
+   "url": "http://127.0.0.1:11435",
+   "model": "qwen3:4b",
+   "caps": {
+    "prefix_caching": true,
+    "spelling": "chat1",
+    "reuse_channel": "usage",
+    "edit_branches": true,
+    "tokenize": false,
+    "render": false,
+    "shared_cache": true,
+    "reuse_slack": 0,
+    "tokenizer_agrees": true,
+    "raw_ids": false
+   },
+   "probed_at": 1794149562.7421489,
+   "latencies": {
+    "base_ms": 21.35920000000624,
+    "branch_ms": 23.95539999997709,
+    "probe_ms": 1933.7605000000622
+   },
+   "version": "",
+   "format": 2,
+   "tier": "T1"
+  },
+  "typing_cps": 12.0,
+  "thinking": false,
+  "max_tokens": 512,
+  "model": "qwen3:4b",
+  "url": "http://127.0.0.1:11435",
+  "when": "2026-11-08 16:06:46"
+ },
+ "rows": {
+  "typed": [
+   {
+    "off_ttft": 0.02895409999837284,
+    "on_ttft": 0.022876700000779238,
+    "identical": true,
+    "same_answer": true,
+    "off_finish": "stop",
+    "on_finish": "stop",
+    "off_text": "Okay, let's see. Luca has 25 euros. He buys 3 notebooks at 4 euros each and a pen for 2 euros. I need to find out how much he has left. \n\nFirst, I should calculate the total cost of the notebooks. Since each notebook is 4 euros and he buys 3, that's 3 times 4. Let me do that: 3 * 4 = 12 euros for the notebooks. Then the pen is 2 euros. So total spent is notebooks plus pen, which is 12 + 2 = 14 euros. \n\nHe started with 25 euros, so subtract the total spent from that. 25 - 14 = 11 euros left. Let me check again. 3 notebooks at 4 each: 3*4=12. Pen is 2. Total spent 14. 25-14=11. Yeah, that seems right. I think that's the answer.\n</think>\n\n25 - (3 * 4 + 2) = 25 - 14 = 11\n\n11",
+    "on_text": "Okay, let's see. Luca has 25 euros. He buys 3 notebooks at 4 euros each and a pen for 2 euros. I need to find out how much he has left. \n\nFirst, I should calculate the total cost of the notebooks. Since each notebook is 4 euros and he buys 3, that's 3 times 4. Let me do that: 3 * 4 = 12 euros for the notebooks. Then the pen is 2 euros. So total spent is notebooks plus pen, which is 12 + 2 = 14 euros. \n\nHe started with 25 euros, so subtract the total spent from that. 25 - 14 = 11 euros left. Let me check again. 3 notebooks at 4 each: 3*4=12. Pen is 2. Total spent 14. 25-14=11. Yeah, that seems right. I think that's the answer.\n</think>\n\n25 - (3 * 4 + 2) = 25 - 14 = 11\n\n11"
+   },
+   {
+    "off_ttft": 0.025603699999919627,
+    "on_ttft": 0.027699700000084704,
+    "identical": false,
+    "same_answer": false,
+    "off_finish": "length",
+    "on_finish": "length",
+    "off_text": "Okay, let's see. The problem is: A train leaves at 9:40 and takes 1 hour 35 minutes. What time does it arrive? Hmm, I need to figure out the arrival time. \n\nFirst, I remember that when adding time, you can break it down into hours and minutes. The train leaves at 9:40, so that's 9 hours and 40 minutes. The travel time is 1 hour and 35 minutes. So I need to add 1 hour and 35 minutes to 9:40.\n\nLet me start by adding the hours first. 9 hours plus 1 hour is 10 hours. Then the minutes: 40 minutes plus 35 minutes. Let's calculate that. 40 + 35 is 75 minutes. But 75 minutes is more than an hour, right? Because 60 minutes is an hour. So 75 minutes is 1 hour and 15 minutes. \n\nWait, so if I add the minutes first, 40 + 35 = 75 minutes. 75 minutes is 1 hour 15 minutes. So then, the total time added is 1 hour (from the travel time) plus 1 hour 15 minutes? Wait, no, maybe I should do it step by step.\n\nLet me think. Let's take the departure time: 9:40. Add 1 hour first. 9:40 + 1 hour = 10:40. Then add the remaining 35 minutes. So 10:40 + 35 minutes. Let's see, 40 minutes plus 35 minutes is 75 minutes. 75 minutes is 1 hour and 15 minutes. So 10:40 + 35 minutes = 10:40 + 30 minutes + 5 minutes = 11:10 + 5 minutes? Wait, no. Wait, 10:40 plus 30 minutes is 11:10, then plus 5 minutes is 11:15. Wait, that might be a better way.\n\nWait, 10:40 plus 35 minutes. Let's break it down: 40 minutes to 11:00 is 20 minutes (because 60 -",
+    "on_text": "Okay, let's see. The problem is: A train leaves at 9:40 and takes 1 hour 35 minutes. What time does it arrive? Hmm, I need to figure out the arrival time. \n\nFirst, I remember that when dealing with time additions, it's helpful to break down the time into hours and minutes. The train leaves at 9:40, so that's 9 hours and 40 minutes. The travel time is 1 hour and 35 minutes. So I need to add 1 hour 35 minutes to 9:40.\n\nLet me start by adding the hours first. The departure time is 9 hours, and the travel time is 1 hour, so 9 + 1 = 10 hours. But wait, we also have the minutes to add. The departure time has 40 minutes, and the travel time has 35 minutes. So 40 + 35 = 75 minutes. But 75 minutes is more than an hour, right? Because 60 minutes is an hour. So 75 minutes is 1 hour and 15 minutes.\n\nOh, so maybe I should add the minutes first. Let's try that. Departure time: 9:40. Add 35 minutes to the minutes part. 40 + 35 = 75 minutes. 75 minutes is 1 hour and 15 minutes. So that means the time becomes 9 hours + 1 hour (from the 75 minutes) + 15 minutes. Wait, maybe another way.\n\nAlternatively, add the hours and minutes step by step. Let's take the departure time: 9:40. Add 1 hour first. 9:40 + 1 hour = 10:40. Then add the remaining 35 minutes. So 10:40 + 35 minutes. Let's calculate that. 40 minutes + 35 minutes = 75 minutes. 75 minutes is 1 hour and 15 minutes. So 10:40 + 35 minutes = 10:40 + 30 minutes = 11:10, then +5 minutes = 11:15. Wait, is that right?\n\nWait, let's check. If you add 35 minutes to 10:4"
+   },
+   {
+    "off_ttft": 0.028863699997600634,
+    "on_ttft": 0.0279277000008733,
+    "identical": false,
+    "same_answer": true,
+    "off_finish": "stop",
+    "on_finish": "stop",
+    "off_text": "Okay, let's see. The problem says there are 7 boxes with 12 pencils each, and then 15 pencils are removed. We need to find out how many pencils remain. \n\nFirst, I should figure out the total number of pencils before any are removed. Since there are 7 boxes and each box has 12 pencils, I need to multiply 7 by 12. Let me do that calculation. 7 times 12 is... 84. So there are 84 pencils in total initially.\n\nThen, 15 pencils are removed. So to find out how many remain, I subtract 15 from the total. That would be 84 minus 15. Let me calculate that. 84 minus 15 is 69. \n\nWait, let me double-check. 7 boxes times 12 pencils each is 84. Then removing 15, so 84 - 15 = 69. Yeah, that seems right. I don't think I made a mistake here. So the answer should be 69.\n</think>\n\n7 boxes with 12 pencils each: $7 \\times 12 = 84$ pencils total.  \nAfter removing 15 pencils: $84 - 15 = 69$.  \n\n69",
+    "on_text": "Okay, let's see. The problem says there are 7 boxes with 12 pencils each, and then 15 pencils are removed. We need to find out how many pencils remain. \n\nFirst, I need to figure out the total number of pencils before any are removed. Since there are 7 boxes and each box has 12 pencils, I should multiply 7 by 12. Let me do that calculation. 7 times 12 is... 84. So there are 84 pencils initially.\n\nThen, 15 pencils are removed. So to find out how many remain, I subtract 15 from the total. That would be 84 minus 15. Let me calculate that. 84 minus 10 is 74, then minus 5 more is 69. So 69 pencils remain.\n\nWait, let me double-check. 7 boxes times 12 pencils each is 84. Then 84 minus 15 is indeed 69. Yeah, that seems right. I think that's the answer.\n</think>\n\n84\n69"
+   },
+   {
+    "off_ttft": 0.03134610000051907,
+    "on_ttft": 0.024052799999481067,
+    "identical": true,
+    "same_answer": true,
+    "off_finish": "stop",
+    "on_finish": "stop",
+    "off_text": "Okay, let's see. I need to find the perimeter of a rectangle. The problem says it's 14 cm long and 9 cm wide. Hmm, perimeter of a rectangle... I remember that the formula for the perimeter of a rectangle is 2 times the length plus 2 times the width, right? Or maybe 2*(length + width). Let me think. Yeah, because a rectangle has two pairs of equal sides. So the perimeter is the sum of all four sides. So if the length is 14 cm and the width is 9 cm, then the two lengths add up to 14 + 14, and the two widths add up to 9 + 9. So perimeter would be (14 + 14) + (9 + 9). Let me calculate that. 14 + 14 is 28, and 9 + 9 is 18. Then 28 + 18 is 46. Alternatively, using the formula 2*(length + width), so 2*(14 + 9) = 2*23 = 46. Yeah, that makes sense. Let me check again. Length is 14, width is 9. Perimeter is 2*(14 + 9) = 2*23 = 46 cm. That seems right. I don't think I made a mistake here. So the perimeter should be 46 cm.\n</think>\n\n46",
+    "on_text": "Okay, let's see. I need to find the perimeter of a rectangle. The problem says it's 14 cm long and 9 cm wide. Hmm, perimeter of a rectangle... I remember that the formula for the perimeter of a rectangle is 2 times the length plus 2 times the width, right? Or maybe 2*(length + width). Let me think. Yeah, because a rectangle has two pairs of equal sides. So the perimeter is the sum of all four sides. So if the length is 14 cm and the width is 9 cm, then the two lengths add up to 14 + 14, and the two widths add up to 9 + 9. So perimeter would be (14 + 14) + (9 + 9). Let me calculate that. 14 + 14 is 28, and 9 + 9 is 18. Then 28 + 18 is 46. Alternatively, using the formula 2*(length + width), so 2*(14 + 9) = 2*23 = 46. Yeah, that makes sense. Let me check again. Length is 14, width is 9. Perimeter is 2*(14 + 9) = 2*23 = 46 cm. That seems right. I don't think I made a mistake here. So the perimeter should be 46 cm.\n</think>\n\n46"
+   },
+   {
+    "off_ttft": 0.03884289999768953,
+    "on_ttft": 0.041621399999712594,
+    "identical": true,
+    "same_answer": true,
+    "off_finish": "stop",
+    "on_finish": "stop",
+    "off_text": "Okay, let's see. The problem is about Marta reading pages. So first, she reads 18 pages a day for 6 days. Then she reads 12 more pages. We need to find the total number of pages she read.\n\nHmm, let's break it down. First part: 18 pages per day for 6 days. So that's 18 multiplied by 6. Let me calculate that. 18 times 6. Let's do 10 times 6 is 60, 8 times 6 is 48, so 60 + 48 is 108. So that's 108 pages in the first 6 days.\n\nThen, after that, she reads 12 more pages. So we need to add those 12 pages to the 108. So 108 plus 12 is 120. Wait, is that right? Let me check again.\n\nFirst part: 6 days * 18 pages/day = 108 pages. Then she reads 12 more pages, so total is 108 + 12 = 120. Yeah, that seems correct. Let me make sure I didn't miss anything. The problem says \"Marta reads 18 pages a day for 6 days, then 12 more pages.\" So \"then\" means after the 6 days, she reads an additional 12 pages. So total pages are 18*6 + 12. Which is 108 + 12 = 120. Yep, that's right. I think that's the answer.\n</think>\n\n120",
+    "on_text": "Okay, let's see. The problem is about Marta reading pages. So first, she reads 18 pages a day for 6 days. Then she reads 12 more pages. We need to find the total number of pages she read.\n\nHmm, let's break it down. First part: 18 pages per day for 6 days. So that's 18 multiplied by 6. Let me calculate that. 18 times 6. Let's do 10 times 6 is 60, 8 times 6 is 48, so 60 + 48 is 108. So that's 108 pages in the first 6 days.\n\nThen, after that, she reads 12 more pages. So we need to add those 12 pages to the 108. So 108 plus 12 is 120. Wait, is that right? Let me check again.\n\nFirst part: 6 days * 18 pages/day = 108 pages. Then she reads 12 more pages, so total is 108 + 12 = 120. Yeah, that seems correct. Let me make sure I didn't miss anything. The problem says \"Marta reads 18 pages a day for 6 days, then 12 more pages.\" So \"then\" means after the 6 days, she reads an additional 12 pages. So total pages are 18*6 + 12. Which is 108 + 12 = 120. Yep, that's right. I think that's the answer.\n</think>\n\n120"
+   },
+   {
+    "off_ttft": 0.03863389999969513,
+    "on_ttft": 0.0433164999994915,
+    "identical": false,
+    "same_answer": false,
+    "off_finish": "length",
+    "on_finish": "length",
+    "off_text": "Okay, let's see. The problem is about a shop selling apples in the morning and afternoon, and then some are returned. We need to find out how many were sold. Hmm. Let me break it down.\n\nFirst, the shop sells 45 apples in the morning and 38 in the afternoon. So total sold before returns would be 45 plus 38. Let me calculate that: 45 + 38. Let's do 40 + 30 = 70, and 5 + 8 = 13, so 70 + 13 = 83. So they sold 83 apples in total during the day.\n\nBut then 17 are returned. Wait, the question is \"how many sold?\" So does \"sold\" here mean the net sold after returns? Because sometimes when they say \"sold,\" it might be the total sold before returns, but the problem says \"17 are returned,\" so probably we need to subtract the returns from the total sold to get the net sold.\n\nLet me read the problem again: \"A shop sells 45 apples in the morning and 38 in the afternoon, 17 are returned. How many sold?\"\n\nHmm, maybe the wording is a bit tricky. Let's parse it. \"Sells 45 apples in the morning and 38 in the afternoon\" so total sold is 45 + 38 = 83. Then \"17 are returned\" \u2013 so those 17 were sold but then returned, so they are no longer sold. So the number of apples that were actually sold (i.e., not returned) would be total sold minus returns.\n\nSo the question is asking \"how many sold?\" which might be the net sold, because otherwise, if it's total sold before returns, it's 83, but the problem mentions returns, so probably they want the net.\n\nLet me check. If you sell 45 in the morning, 38 in the afternoon, so total sold is 83. Then 17 are returned, meaning that 17 of those 83 were returned, so the net sold is 83 - 17 = 66.\n\nYes, that makes sense. Because when they say \"how many sold,\" in the context of returns, it's the number that were sold and not returned. So the answer should be 66.\n\nLet me verify the",
+    "on_text": "Okay, let's see. The problem is about a shop selling apples in the morning and afternoon, and then some are returned. We need to find out how many were sold. Hmm. Let me break it down.\n\nFirst, the shop sells 45 apples in the morning and 38 in the afternoon. So total sold before returns would be 45 plus 38. Let me calculate that: 45 + 38. Let's do 40 + 30 = 70, and 5 + 8 = 13, so 70 + 13 = 83. So they sold 83 apples in total during the day.\n\nBut then 17 are returned. Wait, the question is \"how many sold?\" So does \"sold\" here mean the net sold after returns? Because sometimes when they say \"sold,\" it might be the total sold before returns, but the problem says \"17 are returned,\" so probably we need to subtract the returns from the total sold to get the net sold.\n\nLet me read the problem again: \"A shop sells 45 apples in the morning and 38 in the afternoon, 17 are returned. How many sold?\" So the shop sold some apples, then 17 were returned. So the number sold would be the total sold minus the returns? Wait, but \"sold\" might be the total they took out, but returns are like customers taking back, so the net sold would be total sold minus returns.\n\nWait, maybe the problem is phrased as: they sold 45 in the morning, 38 in the afternoon, so total sold is 45 + 38 = 83, but then 17 were returned, so the number that were actually kept (i.e., sold and not returned) is 83 - 17 = 66. But the question says \"how many sold?\" Maybe in the problem's context, \"sold\" refers to the net, because otherwise, if they just sold 83, but 17 were returned, then the answer would be 83. But the problem says \"17 are returned,\" so probably they want the net sold.\n\nWait, let's think. In business terms, when you sell something, and then customers return it, the number of apples that were sold (i.e., the net) is total sold minus returns. So if they sold 8"
+   },
+   {
+    "off_ttft": 0.036031700001331046,
+    "on_ttft": 0.05418939999799477,
+    "identical": false,
+    "same_answer": false,
+    "off_finish": "length",
+    "on_finish": "length",
+    "off_text": "Okay, let's see. The problem is about three friends splitting a 72 euro bill equally and then leaving a 9 euro tip. We need to find out what each person pays. Hmm, first, I need to figure out if the tip is added to the bill or if the bill is split after the tip. Wait, the problem says \"split a 72 euro bill equally and leave a 9 euro tip.\" So maybe the 72 euro is the bill before the tip? Let me read again.\n\n\"Three friends split a 7 and 2 euro bill equally and leave a 9 euro tip.\" Wait, no, it's 72 euros. So the bill is 72 euros. They split that equally, so each pays 72 divided by 3, and then they leave a 9 euro tip. Wait, but does the tip get split too? The problem says \"what does each pay?\" So probably, the total each pays is the share of the bill plus their share of the tip.\n\nLet me think. If they split the 72 euro bill equally, that's 72 / 3 = 24 euros each. Then they leave a 9 euro tip. Since it's a tip, I think the tip is also split among the three friends. So each pays their share of the bill plus their share of the tip. So the tip is 9 euros total, so each pays 9 / 3 = 3 euros tip. Then total each pays is 24 + 3 = 27 euros.\n\nWait, but maybe the problem is phrased differently. Let me check again. \"Three friends split a 72 euro bill equally and leave a 9 euro tip.\" So the bill is 72 euros. They split that equally, so each pays 24. Then they leave a 9 euro tip. So the tip is an additional amount. So total each pays is 24 (for the bill) plus (9 / 3) (tip) = 24 + 3 = 27. That makes sense.\n\nAlternatively, if the tip was part of the bill, but the problem says \"split a 72 euro bill equally and leave a 9 euro tip,\" so the 72 is the bill, then they leave a tip of 9. So the total amount they need to pay is 72 + 9 = 81 euros, and then split",
+    "on_text": "Okay, let's see. The problem is about three friends splitting a 72 euro bill equally and then leaving a 9 euro tip. We need to find out what each person pays. Hmm, first, I need to figure out if the tip is added to the bill or if the bill is split after the tip. Wait, the problem says \"split a 72 euro bill equally and leave a 9 euro tip.\" So maybe the 72 euro is the bill before the tip? Let me read it again.\n\n\"Three friends split a 7.2 euro bill equally and leave a 9 euro tip.\" Wait, no, the problem says 72 euro bill. So 72 euros is the bill they need to split, and then they leave a 9 euro tip. So first, they split the 72 euro bill equally among themselves, so each pays 72 divided by 3. Then, they leave a 9 euro tip, which is also split equally among the three friends. Wait, but the question is \"What does each pay?\" So does each pay their share of the bill plus their share of the tip?\n\nLet me think. The problem says \"split a 72 euro bill equally and leave a 9 euro tip.\" So maybe the 72 euro is the total amount they need to cover, and the tip is 9 euros. Wait, no, usually the tip is on top of the bill. So the bill is 72 euros, they split that equally, so each pays 72/3 = 24 euros for the bill. Then they leave a 9 euro tip, which is also split equally, so each pays 9/3 = 3 euros tip. So total each pays is 24 + 3 = 27 euros.\n\nWait, let me check. If the problem was that the total amount they pay is 72 euros plus 9 euros tip, then they split 81 euros equally. But the problem says \"split a 72 euro bill equally and leave a 9 euro tip.\" So the bill is 72 euros, they split that, then they leave a tip of 9 euros. So the tip is separate. So each person's payment is (72/3) + (9/3) = 24 + 3 = 27.\n\nYes, that makes sense. Let me confirm. If three friends split a 72 euro bill"
+   },
+   {
+    "off_ttft": 0.050948000000062166,
+    "on_ttft": 0.10723660000076052,
+    "identical": true,
+    "same_answer": true,
+    "off_finish": "stop",
+    "on_finish": "stop",
+    "off_text": "Okay, let's see. The problem is about a tank that holds 120 liters and loses 15 liters every hour for 4 hours. We need to find out how much is left after that time. \n\nFirst, I need to figure out how much water the tank loses in total over 4 hours. Since it loses 15 liters each hour, for 4 hours, that would be 15 liters/hour multiplied by 4 hours. Let me calculate that: 15 * 4 = 60 liters. So the tank loses 60 liters in total over 4 hours.\n\nThen, the tank originally holds 120 liters. So to find out how much is left, we subtract the total lost from the original amount. That would be 120 liters minus 60 liters. Let me do that subtraction: 120 - 60 = 60 liters.\n\nWait, let me double-check. If it loses 15 liters per hour for 4 hours, each hour it's 15, so after 1 hour: 120 - 15 = 105, after 2 hours: 105 -15 = 90, after 3 hours: 90 -15 = 75, after 4 hours: 75 -15 = 60. Yep, that matches. So after 4 hours, 60 liters are left.\n</think>\n\n60",
+    "on_text": "Okay, let's see. The problem is about a tank that holds 120 liters and loses 15 liters every hour for 4 hours. We need to find out how much is left after that time. \n\nFirst, I need to figure out how much water the tank loses in total over 4 hours. Since it loses 15 liters each hour, for 4 hours, that would be 15 liters/hour multiplied by 4 hours. Let me calculate that: 15 * 4 = 60 liters. So the tank loses 60 liters in total over 4 hours.\n\nThen, the tank originally holds 120 liters. So to find out how much is left, we subtract the total lost from the original amount. That would be 120 liters minus 60 liters. Let me do that subtraction: 120 - 60 = 60 liters.\n\nWait, let me double-check. If it loses 15 liters per hour for 4 hours, each hour it's 15, so after 1 hour: 120 - 15 = 105, after 2 hours: 105 -15 = 90, after 3 hours: 90 -15 = 75, after 4 hours: 75 -15 = 60. Yep, that matches. So after 4 hours, 60 liters are left.\n</think>\n\n60"
+   }
+  ],
+  "long": [],
+  "exactness": []
+ }
+}
