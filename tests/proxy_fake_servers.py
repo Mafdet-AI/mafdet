@@ -7,7 +7,9 @@ tokenizer and a prefix cache in place of a model.
     16 tokens, a cache shared by every request, /metrics with the hits counter.
   * FakeOllama: /api/version, no tokenizer, /api/chat with prompt_eval_count (the whole prompt)
     and prompt_eval_duration (1 ms per token computed), one cache per slot (`parallel` of them,
-    the prompt going to the slot it extends, else to the least recently used one).
+    the prompt going to the slot it extends, else to the least recently used one).  Its OpenAI
+    route reports usage.prompt_tokens_details.cached_tokens with `report_cached`, as a real
+    Ollama 0.40.15 does (and nothing, as older ones do, without it).
 
 Each test can set the knobs that make one behaviour (`report_cached`, `metrics`, `parallel`,
 `counts_computed`) and reads back what the adapter sent (`requests`, `headers`).
@@ -114,10 +116,12 @@ class FakeVLLM:
 class FakeOllama:
     name = "ollama"
 
-    def __init__(self, *, parallel: int = 1, counts_computed: bool = False, model: str = "qwen3:4b"):
+    def __init__(self, *, parallel: int = 1, counts_computed: bool = False, model: str = "qwen3:4b",
+                 report_cached: bool = False):
         self.vocab = _Vocab()
         self.parallel = parallel
         self.counts_computed = counts_computed       # prompt_eval_count = only the tokens computed
+        self.report_cached = report_cached           # cached_tokens on the OpenAI route (0.40.15)
         self.model = model
         self.slots: list[list[int]] = [[] for _ in range(parallel)]
         self.used = [0] * parallel                   # when each slot was last used
@@ -157,6 +161,8 @@ class FakeOllama:
             text = ((body.get("messages") or [{}])[-1].get("content") or "")
             usage = {"prompt_tokens": computed if self.counts_computed else len(ids), "completion_tokens": 2,
                      "total_tokens": len(ids) + 2}
+            if self.report_cached:
+                usage["prompt_tokens_details"] = {"cached_tokens": len(ids) - computed}
             if body.get("stream"):
                 events = [{"choices": [{"delta": {"role": "assistant", "content": "echo: "}, "finish_reason": None}]},
                           {"choices": [{"delta": {"content": text[:20]}, "finish_reason": "stop"}]}]

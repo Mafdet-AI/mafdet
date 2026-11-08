@@ -24,7 +24,7 @@ import time
 from typing import Iterable
 from urllib.parse import urlsplit
 
-from ..engine import WarmResult
+from ..engine import EXACT_CHANNELS, WarmResult
 
 FLAVORS = ("openai", "vllm", "sglang", "ollama", "lmstudio")
 NAMES = {"openai": "OpenAI-compatible", "vllm": "vLLM", "sglang": "SGLang", "ollama": "Ollama",
@@ -83,6 +83,7 @@ class OpenAIEngine:
         self._tok_style: str | None = None    # "prompt" (vLLM, SGLang) or "content" (llama-server), once one answered
         self._render: bool | None = None      # False once the engine said it has no endpoint for it (404)
         self._metrics: bool | None = None     # whether /metrics answers; None: not tried yet
+        self._chat_route: str | None = None   # "native" or "openai", once one proved what it reports
         self._hits_seen: float | None = None  # the hits counter after the last warm, for the delta
 
     def __repr__(self) -> str:
@@ -260,10 +261,46 @@ class OpenAIEngine:
         prefill time too, which is the evidence of reuse when nothing else is reported."""
         if spelling != "chat1":
             return WarmResult(channel="none", detail={"ok": False, "why": f"no spelling {spelling} for a chat"})
-        if self.flavor == "ollama":
+        if self.flavor != "ollama":
+            return self._warm_openai(messages, template_kwargs, tools)
+        if self._chat_route is None:
+            return self._learn_chat_route(messages, template_kwargs, tools)
+        if self._chat_route == "native":
             res = self._warm_ollama(messages, template_kwargs, tools)
             if res.ok:
                 return res
+        return self._warm_openai(messages, template_kwargs, tools)
+
+    def _learn_chat_route(self, messages: list[dict], template_kwargs: dict | None,
+                          tools: list | None) -> WarmResult:
+        """Which of Ollama's two routes to warm through, decided once on a real warm.
+
+        They do not report the same thing: `/api/chat` gives `prompt_eval_count` (the whole
+        prompt, cached or not) and `prompt_eval_duration`, so the only evidence of reuse is a
+        prefill that got faster -- on a fast GPU a few tens of ms, which the probe can miss
+        (measured: 62 ms cold against 13 ms warm on 395 tokens, against a 40 ms threshold).  Its
+        OpenAI route answers with `usage.prompt_tokens_details.cached_tokens`, exact, and is the
+        route the request on Enter takes anyway (Ollama 0.40.15, research/LOG.md).  Keep that one
+        where it is reported, the native route otherwise (older Ollama).  Both warms are the same
+        prompt, so the second only reads what the first left cached."""
+        native = self._warm_ollama(messages, template_kwargs, tools)
+        if native.ok and native.channel in EXACT_CHANNELS:
+            self._chat_route = "native"
+            return native
+        openai = self._warm_openai(messages, template_kwargs, tools)
+        if openai.ok and openai.channel in EXACT_CHANNELS:
+            self._chat_route = "openai"
+            return openai
+        if native.ok:
+            self._chat_route = "native"
+            return native
+        if openai.ok:
+            self._chat_route = "openai"
+        return openai
+
+    def _warm_openai(self, messages: list[dict], template_kwargs: dict | None = None,
+                     tools: list | None = None) -> WarmResult:
+        """The draft through the OpenAI chat route (LM Studio's native one first, where it has one)."""
         body: dict = {"messages": messages, "max_tokens": 1, "temperature": 0, "stream": False}
         if self.model:
             body["model"] = self.model

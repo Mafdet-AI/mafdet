@@ -180,8 +180,30 @@ def test_ollama_is_read_ahead_through_its_chat_endpoint(ollama):
     assert caps.prefix_caching and caps.edit_branches
     assert not caps.shared_cache                        # one slot: the unrelated prompt evicted the filler
     assert profile.tier == "T1"
+    assert engine._chat_route == "native"               # nothing exact reported: the native route stands
     chats = [b for p, b in fake.requests if p == "/api/chat"]
     assert chats and all(b["options"]["num_predict"] == 1 for b in chats)
+
+
+def test_ollama_that_reports_cached_tokens_is_warmed_through_its_openai_route():
+    """Ollama 0.40.15 answers /v1/chat/completions with usage.prompt_tokens_details.cached_tokens:
+    the exact channel, and the same route the request on Enter takes, so the drafts go there
+    instead of /api/chat (whose prompt_eval_count is the whole prompt either way)."""
+    fake = FakeOllama(report_cached=True)
+    server, url = serve(fake)
+    try:
+        engine = OpenAIEngine(url, model="qwen3:4b", flavor="ollama")
+        profile = probe(engine, url=url, model="qwen3:4b")
+        assert profile.channel == "usage" and profile.tier == "T1"
+        assert profile.caps.prefix_caching and profile.caps.edit_branches
+        assert engine._chat_route == "openai"
+        # The route is decided on the first warm (both tried once), then only the OpenAI one.
+        native = [p for p, _ in fake.requests if p == "/api/chat"]
+        assert len(native) == 1
+        chats = [b for p, b in fake.requests if p == "/v1/chat/completions"]
+        assert len(chats) > 4 and all(b["max_tokens"] == 1 for b in chats)
+    finally:
+        server.shutdown()
 
 
 def test_ollama_with_two_slots_keeps_the_conversation():
