@@ -5,11 +5,11 @@ thinking ahead to any front end (Open WebUI, Hermes, agents) and any engine (SGL
 others). It lives in its own module (`mafdet/proxy/`), apart from the app, and stays experimental until it
 works and is measured.
 
-Status: reading ahead is built and measured on llama.cpp, thinking ahead is built on llama.cpp (opt-in), and
-an adapter for the other engines (vLLM, SGLang, Ollama, LM Studio, any OpenAI-compatible server) is written
-but not yet run against one of them. Where it stands and what is left: "Where we are" and "Roadmap" below.
+Status: reading ahead is built and measured on llama.cpp and on Ollama, thinking ahead is built on llama.cpp
+(opt-in), and the adapter for the rest (vLLM, SGLang, LM Studio, any OpenAI-compatible server) is written but
+not yet run against one of them. Where it stands and what is left: "Where we are" and "Roadmap" below.
 
-## Where we are (2026-11-06)
+## Where we are (2026-11-08)
 
 The goal is thinking ahead in the front end people already use: in the app, the wait after Enter goes from
 12.2 to 3.2 s on Qwen3-4B. The proxy has the first step, reading ahead on llama.cpp (PR #4).
@@ -43,6 +43,14 @@ The goal is thinking ahead in the front end people already use: in the app, the 
   tokens left to read on Enter: **7158 (4.7 s) without the proxy, 1 with it**; the first message of a new
   chat 7065 (4.3 s) → 23. Installed through Tampermonkey and tried by hand (llama-server with
   `-np 2 -kvu --no-cache-idle-slots`, see `mafdet/proxy/clients/README.md`).
+- **Ollama, run for real** (2026-11-08, RTX 5070 Ti 16 GB, Ollama 0.40.15, qwen3:4b): `tier T1, channel usage`,
+  the drafts through its chat endpoint, Enter → first token on a pasted prompt of ~1,700 tokens
+  **250 → 48 ms**, on short typed messages 39 → 27 ms (`research/LOG.md`, 2026-11-08).
+  Found there: its `/api/chat` reports the whole prompt whether cached or not, so the proxy was reading the
+  reuse off the prefill time and landed in tier T-1 on a fast GPU; its OpenAI route reports
+  `usage.prompt_tokens_details.cached_tokens` exactly, and that is the route the drafts take now. `bench.py`
+  can measure any engine (`--engine`), and on an engine whose cache is shared it gives each run a tag of its
+  own (`--unique-tag`), because the reset cannot evict what the OFF run just read.
 - **Step 4, more engines: built, not run against them yet** (2026-11-06). An OpenAI-compatible adapter
   (`mafdet/proxy/adapters/openai.py`) for vLLM, SGLang, Ollama, LM Studio and anything with
   `/v1/chat/completions`; `mafdet proxy --url <engine>` asks the server which it is. The probe now reads ahead
@@ -97,9 +105,11 @@ measured, with the numbers in `research/LOG.md`.
 
 **4. More engines.**
 - [x] Ollama and LM Studio (what most people run): built on what they expose. Neither tokenizes over HTTP, so
-      the drafts go through their chat endpoint with one token of answer (Ollama's `/api/chat`, LM Studio's
-      `/api/v0/chat/completions`) and the engine applies its own template; the evidence of reuse is the prefill
-      time they report (`prompt_eval_duration`, `time_to_first_token`). Not run against a real one yet.
+      the drafts go through their chat endpoint with one token of answer and the engine applies its own template.
+      Ollama is measured (2026-11-08, 0.40.15): the drafts go through its OpenAI route, which reports
+      `usage.prompt_tokens_details.cached_tokens` exactly, and not through `/api/chat`, whose
+      `prompt_eval_count` is the whole prompt cached or not -- the prefill time alone put a fast GPU in tier
+      T-1. LM Studio (`/api/v0/chat/completions`, `time_to_first_token`): not run against a real one yet.
 - [x] vLLM and SGLang: built. vLLM's `/tokenize` renders the chat request to ids, the drafts go through
       `/v1/completions` (one token: it refuses `max_tokens: 0`), the reuse from
       `usage.prompt_tokens_details.cached_tokens` (`--enable-prompt-tokens-details`), else the `/metrics`
@@ -110,13 +120,14 @@ measured, with the numbers in `research/LOG.md`.
       probed: nothing needs it until thinking ahead reaches these engines.
 - [ ] A table "engine, version, what works", measured and dated: the table below has what the code expects
       of each engine; a row is done when someone runs `mafdet proxy --url` against it (help wanted).
+      One of five rows filled so far: Ollama (2026-11-08).
 
 | engine | the drafts go | reuse seen in | the engine needs | status |
 |---|---|---|---|---|
 | llama.cpp (`llama-server`) | as token ids: `/apply-template`, `/tokenize`, `/completion` with `n_predict: 0` | `timings.cache_n`, exact | `-np 2 -kvu --no-cache-idle-slots` | measured (RTX 2060, b11747, `research/LOG.md` 2026-11-06) |
 | vLLM | as token ids: `/tokenize` with the messages, `/v1/completions` with one token | `usage.prompt_tokens_details.cached_tokens` with `--enable-prompt-tokens-details`; else `/metrics` (estimate) | prefix caching (on by default in V1) | written, not run |
 | SGLang | through the chat endpoint | `cached_tokens` with `--enable-cache-report`; else the time | the radix cache (default) | written, not run |
-| Ollama | through `/api/chat`, `num_predict: 1` | the prefill time (`prompt_eval_duration`) | `OLLAMA_NUM_PARALLEL=2` with a front end that sends titles and follow-ups | written, not run |
+| Ollama | through `/v1/chat/completions`, `max_tokens: 1` (`/api/chat` with `num_predict: 1` where the OpenAI route reports nothing) | `usage.prompt_tokens_details.cached_tokens`, exact (0.40.15); the prefill time (`prompt_eval_duration`) on an older one | `OLLAMA_NUM_PARALLEL=2` with a front end that sends titles and follow-ups (the prefix survives an unrelated prompt even on one slot at `OLLAMA_CONTEXT_LENGTH=16384`) | measured (RTX 5070 Ti, 0.40.15, `research/LOG.md` 2026-11-08) |
 | LM Studio | through `/api/v0/chat/completions`, `max_tokens: 1` | the prefill time (`time_to_first_token`) | — | written, not run |
 | any other OpenAI-compatible server | through `/v1/chat/completions`, `max_tokens: 1` | `cached_tokens` if it reports it, else the time | prefix caching | written, not run |
 
