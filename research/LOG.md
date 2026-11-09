@@ -156,9 +156,12 @@ costs 2.4 decoding steps. To speed up the 14B, take work away from the CPU.
      and decode on the 8B/14B 20-26% low; one card only, check on a second Ampere before changing
      GPU_EFFICIENCY. **The RTX 5070 Ti says the same for Blackwell** (2026-11-09, below): prefill 0.076e12 (4B)
      and 0.101e12 (14B) against Turing's 0.051e12, and the share of the bandwidth decode reaches rising with
-     the model (0.50 on the 4B, 0.69 on the 14B) as on the 3060. So, with two generations behind it:
+     the model (0.50 on the 4B, 0.66 on the 14B) as on the 3060. So, with two generations behind it:
      should GPU_PREFILL_FLOPS_PER_GBS be per generation (Turing 0.051, Ampere and Blackwell ~0.08, Ada 0.125),
-     and should GPU_EFFICIENCY follow the size of the model instead of being one number?
+     and should GPU_EFFICIENCY follow the size of the model instead of being one number? A fixed cost per token
+     may be the better shape (to check): on the 5070 Ti an efficiency of ~0.75 plus ~1.7 ms per token fits both the
+     4B (5.2 ms/token) and the 14B (13.5 ms), and it would say why the small model on the fastest card is the one
+     furthest below 0.62.
    - The catalog's MoE estimate: with the experts in RAM (what llama.cpp's fit does) the 30B-A3B is all-GPU except
      the experts, ~34 tok/s here, not 27 at 54%.
    - A MoE split with the CPU: a smaller fit target (`-fitt 256`: +9%) or `-ncmoe` sized from the free VRAM (+17%)
@@ -194,7 +197,8 @@ costs 2.4 decoding steps. To speed up the 14B, take work away from the CPU.
     0.051e12 for everything that is not Ada or Apple, and this card measures 0.076e12 (4B) and 0.101e12 (14B),
     the range the 3060 showed on Ampere (~0.075-0.09e12, Next 7). Decode goes the other way and follows the
     model rather than the card: the share of the 896 GB/s llama.cpp reaches while generating is 0.50 on the
-    4B and 0.69 on the 14B, against the single `GPU_EFFICIENCY` 0.62 (the 3060: 0.64 on the 4B, 0.74-0.78 on
+    4B and 0.66 on the 14B (its 8,162 MiB on the GPU; 0.69 if the 417 MiB of token embeddings llama.cpp
+    leaves in RAM are counted, which are not read per token), against the single `GPU_EFFICIENCY` 0.62 (the 3060: 0.64 on the 4B, 0.74-0.78 on
     the 8B and 14B). Two generations now say the same two things. Nothing is changed in the catalog here: one
     card each, and what the constants should be is Next 7.
   - `mafdet judge --backend llama` on this card: 20 of 20 ok, 0 errors, and on every one of the 556 requests
