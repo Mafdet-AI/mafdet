@@ -30,6 +30,12 @@ Fourth machine (since 2026-11-02): RTX 3060 12 GB (360 GB/s, Ampere, ~0.8 GB tak
 `.venv` on Python 3.14. The whole 12 GB used: the 14B all on the GPU (35 tok/s), Qwen3-30B-A3B with its experts
 split with the CPU (39.5 tok/s, 11.8-12.0 GB in use), see "Done and measured" (2026-11-02).
 
+Fifth machine (since 2026-11-08): RTX 5070 Ti 16 GB (896 GB/s, Blackwell, GDDR7, ~2 GB taken by the desktop),
+Ryzen 7 7700 (8 cores, 16 threads), 32 GB DDR5 (~42 GB/s by `doctor`), Windows 11, llama.cpp b11747 CUDA 13.4 in
+~/.mafdet/llama.cpp. The 4B and the 14B are both all on the GPU (192.7 and 74.0 tok/s) and nothing here is split
+with the CPU: reasoning ahead 5.4 → 1.7 s on the 4B, 8.9 → 3.5 s on the 14B, see "Done and measured"
+(2026-11-09). The proxy's Ollama row was measured here too (2026-11-08).
+
 AMD Radeon (since 2026-10-26): supported through llama.cpp's Vulkan build, no Radeon here to measure on. The README
 asks for volunteers ("Help wanted: benchmarks on an AMD Radeon"): `mafdet doctor`, Measure, and
 `research/thinking_ahead.py radeon_4b.json`, sent as an issue. First one in (issue #1, 2026-10-28): RX 5700 XT,
@@ -148,7 +154,11 @@ costs 2.4 decoding steps. To speed up the 14B, take work away from the CPU.
 7. **RTX 3060 follow-ups (2026-11-02, above).**
    - The catalog on Ampere: a prefill coefficient between Turing's and Ada's (~0.08e12 from the 3060's 4B and 8B),
      and decode on the 8B/14B 20-26% low; one card only, check on a second Ampere before changing
-     GPU_EFFICIENCY.
+     GPU_EFFICIENCY. **The RTX 5070 Ti says the same for Blackwell** (2026-11-09, below): prefill 0.076e12 (4B)
+     and 0.101e12 (14B) against Turing's 0.051e12, and the share of the bandwidth decode reaches rising with
+     the model (0.50 on the 4B, 0.69 on the 14B) as on the 3060. So, with two generations behind it:
+     should GPU_PREFILL_FLOPS_PER_GBS be per generation (Turing 0.051, Ampere and Blackwell ~0.08, Ada 0.125),
+     and should GPU_EFFICIENCY follow the size of the model instead of being one number?
    - The catalog's MoE estimate: with the experts in RAM (what llama.cpp's fit does) the 30B-A3B is all-GPU except
      the experts, ~34 tok/s here, not 27 at 54%.
    - A MoE split with the CPU: a smaller fit target (`-fitt 256`: +9%) or `-ncmoe` sized from the free VRAM (+17%)
@@ -156,6 +166,41 @@ costs 2.4 decoding steps. To speed up the 14B, take work away from the CPU.
    - The README: a "RTX 3060 12 GB" row (4B, 14B, 30B-A3B) when the user wants these numbers there.
 
 ## Done and measured
+
+- **2026-11-09 · RTX 5070 Ti 16 GB (Blackwell, GDDR7), the fastest machine here: reasoning ahead
+  5.39 → 1.73 s on the 4B and 8.95 → 3.49 s on the 14B, both models all on the GPU; and on this
+  generation the catalog's prefill estimate is half of what the card does.** New machine (see Where we are).
+  llama.cpp b11747 CUDA 13.4 (installed by `mafdet doctor --install`), Q4_K_M models,
+  `research/thinking_ahead.py`, the 24 problems typed at 8 characters a second.
+  - 4B, 37/37 on the GPU, `--max-tokens 3000`, no warm-up (`thinking_ahead_4b_5070ti.json`, measured
+    2026-11-08): 24/24 both, mean **5.39 → 1.73 s**, median 4.92 → 1.32 s, 943 → 1286 reasoning tokens
+    (1007 ahead, 280 left after Enter), 178 tok/s, faster in 23 of 24. The one that is slower is problem 16
+    (the snail: 7.80 → 9.48 s), which reasoned 2617 tokens instead of 1366.
+  - 14B, 41/41 on the GPU, `--warm-up --max-tokens 1800` as on the 3060
+    (`thinking_ahead_14b_5070ti.json`): **21/24 → 24/24** correct, mean **8.95 → 3.49 s**, median
+    8.31 → 2.88 s, 804 → 992 reasoning tokens (746 ahead, 246 left), 75 tok/s, faster in 22 of the 22
+    problems the run without ahead answered at all. Its three misses are the budget, not a wrong number:
+    problems 9, 16 and 17 cut at 1800 tokens, 16 and 17 with no answer left to write and 9 with a tail
+    that never reached the number — as problem 16 was on the 3060. With the ahead on nothing is cut: the
+    reasoning done while typing is what brings those three inside the budget.
+  - **Reasoning ahead gathers more material here, not less.** On the 2060 it cut the reasoning in total
+    (944 → 662 tokens); on this card it raises it (943 → 1286 on the 4B). Typing a message takes the
+    same number of seconds, so a card writing at 178 tok/s instead of 83 covers more ground before Enter:
+    1007 tokens ahead against 418. What is left after Enter is what the wait is made of, and that is about
+    the 2060's (280 tokens against 244, median 202).
+  - Measure (`research/measure_gguf.py`), prefill / decode tok/s, against the catalog's estimate here:
+    4B 37/37: **8485 / 192.7** (estimate 5712 / 238.9); 14B 41/41: **3049 / 74.0** (1544 / 69.9).
+  - So on Blackwell the catalog's prefill is low by 1.5-2.0 times: `GPU_PREFILL_FLOPS_PER_GBS` is Turing's
+    0.051e12 for everything that is not Ada or Apple, and this card measures 0.076e12 (4B) and 0.101e12 (14B),
+    the range the 3060 showed on Ampere (~0.075-0.09e12, Next 7). Decode goes the other way and follows the
+    model rather than the card: the share of the 896 GB/s llama.cpp reaches while generating is 0.50 on the
+    4B and 0.69 on the 14B, against the single `GPU_EFFICIENCY` 0.62 (the 3060: 0.64 on the 4B, 0.74-0.78 on
+    the 8B and 14B). Two generations now say the same two things. Nothing is changed in the catalog here: one
+    card each, and what the constants should be is Next 7.
+  - `mafdet judge --backend llama` on this card: 20 of 20 ok, 0 errors, and on every one of the 556 requests
+    llama-server reused exactly the common prefix. The incremental cache is right on Blackwell too.
+  - The 14B's first run was thrown away: from problem 10 on, a game and an Ollama server holding a 131k
+    context were on the same GPU, and decode fell from 73 to 55 tok/s. Measured again on an idle card.
 
 - **2026-11-08 · The proxy in front of a real Ollama (roadmap step 4, first row of the table filled):
   `tier T1, channel usage`, Enter → first token on a pasted prompt of ~1,700 tokens
