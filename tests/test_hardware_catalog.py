@@ -102,6 +102,34 @@ def test_estimates_on_ada(variant, decode, prefill):
     assert e["prefill_tps"] == pytest.approx(prefill, rel=0.2)
 
 
+def nvidia_pc(name: str, vram_mb: int, used_mb: int, bandwidth: int) -> Hardware:
+    return Hardware(os="Windows 11", system="windows", arch="amd64", cpu="AMD Ryzen 7 7700", cores=8, threads=16,
+                    ram_mb=32000, ram_free_mb=20000, ram_bandwidth_gbs=42,
+                    gpus=[GPU(name, vram_mb, used_mb, "", bandwidth, True)])
+
+
+@pytest.mark.parametrize("card,vram,used,bandwidth,variant,prefill", [
+    ("NVIDIA GeForce RTX 3060", 12288, 800, 360, "qwen3-4b:Q4_K_M", 3356),          # Ampere, research/LOG.md
+    ("NVIDIA GeForce RTX 3060", 12288, 800, 360, "qwen3-8b:Q4_K_M", 2010),
+    ("NVIDIA GeForce RTX 3060", 12288, 800, 360, "qwen3-14b:Q4_K_M", 1120),
+    ("NVIDIA GeForce RTX 5070 Ti", 16303, 2000, 896, "qwen3-4b:Q4_K_M", 8485),      # Blackwell
+    ("NVIDIA GeForce RTX 5070 Ti", 16303, 2000, 896, "qwen3-14b:Q4_K_M", 3049),
+])
+def test_prefill_on_ampere_and_blackwell(card, vram, used, bandwidth, variant, prefill):
+    e = catalog.estimate(catalog.find(variant), nvidia_pc(card, vram, used, bandwidth))
+    assert e["placement"] == "gpu"
+    assert e["prefill_tps"] == pytest.approx(prefill, rel=0.2)
+
+
+@pytest.mark.parametrize("name,expected", [
+    ("NVIDIA GeForce RTX 3060", True), ("NVIDIA GeForce RTX 3080 Ti Laptop GPU", True),
+    ("NVIDIA GeForce RTX 5070 Ti", True), ("NVIDIA RTX A4000", True), ("NVIDIA RTX PRO 6000 Blackwell", True),
+    ("NVIDIA GeForce RTX 2060", False), ("NVIDIA GeForce RTX 4070 SUPER", False), ("Tesla T4", False),
+])
+def test_ampere_or_blackwell(name, expected):
+    assert catalog.ampere_or_blackwell(name) is expected
+
+
 def test_split_follows_llama_fit():
     """llama.cpp's --fit, measured on the 4070 SUPER with a larger margin standing in for a busier card:
     36 and 24 of the 14B's 41 layers (40 and the output) on the GPU."""

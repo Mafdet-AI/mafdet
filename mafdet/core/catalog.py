@@ -49,6 +49,9 @@ PCIE_GBS = 12.0                # weights left on the CPU are streamed to the GPU
 GPU_PREFILL_FLOPS_PER_GBS = 0.051e12   # usable prefill compute, from the card's bandwidth class (2060: 4B 2,141 tok/s)
 # Ada has about 2.5 times the tensor compute per GB/s of Turing (4070 SUPER: 4B 7,441, 14B 2,486 tok/s).
 GPU_PREFILL_FLOPS_PER_GBS_ADA = 0.125e12
+# Ampere and Blackwell sit between the two, and measure alike: 0.075-0.092e12 on the 3060 (4B 3,356, 8B 2,010,
+# 14B 1,120 tok/s), 0.076-0.101e12 on the 5070 Ti (4B 8,485, 14B 3,049); 0.085e12 keeps all five within ~16%.
+GPU_PREFILL_FLOPS_PER_GBS_AMPERE = 0.085e12
 APPLE_PREFILL_FLOPS_PER_GBS = 0.025e12 # the same for Apple Silicon's GPU (no tensor cores)
 CPU_PREFILL_FLOPS_PER_CORE = 30e9
 # Typing a question takes about half a minute (measured: 30-37 s at 5 characters per second with
@@ -353,6 +356,22 @@ def ada(name: str) -> bool:
     return bool(re.search(r"RTX\s*40\d0", name, re.I))
 
 
+def ampere_or_blackwell(name: str) -> bool:
+    """An NVIDIA card of the RTX 30 or 50 series, laptop ones included, or an RTX A-series workstation card."""
+    return bool(re.search(r"RTX\s*(30|50)\d0|RTX\s*A\d{3,4}\b|Blackwell", name, re.I))
+
+
+def gpu_prefill_flops_per_gbs(gpu) -> float:
+    """Usable prefill compute per GB/s of the card's bandwidth, by generation (Turing for the unknown ones)."""
+    if gpu.unified:
+        return APPLE_PREFILL_FLOPS_PER_GBS
+    if ada(gpu.name):
+        return GPU_PREFILL_FLOPS_PER_GBS_ADA
+    if ampere_or_blackwell(gpu.name):
+        return GPU_PREFILL_FLOPS_PER_GBS_AMPERE
+    return GPU_PREFILL_FLOPS_PER_GBS
+
+
 def estimate(v: Variant, hw: Hardware, device: str = "auto", ctx: int = 8192) -> dict:
     """Where the model runs here and how fast, before downloading it."""
     m = v.model
@@ -386,9 +405,7 @@ def estimate(v: Variant, hw: Hardware, device: str = "auto", ctx: int = 8192) ->
     # Reading the prompt: compute-bound, about 2 operations per active parameter and token.
     flops = 2 * m["active_b"] * 1e9
     if gpu:
-        per_gbs = (APPLE_PREFILL_FLOPS_PER_GBS if gpu.unified else
-                   GPU_PREFILL_FLOPS_PER_GBS_ADA if ada(gpu.name) else GPU_PREFILL_FLOPS_PER_GBS)
-        tps = gpu.bandwidth_gbs * per_gbs / flops
+        tps = gpu.bandwidth_gbs * gpu_prefill_flops_per_gbs(gpu) / flops
         if share < 1 and not gpu.unified:      # the CPU's layers cross the bus once per batch of 512 tokens
             tps = 512 / (512 / tps + cpu_mb / 1024 / PCIE_GBS)
         prefill = tps

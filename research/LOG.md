@@ -152,13 +152,10 @@ costs 2.4 decoding steps. To speed up the 14B, take work away from the CPU.
      and Gemma were asked for on Reddit
 
 7. **RTX 3060 follow-ups (2026-11-02, above).**
-   - The catalog on Ampere: a prefill coefficient between Turing's and Ada's (~0.08e12 from the 3060's 4B and 8B),
-     and decode on the 8B/14B 20-26% low; one card only, check on a second Ampere before changing
-     GPU_EFFICIENCY. **The RTX 5070 Ti says the same for Blackwell** (2026-11-09, below): prefill 0.076e12 (4B)
-     and 0.101e12 (14B) against Turing's 0.051e12, and the share of the bandwidth decode reaches rising with
-     the model (0.50 on the 4B, 0.66 on the 14B) as on the 3060. So, with two generations behind it:
-     should GPU_PREFILL_FLOPS_PER_GBS be per generation (Turing 0.051, Ampere and Blackwell ~0.08, Ada 0.125),
-     and should GPU_EFFICIENCY follow the size of the model instead of being one number? A fixed cost per token
+   - The catalog's prefill on Ampere and Blackwell: **done 2026-11-09** (below), 0.085e12 per GB/s.
+   - The catalog's decode: on the 3060 the 8B/14B are 20-26% above the estimate, on the 5070 Ti the 14B +6% and
+     the 4B 19% below (the share of the bandwidth decode reaches: 3060 0.64 on the 4B, 0.74-0.78 on the 8B and 14B;
+     5070 Ti 0.50 and 0.66). Should GPU_EFFICIENCY follow the size of the model instead of being one number? A fixed cost per token
      may be the better shape (to check): on the 5070 Ti an efficiency of ~0.75 plus ~1.7 ms per token fits both the
      4B (5.2 ms/token) and the 14B (13.5 ms), and it would say why the small model on the fastest card is the one
      furthest below 0.62.
@@ -169,6 +166,16 @@ costs 2.4 decoding steps. To speed up the 14B, take work away from the CPU.
    - The README: a "RTX 3060 12 GB" row (4B, 14B, 30B-A3B) when the user wants these numbers there.
 
 ## Done and measured
+
+- **2026-11-09 · The catalog's prefill per generation: Ampere and Blackwell get their own coefficient,
+  0.085e12 FLOPS per GB/s** (Turing 0.051e12, Ada 0.125e12, Apple 0.025e12 unchanged). The five points measured
+  on the two generations (3060: 4B 0.075, 8B 0.092, 14B 0.092e12; 5070 Ti: 4B 0.076, 14B 0.101e12) all land
+  within 16% of the estimate now, where they were 1.5-2.0 times above it: 3060 4B 3825 (measured 3356), 8B 1866
+  (2010), 14B 1034 (1120); 5070 Ti 4B 9520 (8485), 14B 2573 (3049). `catalog.ampere_or_blackwell()`: RTX 30x0 and
+  50x0 (laptops too), RTX A-series, a name with "Blackwell"; the rest that is not Ada stays on Turing's. The
+  recommendation does not change on either machine (the 14B). The coefficient grows with the model on every
+  generation (the 4B lowest): one number per card is the shape the catalog has, not what the cards do.
+  Tests: `test_prefill_on_ampere_and_blackwell`, `test_ampere_or_blackwell`.
 
 - **2026-11-09 · RTX 5070 Ti 16 GB (Blackwell, GDDR7), the fastest machine here: reasoning ahead
   5.39 → 1.73 s on the 4B and 8.95 → 3.49 s on the 14B, both models all on the GPU; and on this
