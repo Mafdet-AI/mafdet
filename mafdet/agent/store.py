@@ -47,6 +47,19 @@ class Session:
         with open(self.dir / "transcript.jsonl", "a", encoding="utf-8") as f:
             f.write(json.dumps(message, ensure_ascii=False) + "\n")
 
+    def reset(self, messages: list[dict]):
+        """The conversation was compacted: from here on it is `messages` (the lines before stay as a record)."""
+        self.log({"reset": True})
+        for m in messages:
+            self.log(m)
+
+    def notes(self) -> list[str]:
+        try:
+            lines = (self.dir / "notes.md").read_text(encoding="utf-8").splitlines()
+        except OSError:
+            return []
+        return [line[2:] for line in lines if line.startswith("- ")]
+
     def messages(self) -> list[dict]:
         """The conversation so far, without a tail left half done (tool calls with no result)."""
         out = []
@@ -54,9 +67,13 @@ class Session:
             with open(self.dir / "transcript.jsonl", encoding="utf-8") as f:
                 for line in f:
                     try:
-                        out.append(json.loads(line))
+                        m = json.loads(line)
                     except ValueError:
                         break
+                    if m.get("reset"):
+                        out = []
+                    else:
+                        out.append(m)
         except OSError:
             return []
         out = [m for m in out if m.get("role") != "system"]

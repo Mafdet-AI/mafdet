@@ -1,5 +1,6 @@
-"""The agent's own tools: files and the shell. Five of them, with short schemas: every tool is
-read again with every prompt, and Open WebUI's thirty cost 5.8k tokens (research/LOG.md).
+"""The agent's own tools: files and the shell (`shell.py`), with short schemas: every tool is
+read again with every prompt, and Open WebUI's thirty cost 5.8k tokens (research/LOG.md). Notes
+and the to-do list are in `memory.py`, the web in `web.py`.
 
 Each tool says how risky it is ("read", "write", "exec") and whether a call reaches outside the
 working folder; `permissions.py` decides from that. Everything else (decompilers, debuggers,
@@ -10,11 +11,11 @@ from __future__ import annotations
 import fnmatch
 import os
 import re
-import subprocess
-import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
+
+from .shell import Shell
 
 SKIP_DIRS = {".git", ".venv", "venv", "node_modules", "__pycache__", ".mypy_cache", ".pytest_cache"}
 MAX_SEARCH_FILE = 2_000_000
@@ -47,16 +48,10 @@ def _int(desc: str) -> dict:
     return {"type": "integer", "description": desc}
 
 
-def _kill(proc: subprocess.Popen):
-    """The command and what it started: PowerShell's children outlive it otherwise."""
-    if os.name == "nt":
-        subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True)
-    proc.kill()
-
-
-def builtin_tools(workdir: Path, read_roots: tuple[Path, ...] = (), stop=None) -> list[Tool]:
-    """The five tools, on `workdir`. Reads inside `read_roots` (the session's saved outputs) count as inside.
-    `stop` (a threading.Event) ends a shell command that is still running."""
+def builtin_tools(workdir: Path, read_roots: tuple[Path, ...] = (), stop=None, shell: Shell | None = None) -> list[Tool]:
+    """The file tools and the shell, on `workdir`. Reads inside `read_roots` (the session's saved outputs)
+    count as inside. `stop` (a threading.Event) ends a shell command that is still running; `shell` is the
+    session's shell (one is made, and closed at exit, when none is given)."""
     workdir = workdir.resolve()
     roots = (workdir,) + tuple(Path(r).resolve() for r in read_roots)
 
@@ -140,31 +135,19 @@ def builtin_tools(workdir: Path, read_roots: tuple[Path, ...] = (), stop=None) -
                         break
         return "\n".join(out) or "no match"
 
-    def shell(a: dict) -> str:
-        timeout = min(600, max(1, int(a.get("timeout") or 60)))
-        argv = (["powershell", "-NoProfile", "-NonInteractive", "-Command", a["command"]] if os.name == "nt"
-                else ["sh", "-c", a["command"]])
-        proc = subprocess.Popen(argv, cwd=workdir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                stdin=subprocess.DEVNULL)
-        end, why = time.monotonic() + timeout, ""
-        while True:
-            try:
-                data, _ = proc.communicate(timeout=0.2)
-                break
-            except subprocess.TimeoutExpired:
-                if stop is not None and stop.is_set():
-                    why = "error: stopped by the user"
-                elif time.monotonic() > end:
-                    why = (f"error: still running after {timeout} s, stopped "
-                           "(a longer `timeout`, up to 600, if it needs it)")
-                if why:
-                    _kill(proc)
-                    data, _ = proc.communicate()
-                    break
-        out = data.decode("utf-8", "replace").strip()
-        if why:
-            return (out + "\n" if out else "") + why
-        return (out or "[no output]") + (f"\n[exit code {proc.returncode}]" if proc.returncode else "")
+    if shell is None:
+        import atexit
+        import tempfile
+        shell = Shell(workdir, Path(tempfile.mkdtemp(prefix="mafdet-shell-")), stop)
+        atexit.register(shell.close)
+
+    def run_shell(a: dict) -> str:
+        if a.get("background"):
+            return shell.start_job(a["command"])
+        return shell.run(a["command"], min(600, max(1, int(a.get("timeout") or 60))))
+
+    def job(a: dict) -> str:
+        return shell.job(a.get("id"), "stop" if a.get("stop") else "output")
 
     def out(key: str):
         return lambda a: not inside(a.get(key) or ".")
@@ -187,7 +170,13 @@ def builtin_tools(workdir: Path, read_roots: tuple[Path, ...] = (), stop=None) -
              _params([], pattern=_str("regular expression for the lines; empty lists the files"),
                      path=_str("folder or file, default the working folder"),
                      glob=_str("file names to look at, e.g. *.c")), search, "read", out("path")),
-        Tool("shell", f"Run a {sh} command in the working folder and return its output.",
-             _params(["command"], command=_str("the command"), timeout=_int("seconds, default 60")),
-             shell, "exec"),
+        Tool("shell", f"Run a {sh} command and return its output. The shell stays open: the folder and the "
+                      "variables of one command are there for the next.",
+             _params(["command"], command=_str("the command"), timeout=_int("seconds, default 60"),
+                     background={"type": "boolean", "description": "true for something that must stay up (a "
+                                                                   "server, a debugger): it becomes a job"}),
+             run_shell, "exec"),
+        Tool("job", "The background jobs; with an id, the end of that job's output.",
+             _params([], id=_int("the job's number"),
+                     stop={"type": "boolean", "description": "true to stop that job"}), job, "read"),
     ]

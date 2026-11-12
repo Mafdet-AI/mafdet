@@ -33,7 +33,9 @@ System: {system}
 How to work:
 - Act through the tools; do not describe what you would do, do it. One step at a time: look at each result before the next call.
 - Say only what you have seen in a tool result. If you have not checked something, check it or say it is a guess.
-- Tool outputs are cut when long, and old ones are left out of the conversation: write down what matters (an address, a name, a value) in your answer as you find it, and ask for narrow outputs (one function, one range, a pattern) instead of whole listings.
+- Tool outputs are cut when long, and old ones are left out of the conversation: when you find something that matters (an address, a name, a value), keep it with `note`, and ask for narrow outputs (one function, one range, a pattern) instead of whole listings.
+- For a task of several steps, set the steps with `todo` first and update it as you go.
+- The shell stays open between commands. For something that must keep running (a server, a debugger), use `background` and read it with `job`.
 - The user approves commands and writes: if a call is declined, do not repeat it.
 - When the task is done, answer briefly: what you found, where, and what is left open."""
 
@@ -82,6 +84,11 @@ class Printer:
             self._w(_paint(f"  declined: {d['name']}", DIM) + "\n")
         elif kind == "left_out":
             self._w(_paint(f"  context: {d['n']} old tool outputs left out", DIM) + "\n")
+        elif kind == "compacted":
+            self._w(_paint(f"  context: the conversation so far was summarized, about {d['before']} -> "
+                           f"{d['after']} tokens", DIM) + "\n")
+        elif kind == "stopped":
+            self._w(_paint("  stopped", DIM) + "\n")
         elif kind == "step":
             total = d["prompt_tokens"] + d["completion_tokens"]
             speed = d["completion_tokens"] / d["seconds"] if d["seconds"] else 0
@@ -101,13 +108,39 @@ def ask_in_terminal(tool, args: dict, why: str) -> str:
         return "n"
 
 
-def build_toolbox(args, workdir: Path, stop=None):
-    """The five tools, plus the MCP servers named with --mcp. Returns (toolbox, servers, their instructions)."""
+SAVED = {"model": "", "approve": "ask", "mcp": [], "profile": "", "tools": "", "web": False}
+
+
+def settings(args) -> dict:
+    """The options that stay from one start to the next (~/.mafdet/agent.json): what the command line
+    does not say comes from there. --save writes the ones in use. `search_url` (a SearXNG) is only in the file."""
+    from ..core import config
+    saved = config.read_json("agent.json")
+    for key, default in SAVED.items():
+        if getattr(args, key, None) is None:
+            value = saved.get(key, default)
+            setattr(args, key, value if type(value) is type(default) else default)
+    args.search_url = str(saved.get("search_url") or "")
+    if getattr(args, "save", False):
+        config.write_json("agent.json", {**saved, **{key: getattr(args, key) for key in SAVED}})
+    return saved
+
+
+def build_toolbox(args, workdir: Path, stop=None, memory=None, shell=None):
+    """The agent's own tools, plus the MCP servers named with --mcp. Returns (toolbox, servers, their
+    instructions)."""
     from . import mcp
     from .store import sessions_dir
     from .tools import builtin_tools
     # Reads of the saved outputs of any session count as inside: /new changes session, not tools.
-    box = mcp.Toolbox(builtin_tools(workdir, read_roots=(sessions_dir(),), stop=stop))
+    tools = builtin_tools(workdir, read_roots=(sessions_dir(),), stop=stop, shell=shell)
+    if memory is not None:
+        from .memory import memory_tools
+        tools += memory_tools(memory)
+    if getattr(args, "web", False):
+        from .web import web_tools
+        tools += web_tools(getattr(args, "search_url", ""))
+    box = mcp.Toolbox(tools)
     servers, notes = [], []
     known = mcp.configured()
     patterns = [p.strip() for p in (args.tools or "").split(",") if p.strip()]
@@ -205,6 +238,11 @@ def run(args) -> int:
     from .permissions import Permissions
     from .store import Session
 
+    from .memory import Memory
+    from .shell import Shell
+    from .store import sessions_dir
+
+    settings(args)
     workdir = Path(args.workdir).resolve()
     if not workdir.is_dir():
         raise SystemExit(f"{workdir} is not a folder.")
@@ -212,7 +250,9 @@ def run(args) -> int:
     history = session.messages() if args.resume else None
     interactive = bool(sys.stdin and sys.stdin.isatty() and sys.stdout and sys.stdout.isatty())
     stop = threading.Event()
-    box, servers, notes = build_toolbox(args, workdir, stop)
+    memory = Memory()
+    shell = Shell(workdir, sessions_dir() / f"shell-{os.getpid()}", stop)
+    box, servers, notes = build_toolbox(args, workdir, stop, memory, shell)
     notes.insert(0, project_notes(workdir))
     if args.system:
         notes.insert(0, Path(args.system).read_text(encoding="utf-8"))
@@ -232,7 +272,7 @@ def run(args) -> int:
             return Agent(model, box, Permissions(mode, ask), Session() if fresh else session, system=system,
                          ctx=args.ctx, max_tokens=args.max_tokens, max_steps=args.max_steps,
                          tool_chars=args.tool_chars, temperature=args.temperature, think=args.think, emit=emit,
-                         history=None if fresh else history, stop=stop)
+                         history=None if fresh else history, stop=stop, memory=memory)
 
         if interactive and not args.prompt and not args.plain:
             from .tui import AgentTUI
@@ -274,6 +314,7 @@ def run(args) -> int:
                 _turn(agent, text)
     finally:
         stop.set()
+        shell.close()
         for server in servers:
             server.close()
         if engine is not None:

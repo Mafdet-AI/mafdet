@@ -13,6 +13,7 @@ import threading
 import time
 
 from .context import Context, ContextFull, clip
+from .memory import Memory, compact
 from .model import ModelError, Reply, Stopped
 from .mcp import Toolbox
 from .permissions import Permissions
@@ -25,8 +26,9 @@ class Agent:
     def __init__(self, model, toolbox: Toolbox, permissions: Permissions, session: Session, *, system: str,
                  ctx: int = 16384, max_tokens: int = 4096, max_steps: int = 40, tool_chars: int = 4000,
                  temperature: float = 0.6, think: bool = True, emit=None, history: list[dict] | None = None,
-                 stop: threading.Event | None = None):
+                 stop: threading.Event | None = None, memory: Memory | None = None):
         self.model = model
+        self.memory = memory or Memory()
         self.toolbox = toolbox
         self.permissions = permissions
         self.session = session
@@ -43,7 +45,10 @@ class Agent:
         self.stop = stop or threading.Event()           # set it to end the turn (Esc); the tools see it too
         if history:
             self.messages += history
+            self.memory.clear(session.dir / "notes.md")
+            self.memory.notes = session.notes()
         else:
+            self.memory.clear(session.dir / "notes.md")
             session.log(self.messages[0])
 
     def _add(self, message: dict):
@@ -72,16 +77,43 @@ class Agent:
                 if call["id"] not in answered:
                     self._add({"role": "tool", "tool_call_id": call["id"], "content": why})
 
+    def compact(self) -> bool:
+        """Replace the conversation with the model's summary of it, the notes, the list and the last turns."""
+        try:
+            new = compact(self.messages, self.model, self.memory, self.context.limit, self.context.ratio)
+        except ModelError as e:
+            self.emit("error", text=f"no summary: {e}")
+            return False
+        if new is None:
+            return False
+        before = self.context.estimate(self.messages, self.toolbox.specs())
+        self.messages = new
+        self.session.reset(new[1:])
+        self.emit("compacted", before=before, after=self.context.estimate(new, self.toolbox.specs()))
+        return True
+
+    def _fit(self, tools: list[dict]) -> bool:
+        """Make the prompt fit: old outputs left out first, then the conversation summarized."""
+        try:
+            left_out = self.context.fit(self.messages, tools, self.paths)
+        except ContextFull as e:
+            if not self.compact():
+                self.emit("error", text=str(e))
+                return False
+            try:
+                left_out = self.context.fit(self.messages, tools, self.paths)
+            except ContextFull as e2:
+                self.emit("error", text=str(e2))
+                return False
+        if left_out:
+            self.emit("left_out", n=left_out)
+        return True
+
     def _steps(self) -> str:
         for step in range(1, self.max_steps + 1):
             tools = self.toolbox.specs()
-            try:
-                left_out = self.context.fit(self.messages, tools, self.paths)
-            except ContextFull as e:
-                self.emit("error", text=str(e))
+            if not self._fit(tools):
                 return ""
-            if left_out:
-                self.emit("left_out", n=left_out)
             t0 = time.perf_counter()
             try:
                 reply: Reply = self.model.chat(self.messages, tools, max_tokens=self.max_tokens,

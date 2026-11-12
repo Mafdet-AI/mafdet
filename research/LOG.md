@@ -213,6 +213,19 @@ costs 2.4 decoding steps. To speed up the 14B, take work away from the CPU.
 
 ## Done and measured
 
+- **2026-11-12 · `mafdet agent`, the six missing functions: built, tested on fakes, none tried on a real model.**
+  `shell.py`: one PowerShell (or sh) open for the session, each command dot-sourced from a file, a marker with
+  the exit code and the folder; a timeout or Esc kills it and the next result says a new shell started;
+  `background` makes a job, `job` reads or stops it. `memory.py`: `note`, `todo` (shown above the message box),
+  and compaction (a summary by the model, without tools or reasoning, then notes, list and the last two
+  assistant turns) when leaving outputs out is not enough, or with `/compact`; the transcript gets a reset
+  record so `--resume` starts from the compacted state. `web.py`: `web_search` (DuckDuckGo's HTML page, or
+  `search_url` of a SearXNG in agent.json) and `web_fetch`, only with `--web`. `mcp._budget`: a tool's schema
+  cut by levels to 450 characters or bare names and types (not measured again on rea). The interface replays a
+  resumed session (`/notes`, `/compact` added). `--save` keeps model, approval, MCP servers, profile, tools and
+  web in `~/.mafdet/agent.json`. 37 tests (`test_agent.py`, `test_agent_more.py`). **Left: README (en, it) not
+  updated for these six; the full suite not rerun after them; a real session.**
+
 - **2026-11-12 · `mafdet agent` opens a full-screen conversation, as Claude Code does (the user: "like my
   behaviour and yours here, in this window").** `mafdet/agent/tui.py` (Textual, the app's amber theme): the
   log above, a multi-line message box, a status line (model, tokens used of the budget, approval, tok/s).

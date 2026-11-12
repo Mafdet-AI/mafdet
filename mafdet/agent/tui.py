@@ -13,7 +13,7 @@ approval asks in place: y, a or n.
     Ctrl+O          reasoning and tool outputs in full, or folded
     Up / Down       earlier messages
     Ctrl+C          clear the message, stop the model, or leave
-    /help /tools /new /approve <mode> /quit
+    /help /tools /notes /compact /new /approve <mode> /quit
 """
 from __future__ import annotations
 
@@ -44,9 +44,11 @@ THEME = Theme(name="mafdet-agent", primary=AMBER, secondary=TEXT, accent=HOT, fo
 HELP = """Enter sends, Shift+Enter (or Ctrl+J) starts a new line, Esc stops the model.
 Shift+Tab changes what runs without asking: ask (writes and commands ask), edits (writes in the folder run), all (commands too).
 Ctrl+O shows the reasoning and the tool outputs in full. Up and Down bring back earlier messages.
-/tools  the tools the model has      /new  a new conversation      /approve ask|edits|all      /quit"""
+/tools  the tools the model has      /notes  what the model wrote down      /compact  summarize to make room
+/new  a new conversation      /approve ask|edits|all      /quit"""
 
 FOLDED_LINES, OPEN_LINES = 4, 40
+REPLAY = 60                 # messages of a resumed session shown again
 
 # What the model is up to while it works, as a cat would put it. Plain ASCII faces: they show in any terminal.
 CAT_FACES = ("=^.^=", "=^.^=", "=^.^=", "=^-^=", "=^.^=", "=^.^=", "=^o^=", "=^.^=")
@@ -163,6 +165,7 @@ class AgentTUI(App):
     .user {{ background: {PANEL}; color: {HOT}; margin: 1 0 0 0; padding: 0 1; }}
     .think {{ margin: 1 0 0 0; }}
     #activity {{ display: none; height: 1; margin: 1 2 0 2; }}
+    #todo {{ display: none; height: auto; max-height: 10; margin: 1 2 0 2; }}
     .text {{ margin: 1 0 0 0; }}
     Markdown.answer {{ margin: 1 0 0 0; padding: 0; background: transparent; }}
     .tool {{ margin: 1 0 0 0; }}
@@ -207,6 +210,7 @@ class AgentTUI(App):
 
     def compose(self) -> ComposeResult:
         yield VerticalScroll(id="log")
+        yield Static(id="todo")
         yield Static(id="activity")
         yield Static(id="ask")
         yield Prompt(id="prompt")
@@ -242,6 +246,63 @@ class AgentTUI(App):
         t.append(f"session   {self.agent.session.id}" + (f" (resumed, {resumed} messages)" if resumed else "") + "\n")
         t.append("Enter sends · Esc stops · Shift+Tab approval · Ctrl+O reasoning and details · /help", style=FAINT)
         self._put(t, "welcome")
+        self.agent.memory.changed = self._memory_changed
+        if resumed:
+            self._replay(self.agent.messages[1:])
+        self._todo()
+
+    def _replay(self, messages: list[dict]):
+        """A resumed session on the screen again: what was said and done, without the reasoning."""
+        if len(messages) > REPLAY:
+            self._put(Text(f"  … {len(messages) - REPLAY} earlier messages not shown", style=FAINT), "note")
+        for m in messages[-REPLAY:]:
+            role, content = m.get("role"), str(m.get("content") or "").strip()
+            if role == "user":
+                self._put(Text("> " + content), "user")
+            elif role == "assistant":
+                if content:
+                    self.log_view.mount(Markdown(content, classes="answer"))
+                for call in m.get("tool_calls") or []:
+                    fn = call.get("function") or {}
+                    try:
+                        args = json.loads(fn.get("arguments") or "{}")
+                    except ValueError:
+                        args = fn.get("arguments")
+                    self._event("tool", {"name": fn.get("name", ""), "args": args})
+            elif role == "tool":
+                self._event("result", {"text": content})
+        self.doing = ""
+        self._put(Text("  ⎿ resumed here", style=DIM), "note")
+
+    def _memory_changed(self):
+        try:
+            self.call_from_thread(self._todo)
+        except Exception:                       # called from this thread (a new agent), or the app is closing
+            try:
+                self._todo()
+            except Exception:
+                pass
+
+    def _todo(self):
+        """The model's to-do list, above the message box while there is one."""
+        panel = self.query_one("#todo", Static)
+        todo = self.agent.memory.todo if self.agent is not None else []
+        panel.display = bool(todo)
+        if not todo:
+            return
+        t = Text()
+        done = sum(1 for item in todo if item["done"])
+        t.append(f"To do  {done}/{len(todo)}\n", style=f"bold {DIM}")
+        current = next((i for i, item in enumerate(todo) if not item["done"]), -1)
+        for i, item in enumerate(todo[:8]):
+            if item["done"]:
+                t.append(f"  [x] {item['task']}\n", style=FAINT)
+            else:
+                t.append(f"  [ ] {item['task']}\n", style=HOT if i == current else TEXT)
+        if len(todo) > 8:
+            t.append(f"  … {len(todo) - 8} more\n", style=FAINT)
+        t.rstrip()
+        panel.update(t)
 
     def _put(self, content, classes: str) -> Static:
         widget = Static(content, classes=classes)
@@ -340,6 +401,10 @@ class AgentTUI(App):
             self.limit = d["limit"]
             if d["seconds"] > 0 and d["completion_tokens"]:
                 self.tps = d["completion_tokens"] / d["seconds"]
+        elif kind == "compacted":
+            self._put(Text(f"  context: the conversation so far was summarized, about {d['before']:,} → "
+                           f"{d['after']:,} tokens (notes and to-do list kept)", style=DIM), "note")
+            self.used = d["after"]
         elif kind == "stopped":
             self._put(Text("  ⎿ stopped", style=DIM), "note")
         elif kind == "error":
@@ -472,6 +537,17 @@ class AgentTUI(App):
         except Exception:
             pass
 
+    def _compact(self):
+        try:
+            if not self.agent.compact():
+                self._emit("error", text="nothing to summarize yet")
+        except Exception as e:
+            self._emit("error", text=f"{type(e).__name__}: {e}")
+        try:
+            self.call_from_thread(self._turn_done)
+        except Exception:
+            pass
+
     def _turn_done(self):
         self._end_block()
         self.running = self.stopping = False
@@ -496,6 +572,16 @@ class AgentTUI(App):
             t.append(f"  {hidden} more through find_tools" if hidden else "")
             t.rstrip()
             self._put(t, "note")
+        elif name == "/notes":
+            notes = self.agent.memory.notes
+            self._put(Text("\n".join(f"  - {n}" for n in notes) if notes else "  no notes yet", style=DIM), "note")
+        elif name == "/compact":
+            if self.running:
+                self._put(Text("  stop the model first (Esc)", style=DIM), "note")
+            else:
+                self.running, self.stopping, self.t_turn = True, False, time.monotonic()
+                self.pieces, self.doing, self.word = 0, "summarizing", ""
+                self.run_worker(self._compact, thread=True)
         elif name == "/approve":
             if arg in MODES:
                 self._set_mode(arg)

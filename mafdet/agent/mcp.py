@@ -32,6 +32,7 @@ from .tools import Tool
 PROTOCOL = "2025-06-18"
 DESCRIPTION_CHARS = 200
 PARAMETER_CHARS = 100
+TOOL_CHARS = 450                # a tool's description and schema together, about 150 tokens
 # Schema keywords the model does not need to write a call: names, and checks the server makes anyway.
 DROPPED = {"$schema", "$id", "$comment", "title", "additionalProperties", "examples", "pattern", "format",
            "minLength", "maxLength", "minItems", "maxItems", "uniqueItems", "deprecated"}
@@ -175,6 +176,50 @@ def _slim(schema):
     return out
 
 
+def _flat(prop, chars: int):
+    """One parameter down to what a call needs: its type, a short enum, a short description."""
+    if not isinstance(prop, dict):
+        return prop
+    for key in ("anyOf", "oneOf"):                  # "a string or null": the first real type
+        options = [o for o in prop.get(key) or [] if isinstance(o, dict) and o.get("type") != "null"]
+        if options:
+            prop = {**options[0], **{k: v for k, v in prop.items() if k not in ("anyOf", "oneOf")}}
+            break
+    out = {}
+    if "type" in prop:
+        out["type"] = prop["type"]
+    if isinstance(prop.get("enum"), list) and len(prop["enum"]) <= 8:
+        out["enum"] = prop["enum"]
+    if isinstance(prop.get("items"), dict) and "type" in prop["items"]:
+        out["items"] = {"type": prop["items"]["type"]}
+    if chars and isinstance(prop.get("description"), str):
+        out["description"] = _short(prop["description"], chars)
+    return out or {"type": "string"}
+
+
+def _budget(description: str, schema: dict) -> tuple[str, dict]:
+    """Cut a tool's schema, a level at a time, until it is under TOOL_CHARS or bare: sixteen tools of a
+    reverse-engineering server took 3.8k tokens with their schemas only slimmed, a quarter of 16k.
+    Nothing a call needs goes: every parameter keeps its name and type, `required` stays."""
+    def size() -> int:
+        return len(description) + len(json.dumps(schema, ensure_ascii=False))
+
+    props = schema.get("properties")
+    if size() <= TOOL_CHARS or not isinstance(props, dict):
+        return description, schema
+    required = set(schema.get("required") or [])
+    schema = {k: v for k, v in schema.items() if k in ("type", "properties", "required")}
+    for level in (60, 0):                           # nested schemas flattened; then the optional ones bare
+        schema["properties"] = {name: _flat(p, 60 if (name in required or level) else 0)
+                                for name, p in props.items()}
+        if size() <= TOOL_CHARS:
+            return description, schema
+    description = _short(description, 110)
+    if size() > TOOL_CHARS:                         # as bare as it gets: a tool of many parameters stays above
+        schema["properties"] = {name: _flat(p, 0) for name, p in props.items()}
+    return description, schema
+
+
 def _short(text: str, n: int) -> str:
     text = " ".join(str(text).split())
     return text if len(text) <= n else text[:n - 1].rsplit(" ", 1)[0] + "…"
@@ -189,7 +234,8 @@ def as_tool(server: McpServer, spec: dict, name: str = "", allow: list[str] | tu
     schema.setdefault("properties", {})
     read_only = (bool((spec.get("annotations") or {}).get("readOnlyHint"))
                  or any(fnmatch.fnmatch(remote, p) for p in allow))
-    return Tool(name or remote, _short(spec.get("description") or remote, DESCRIPTION_CHARS), schema,
+    description, schema = _budget(_short(spec.get("description") or remote, DESCRIPTION_CHARS), schema)
+    return Tool(name or remote, description, schema,
                 lambda args: server.call(remote, args), "read" if read_only else "exec", source=server.name)
 
 

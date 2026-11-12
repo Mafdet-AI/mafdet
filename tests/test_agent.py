@@ -216,7 +216,7 @@ def test_mcp_client(server):
 def test_many_tools_stay_hidden_until_found(server):
     box = mcp.Toolbox(builtin_tools(Path(".")))
     box.add_server(server, ["tool_0", "decomp*"])
-    assert set(box.active) == {"read_file", "write_file", "edit_file", "search", "shell", "tool_0",
+    assert set(box.active) == {"read_file", "write_file", "edit_file", "search", "shell", "job", "tool_0",
                                "decompile_function", "find_tools"}
     assert len(box.hidden) == 20
     t0 = box.get("tool_0")
@@ -226,7 +226,7 @@ def test_many_tools_stay_hidden_until_found(server):
     assert list(props) == ["title"] and "title" not in props["title"]
     assert len(props["title"]["description"]) <= mcp.PARAMETER_CHARS
     assert "$schema" not in t0.parameters and "additionalProperties" not in t0.parameters
-    assert len(json.dumps(box.specs())) < 3200                           # 8 tools: under ~1,000 tokens
+    assert len(json.dumps(box.specs())) < 3700                           # 9 tools: about 1,200 tokens
 
     found = box.find({"query": "long output"})
     assert found.splitlines()[0].startswith("big:") and "enable" in found
@@ -385,9 +385,9 @@ class Streams(Script):
 
     def chat(self, messages, tools=None, on_delta=None, **kw):
         reply = super().chat(messages, tools)
-        if reply.reasoning:
+        if reply.reasoning and on_delta:
             on_delta("think", reply.reasoning)
-        if reply.content:
+        if reply.content and on_delta:
             on_delta("text", reply.content)
         reply.completion_tokens = 10
         return reply

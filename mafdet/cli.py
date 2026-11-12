@@ -88,12 +88,14 @@ COMMANDS = [
             "named in ~/.mafdet/mcp.json) in a loop, until the task is done. Built first for reverse engineering "
             "and security study on your own machine. Reading inside the working folder runs by itself; writing "
             "and commands ask first (--approve). Tool outputs are cut to fit a local model's context, and kept "
-            "whole in ~/.mafdet/sessions. In a terminal it opens a full-screen conversation (Esc stops the model, "
+            "whole in ~/.mafdet/sessions; the shell stays open between commands, long ones run as background jobs, "
+            "and the model keeps notes and a to-do list that survive a full context. In a terminal it opens a full-screen conversation (Esc stops the model, "
             "Shift+Tab changes the approval, Ctrl+O shows the details); --plain or -p for plain lines. With --url "
             "it uses an engine already running.",
             ("mafdet agent", "mafdet agent --model qwen3-14b --workdir C:\\samples\\crackme",
              "mafdet agent --mcp rea --profile native-static", 'mafdet agent -p "what does main.c do?"',
-             "mafdet agent --resume last"), "use", common=False),
+             "mafdet agent --resume last", "mafdet agent --model qwen3-14b --mcp rea --profile native-static --web --save"),
+            "use", common=False),
     Command("hunt", "the hunt", "simulate people typing and measure the wait after sending",
             "Simulates a person typing a message (clean: start to finish; messy: typos, backspaces and an "
             "edit in the middle; paste: a long document followed by a question) and measures the wait from "
@@ -388,23 +390,30 @@ def _proxy_args(p):
 
 
 def _agent_args(p):
-    p.add_argument("--model", default="",
+    p.add_argument("--model", default=None,
                    help="the model: an id from `mafdet models` (qwen3-14b), a GGUF file, or repository:file "
-                        "(default: the one chosen in the app). It needs a chat template with tool calls")
+                        "(default: the one saved with --save, else the one chosen in the app). It needs a chat "
+                        "template with tool calls")
     p.add_argument("--workdir", default=".", help="the folder the agent works in (default: this one)")
+    p.add_argument("--save", action="store_true",
+                   help="remember --model, --approve, --mcp, --profile, --tools and --web for the next starts "
+                        "(~/.mafdet/agent.json): after it, `mafdet agent` alone uses them")
     p.add_argument("-p", "--prompt", default="", help="one task, then exit (without it: a conversation)")
     p.add_argument("--plain", action="store_true",
                    help="the conversation as plain lines in the terminal, instead of the full-screen interface")
-    p.add_argument("--approve", default="ask", choices=["ask", "edits", "all"],
+    p.add_argument("--approve", default=None, choices=["ask", "edits", "all"],
                    help="ask: writes, commands and tools not marked read-only ask first; edits: writes inside "
                         "the working folder run by themselves; all: commands too, for a VM or a throwaway "
-                        "folder (default: %(default)s)")
+                        "folder (default: ask)")
+    p.add_argument("--web", action=argparse.BooleanOptionalAction, default=None,
+                   help="give the model web_search and web_fetch; off by default, since an address or a query "
+                        "is something that leaves the machine")
     p.add_argument("--mcp", action="append", metavar="NAME",
                    help="an MCP server from ~/.mafdet/mcp.json whose tools the model gets; repeat for more")
-    p.add_argument("--profile", default="",
+    p.add_argument("--profile", default=None,
                    help="the MCP tools to start with, by task: native-static (static analysis of a native "
                         "binary); the others stay reachable through find_tools")
-    p.add_argument("--tools", default="",
+    p.add_argument("--tools", default=None,
                    help="MCP tools to start with, as comma-separated name patterns: \"procedure_*,xrefs\"")
     p.add_argument("--ctx", type=int, default=0,
                    help="context in tokens (default: %(default)s, the largest of 32k, 24k and 16k that leaves "
