@@ -173,6 +173,7 @@ def build_toolbox(args, workdir: Path, stop=None, memory=None, shell=None):
             need = None
         if need is not None:
             box.active[need.name] = need
+            box.need = need.run.__self__                # the interface's key installs through the same door
     known = mcp.configured()
     patterns = [p.strip() for p in (args.tools or "").split(",") if p.strip()]
     if args.profile:
@@ -343,7 +344,13 @@ def run(args) -> int:
 
         if interactive and not args.prompt and not args.plain:
             from .tui import AgentTUI
-            AgentTUI(make_agent, label=label, workdir=str(workdir), mode=args.approve).run()
+            ahead = None
+            if args.think and args.engine == "llama" and getattr(args, "think_ahead", True):
+                from .ahead import Ahead, AheadModel
+                ahead = Ahead.for_engine(model.url, args.ctx)
+                if ahead is not None:
+                    model = AheadModel(model, ahead)
+            AgentTUI(make_agent, label=label, workdir=str(workdir), mode=args.approve, ahead=ahead).run()
             return 0
         agent = make_agent(Printer(), ask_in_terminal if interactive else None)
         from .context import json_tokens

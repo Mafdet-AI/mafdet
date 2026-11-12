@@ -481,6 +481,38 @@ def _digest(path: Path, algo: str) -> str:
     return h.hexdigest()
 
 
+# ---------------------------------------------------------------- while the user types
+
+def suggest(kit: Kit, text: str, attached=()) -> dict | None:
+    """The catalog's tool a message being written seems to need, by the words of the entry's `tasks`
+    (English and Italian, file extensions, http://): {"id", "name", "words", "state", "mb"}, or None. No model,
+    no GPU: it runs at every keystroke. A tool whose server is on already is not suggested."""
+    low = " " + text.lower() + " "
+    best, best_score, words = None, 0, []
+    for tool_id in kit.ids():
+        e = kit.entry(tool_id)
+        if not e.get("tasks") or (e.get("mcp") or {}).get("name") in attached:
+            continue
+        hits = []
+        for word in (w.strip().lower() for w in e["tasks"].split(",")):
+            if not word:
+                continue
+            if word.startswith(".") or word.endswith("://"):
+                found = re.search(re.escape(word) + (r"(?![\w])" if word.startswith(".") else ""), low)
+            else:
+                found = re.search(r"(?<![\w])" + re.escape(word) + r"(?![\w])", low)
+            if found:
+                hits.append(word)
+        if len(hits) > best_score:
+            best, best_score, words = tool_id, len(hits), hits
+    if best is None:
+        return None
+    plan = kit.plan(best)
+    state = ("start" if kit.configured(best) or not plan else "install")
+    mb = sum(int((kit.file(i) or {}).get("mb") or 0) for i in plan) if state == "install" else 0
+    return {"id": best, "name": kit.entry(best)["name"], "words": words, "state": state, "mb": mb}
+
+
 # ---------------------------------------------------------------- the model's tool
 
 def mentioned(kit: Kit, tool_id: str, turn) -> bool:
@@ -503,6 +535,7 @@ class NeedTool:
         self.auto = {str(a) for a in auto or ()}
         self.stop = stop
         self.log_dir = log_dir
+        self._run_lock = threading.Lock()               # the model and the person (a key) may ask at once
 
     def tool(self) -> Tool | None:
         ids = self.kit.ids()
@@ -550,7 +583,14 @@ class NeedTool:
                      "being analysed rather than from your task")
         return "install", text
 
-    def run(self, args: dict) -> str:
+    def attached_names(self) -> set[str]:
+        return {getattr(s, "name", "") for s in self.servers}
+
+    def run(self, args: dict, say=None) -> str:
+        with self._run_lock:
+            return self._run(args, say)
+
+    def _run(self, args: dict, say=None) -> str:
         tool_id = str(args.get("id") or "")
         kit = self.kit
         try:
@@ -562,7 +602,8 @@ class NeedTool:
         notes = []
         try:
             if not kit.configured(tool_id):
-                done = kit.install(tool_id, say=notes.append, stop=self.stop)
+                done = kit.install(tool_id, say=(lambda t: (notes.append(t), say(t))) if say else notes.append,
+                                   stop=self.stop)
                 if done:
                     notes = [f"installed: {', '.join(kit.entry(i)['name'] + ' ' + kit.entry(i)['version'] for i in done)}"]
         except KitError as err:

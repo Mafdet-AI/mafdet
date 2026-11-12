@@ -213,7 +213,11 @@ costs 2.4 decoding steps. To speed up the 14B, take work away from the CPU.
      Left: runs of hours (`--time-limit`; rerunning the command goes on, checked after a hard kill); inside a
      cycle the peers not named yet are seen under their default names; a function with hundreds of callees
      shows 60.
-   - **Phase 3, MAFDET's own part.** Thinking ahead while a tool runs (a 10 s command leaves the GPU idle, as
+   - **Phase 3, MAFDET's own part.** Thinking ahead while the request is typed: **built 2026-11-12** ("Done
+     and measured"), to measure on the 5070 Ti with the 14B: the 24 word problems are not an agent's tasks;
+     a set of agent requests (read a file and answer, find a function in a binary, a search in a folder),
+     typed by `research/thinking_ahead.py`'s typist, Enter to first tool call and to the answer, with and
+     without, and whether the notes change which tool is called first. Thinking ahead while a tool runs (a 10 s command leaves the GPU idle, as
      typing does) and on the function under the analyst's cursor: **not through rea on Windows**
      (`current_address` and `current_procedure` are Hopper-only there, 2026-11-12); it needs a server that
      follows the analyst's own decompiler, to look for. Leaves analysed in parallel on slots, only for a model
@@ -278,6 +282,31 @@ costs 2.4 decoding steps. To speed up the 14B, take work away from the CPU.
      pyghidra-mcp ("Done and measured", 2026-11-12).
 
 ## Done and measured
+
+- **2026-11-12 · Thinking ahead in the agent (phase 3, the typing part) and the tool suggested while the
+  request is written; a first real run with Qwen3-4B on the RTX 2060.** `ahead.py`: the proxy's Thinker and
+  frame (`proxy/think.py`) reused on the agent's conversation. While the user types in the full-screen
+  interface, the history plus the draft is rendered by llama-server's template with the tools
+  (`/apply-template`, enable_thinking on, debounced 0.15 s) and the model writes notes after it in chunks of
+  32 tokens on `/completion`, slot 0, at most 1,024; only while no turn runs. On Enter the first step of the
+  turn, if the history is the one the notes were written after, is the prompt of the final message + the
+  notes (a bridge for the words added since) + SENT, streamed on `/completion`, read back as reasoning, text
+  and Qwen3's <tool_call> blocks (`think.answer`); the later steps through `/v1/chat/completions` as before,
+  the history plain (no reasoning in it). The agent's own frame: the chat's SEED (facts about each key term)
+  made the 4B list decades of history from "read notes.txt and" in the first run; the agent's ("I prepare
+  the work: what the words point to among files, programs, addresses, tools; what to find out; the first
+  step") gave on-task notes ("1st step: read notes.txt", "I will call read_file"). Real, the 4B all on the
+  GPU, 16k, one request typed at ~3 words a second ("read notes.txt and tell me who owns the installer and
+  how much budget is left"), the same task three times: with notes (273-294 tokens reasoned ahead) the
+  first tool call 0.85-1.75 s after Enter and the turn 4.0-5.1 s; without, 3.5-5.5 s and 6.3-8.3 s; every
+  answer right. Single samples, one task: a direction, not a result. On by default where it can work
+  (llama-server, a template with <think>, thinking on, the full-screen interface), `--no-think-ahead`.
+  `kit.suggest`: the catalog's `tasks` words (English and Italian, `.exe`, `https://`) matched against the
+  draft at every keystroke, no model; a line under the box ("rea-agents may help (.exe, eseguibile): ctrl+t
+  installs it, ~766 MB, while you write"), Ctrl+T asks as need_tool does and installs in the background, the
+  server attached before the message is sent. rea now needs Ghidra (not only wants it): without a backend
+  it cannot read a native binary. 7 tests (`tests/test_agent_ahead.py`, one through Textual's pilot);
+  suite 316 passed.
 
 - **2026-11-12 · `need_tool`: the agent installs tools from MAFDET's own catalog, asked first; a real install
   of Node.js and chrome-devtools-mcp on the RTX 2060 desktop.** Decided with the user: never a package name

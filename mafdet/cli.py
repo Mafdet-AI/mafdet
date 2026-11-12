@@ -460,6 +460,9 @@ def _agent_args(p):
                    help="list MAFDET's catalog of tools the agent can install (need_tool), and what is installed")
     p.add_argument("--install", default="", metavar="ID",
                    help="install a tool of the catalog by hand (asks first), and write its MCP server into mcp.json")
+    p.add_argument("--no-think-ahead", dest="think_ahead", action="store_false",
+                   help="in the full-screen interface, do not let the model reason on the message while you write it "
+                        "(on by default with llama-server and a reasoning model)")
     p.add_argument("--no-install", action="store_true",
                    help="no need_tool: the model cannot ask to install anything in this session")
     p.add_argument("--book", default="", metavar="BINARY",

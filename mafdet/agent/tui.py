@@ -6,11 +6,16 @@ thoughts are not shown: a cat face blinks next to what a cat would be doing (Maf
 goddess), and the reasoning stays folded in a line, to open with Ctrl+O. A call that needs your
 approval asks in place: y, a or n.
 
+While you write, the model already reasons about the message (thinking ahead, `ahead.py`: llama-server
+and a reasoning model only), and a line under the box says when the message seems to need a tool of
+MAFDET's catalog that is not on (`kit.suggest`): Ctrl+T installs it, asking first, while you finish.
+
     Enter           send (while the model works: queued, sent when it is done)
     Shift+Enter     a new line (Ctrl+J where the terminal does not tell them apart)
     Esc             stop the model, or say no to a question
     Shift+Tab       approval: ask -> edits -> all
     Ctrl+O          reasoning and tool outputs in full, or folded
+    Ctrl+T          install (or start) the tool the message being written seems to need
     Up / Down       earlier messages
     Ctrl+C          clear the message, stop the model, or leave
     /help /tools /notes /compact /new /approve <mode> /quit
@@ -157,6 +162,14 @@ class Prompt(TextArea):
         await super()._on_key(event)
 
 
+class _Named:
+    """A stand-in for a tool in an approval asked by the interface itself (Ctrl+T)."""
+    risk = "install"
+
+    def __init__(self, name: str):
+        self.name = name
+
+
 class AgentTUI(App):
     CSS = f"""
     Screen {{ background: $background; }}
@@ -173,6 +186,7 @@ class AgentTUI(App):
     .note {{ color: {DIM}; }}
     .err {{ color: {ALARM}; margin: 1 0 0 0; }}
     #ask {{ display: none; height: auto; max-height: 60%; border: round {AMBER}; padding: 0 1; margin: 0 1; }}
+    #hint {{ display: none; height: auto; max-height: 3; margin: 0 2; color: {DIM}; }}
     #prompt {{ height: auto; min-height: 3; max-height: 12; border: round {LINE}; margin: 0 1; background: {SURFACE}; }}
     #prompt:focus {{ border: round {AMBER}; }}
     #status {{ height: 1; padding: 0 2; color: {DIM}; background: {RAIL}; }}
@@ -180,11 +194,16 @@ class AgentTUI(App):
     BINDINGS = [Binding("escape", "stop", show=False, priority=True),
                 Binding("shift+tab", "cycle_mode", show=False, priority=True),
                 Binding("ctrl+o", "toggle_detail", show=False, priority=True),
+                Binding("ctrl+t", "use_hint", show=False, priority=True),
                 Binding("ctrl+c", "interrupt", show=False, priority=True)]
 
-    def __init__(self, make_agent, *, label: str, workdir: str, mode: str = "ask"):
-        """`make_agent(emit, ask, mode, fresh)` builds the agent; `fresh` asks for a new session."""
+    def __init__(self, make_agent, *, label: str, workdir: str, mode: str = "ask", ahead=None):
+        """`make_agent(emit, ask, mode, fresh)` builds the agent; `fresh` asks for a new session. `ahead`
+        (ahead.Ahead) reasons on the message being written."""
         super().__init__()
+        self.ahead = ahead
+        self.hint: dict | None = None             # kit.suggest's tool for the message being written
+        self.installing = ""                      # what the Ctrl+T install is doing
         self.make_agent = make_agent
         self.label, self.workdir, self.mode = label, workdir, mode
         self.agent = None
@@ -214,6 +233,7 @@ class AgentTUI(App):
         yield Static(id="todo")
         yield Static(id="activity")
         yield Static(id="ask")
+        yield Static(id="hint")
         yield Prompt(id="prompt")
         yield Static(id="status")
 
@@ -230,10 +250,14 @@ class AgentTUI(App):
     def on_unmount(self):
         if self.agent is not None:
             self.agent.stop.set()
+        if self.ahead is not None:
+            self.ahead.close()
         self._answered.set()
 
     def _new_agent(self, fresh: bool):
         self.agent = self.make_agent(self._emit, self._ask, self.mode, fresh)
+        if self.ahead is not None:
+            self.ahead.agent = self.agent
         self.limit = self.agent.context.limit
         self.used = 0
         box = self.agent.toolbox
@@ -326,6 +350,8 @@ class AgentTUI(App):
             t.append(f" · {len(self.queue)} queued", style=HOT)
         if self.tps:
             t.append(f" · {self.tps:.0f} tok/s")
+        if self.ahead is not None and not self.running and self.ahead.reasoned:
+            t.append(f" · thinking ahead {self.ahead.reasoned} tok", style=AMBER)
         try:
             self.query_one("#status", Static).update(t)
         except NoMatches:                       # the timer fired while the app is closing
@@ -530,6 +556,90 @@ class AgentTUI(App):
 
     # ------------------------------------------------------------ what the user does
 
+    # ------------------------------------------------------------ while the message is written
+
+    def on_text_area_changed(self, event):
+        if getattr(event.text_area, "id", "") != "prompt":
+            return
+        text = event.text_area.text
+        if self.ahead is not None and not self.running and not text.startswith("/"):
+            self.ahead.typed(text)
+        self._suggest(text)
+
+    def _suggest(self, text: str):
+        need = getattr(self.agent.toolbox, "need", None) if self.agent is not None else None
+        hint = None
+        if need is not None and len(text.split()) >= 3 and not text.startswith("/"):
+            try:
+                from .kit import suggest
+                hint = suggest(need.kit, text, need.attached_names())
+            except Exception:
+                hint = None
+        self.hint = hint
+        self._show_hint()
+
+    def _show_hint(self):
+        try:
+            line = self.query_one("#hint", Static)
+        except NoMatches:
+            return
+        t = Text(no_wrap=True, overflow="ellipsis")
+        if self.installing:
+            t.append("⇣ ", style=AMBER)
+            t.append(self.installing, style=DIM)
+        elif self.hint:
+            h = self.hint
+            t.append("◆ ", style=AMBER)
+            t.append(f"{h['name']}", style=TEXT)
+            t.append(f" may help ({', '.join(h['words'][:3])}): ", style=DIM)
+            t.append("ctrl+t", style=f"bold {HOT}")
+            t.append(f" installs it, ~{h['mb']} MB, while you write" if h["state"] == "install" else " starts it",
+                     style=DIM)
+        line.update(t)
+        line.display = bool(self.installing or self.hint)
+
+    def action_use_hint(self):
+        need = getattr(self.agent.toolbox, "need", None) if self.agent is not None else None
+        if not self.hint or need is None or self.installing or self.asking:
+            return
+        hint = self.hint
+        self.installing = f"{hint['name']}: " + ("waiting for your answer" if hint["state"] == "install" else "starting")
+        self._show_hint()
+        self.run_worker(lambda: self._install(need, hint), thread=True)
+
+    def _install(self, need, hint: dict):
+        """Ctrl+T, in a worker: ask (as for the model's need_tool), install, start the server."""
+        out = ""
+        try:
+            if hint["state"] == "install":
+                text = need.kit.describe(need.kit.plan(hint["id"])) + "\n  asked by you (ctrl+t)"
+                tool = need.box.active.get("need_tool") if hasattr(need, "box") else None
+                if (self._ask(tool or _Named("need_tool"), {"id": hint["id"]}, text) or "")[:1] not in ("y", "a"):
+                    out = f"{hint['name']}: not installed"
+                    return
+            def progress(t: str):
+                self.installing = f"{hint['name']}: {t.strip()}"
+                try:
+                    self.call_from_thread(self._show_hint)
+                except Exception:
+                    pass
+            progress("downloading..." if hint["state"] == "install" else "starting...")
+            out = need.run({"id": hint["id"], "why": "asked by the user"}, say=progress)
+        except Exception as e:
+            out = f"{hint['name']}: {type(e).__name__}: {e}"
+        finally:
+            self.installing = ""
+            try:
+                self.call_from_thread(self._installed, out)
+            except Exception:
+                pass
+
+    def _installed(self, out: str):
+        if out:
+            self._put(Text("\n".join("  " + line for line in out.splitlines()[:6]), style=DIM), "note")
+        self._suggest(self.query_one(Prompt).text)
+        self._status()
+
     def on_prompt_submitted(self, message: Prompt.Submitted):
         text = message.text
         if text.startswith("/"):
@@ -540,6 +650,10 @@ class AgentTUI(App):
         self._start(text)
 
     def _start(self, text: str):
+        if self.ahead is not None:
+            self.ahead.paused = True
+        self.hint = None
+        self._show_hint()
         self.running, self.stopping, self.t_turn = True, False, time.monotonic()
         self.pieces, self.doing, self.word = 0, "", ""
         self._put(Text("> " + text), "user")
@@ -572,6 +686,12 @@ class AgentTUI(App):
         self._activity()
         if self.queue:
             self._start(self.queue.pop(0))
+        elif self.ahead is not None:
+            self.ahead.paused = False
+            text = self.query_one(Prompt).text
+            if text:                            # written while the model worked: reasoned on from now
+                self.ahead.typed(text)
+                self._suggest(text)
         self._status()
 
     def _command(self, text: str):
