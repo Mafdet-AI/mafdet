@@ -484,6 +484,7 @@ def test_tui_asks_before_a_write_and_esc_says_no(tmp_path):
 
 def test_tui_esc_stops_and_a_message_typed_meanwhile_waits(tmp_path):
     import asyncio
+    from mafdet.agent import tui
     release = threading.Event()
 
     class Slow(Streams):
@@ -507,12 +508,18 @@ def test_tui_esc_stops_and_a_message_typed_meanwhile_waits(tmp_path):
         async with app.run_test(size=(110, 40)) as pilot:
             await pilot.press(*"one", "enter")
             await until(pilot, lambda: app.running and model.started)
+            await pilot.pause(0.5)
+            cat = app.query_one("#activity")                 # the model works: a cat, not its thoughts
+            line = str(cat.render())
+            assert cat.display and line[:5] in tui.CAT_FACES and "esc to stop" in line
+            assert any(word + "…" in line for word in tui.CAT_WORDS) and "writing" in line
             await pilot.press(*"two", "enter")               # the model is busy: queued
             assert app.queue == ["two"]
             release.set()
             await until(pilot, lambda: not app.running and not app.queue and len(model.seen) == 2)
             await pilot.pause(0.2)
             assert "> two" in shown(app) and "second" in shown(app) and "third" not in shown(app)
+            assert not app.query_one("#activity").display
 
         release.clear()
         model2 = Slow(Reply(content="after the stop"))

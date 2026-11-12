@@ -216,7 +216,10 @@ costs 2.4 decoding steps. To speed up the 14B, take work away from the CPU.
 - **2026-11-12 · `mafdet agent` opens a full-screen conversation, as Claude Code does (the user: "like my
   behaviour and yours here, in this window").** `mafdet/agent/tui.py` (Textual, the app's amber theme): the
   log above, a multi-line message box, a status line (model, tokens used of the budget, approval, tok/s).
-  Reasoning streams as its last 6 lines and folds to "thought for N s"; a tool call is one line with the first
+  Reasoning is not shown while it is written (the user, the same day): a line above the message box has a
+  blinking ASCII cat and one of thirty things a cat does, changed every 5 s, with the seconds, the tokens so
+  far and what is going on (thinking, writing, running <tool>); when it ends the reasoning is one line,
+  "thought for N s", opened by Ctrl+O. A tool call is one line with the first
   4 lines of its result, `edit_file` and `write_file` as a diff; the answer streams as text and becomes
   Markdown when done. Approvals ask in place (y / a / n, Esc is no) with the command or the diff. Esc stops the
   turn: the stream to llama-server is closed (`model.Stopped`), a running shell command is killed with its

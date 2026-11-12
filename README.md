@@ -166,7 +166,7 @@ mafdet agent --resume last
 
 It is meant for a card with 12-16 GB (the reference is an RTX 5070 Ti, where Qwen3-14B is all on the GPU); on 6 GB only a 4B model is fast enough for a loop. The context is the largest of 32k, 24k and 16k tokens that leaves the model all on the GPU (`--ctx` to choose).
 
-`mafdet agent` opens a conversation that fills the terminal, with the model at work in it. You write at the bottom; above, its reasoning as it is written (folded to a line when done), every tool call with the start of its result, edits as a diff, the answer as Markdown. A call that needs your approval asks in place, with what it would run or change.
+`mafdet agent` opens a conversation that fills the terminal, with the model at work in it. You write at the bottom; above, every tool call with the start of its result, edits as a diff, the answer as Markdown. While the model reasons its thoughts are not shown: a cat blinks next to what a cat would be doing (`=^.^= Making biscuits…`, with the seconds and the tokens so far), and the reasoning stays folded in a line. A call that needs your approval asks in place, with what it would run or change.
 
 | Key | |
 |---|---|
@@ -175,7 +175,7 @@ It is meant for a card with 12-16 GB (the reference is an RTX 5070 Ti, where Qwe
 | Esc | stop the model (a running command too), or say no to a question |
 | `y` / `a` / `n` | at a question: yes, always for this tool, no |
 | Shift+Tab | what runs without asking: ask → edits → all |
-| Ctrl+O | reasoning and tool outputs in full, or folded |
+| Ctrl+O | the reasoning and the tool outputs in full, or folded |
 | Up / Down | your earlier messages |
 | `/help` `/tools` `/new` `/approve` `/quit` | |
 

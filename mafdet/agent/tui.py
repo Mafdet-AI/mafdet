@@ -1,8 +1,10 @@
 """The agent in the terminal (Textual): what `mafdet agent` opens.
 
-A conversation with the model at work in it: you write at the bottom; above, the model's reasoning
-as it is written (folded to a line when done), each tool call with the start of its result, edits
-as a diff, the answer as Markdown. A call that needs your approval asks in place: y, a or n.
+A conversation with the model at work in it: you write at the bottom; above, each tool call with
+the start of its result, edits as a diff, the answer as Markdown. While the model reasons, its
+thoughts are not shown: a cat face blinks next to what a cat would be doing (Mafdet is a feline
+goddess), and the reasoning stays folded in a line, to open with Ctrl+O. A call that needs your
+approval asks in place: y, a or n.
 
     Enter           send (while the model works: queued, sent when it is done)
     Shift+Enter     a new line (Ctrl+J where the terminal does not tell them apart)
@@ -17,6 +19,7 @@ from __future__ import annotations
 
 import difflib
 import json
+import random
 import threading
 import time
 
@@ -43,7 +46,17 @@ Shift+Tab changes what runs without asking: ask (writes and commands ask), edits
 Ctrl+O shows the reasoning and the tool outputs in full. Up and Down bring back earlier messages.
 /tools  the tools the model has      /new  a new conversation      /approve ask|edits|all      /quit"""
 
-FOLDED_LINES, OPEN_LINES, THINK_TAIL = 4, 40, 6
+FOLDED_LINES, OPEN_LINES = 4, 40
+
+# What the model is up to while it works, as a cat would put it. Plain ASCII faces: they show in any terminal.
+CAT_FACES = ("=^.^=", "=^.^=", "=^.^=", "=^-^=", "=^.^=", "=^.^=", "=^o^=", "=^.^=")
+CAT_WORDS = ("Purring", "Kneading", "Making biscuits", "Stalking", "Pouncing", "Prowling", "Grooming",
+             "Chasing the red dot", "Loafing", "Tail-flicking", "Whisker-twitching", "Ear-swiveling", "Slow-blinking",
+             "Sharpening claws", "Napping on it", "Stretching", "Chirping at birds", "Sniffing around",
+             "Sitting in the box", "Pawing at it", "Knocking things off the desk", "Hunting", "Zooming",
+             "Chasing its tail", "Watching the fish", "Hiding under the sofa", "Climbing the curtains",
+             "Batting at the yarn", "Curling up", "Meowing at the door")
+WORD_SECONDS = 5.0          # how long one of them stays
 
 
 def call_line(name: str, args) -> str:
@@ -149,6 +162,7 @@ class AgentTUI(App):
     .welcome {{ border: round {LINE}; padding: 0 1; margin: 0 0 0 0; color: {DIM}; }}
     .user {{ background: {PANEL}; color: {HOT}; margin: 1 0 0 0; padding: 0 1; }}
     .think {{ margin: 1 0 0 0; }}
+    #activity {{ display: none; height: 1; margin: 1 2 0 2; }}
     .text {{ margin: 1 0 0 0; }}
     Markdown.answer {{ margin: 1 0 0 0; padding: 0; background: transparent; }}
     .tool {{ margin: 1 0 0 0; }}
@@ -181,6 +195,9 @@ class AgentTUI(App):
         self.folds: list[tuple[Static, str, str]] = []     # (widget, "think" or "result", what it shows in full)
         self.used = self.limit = 0
         self.tps = 0.0
+        self.doing = ""                       # under the cat: "thinking", "writing", or the tool that runs
+        self.pieces = 0                       # pieces written this turn, about a token each
+        self.word, self.t_word, self.frame = "", 0.0, 0
         self.asking = False
         self.declined = False
         self._answer = ""
@@ -190,6 +207,7 @@ class AgentTUI(App):
 
     def compose(self) -> ComposeResult:
         yield VerticalScroll(id="log")
+        yield Static(id="activity")
         yield Static(id="ask")
         yield Prompt(id="prompt")
         yield Static(id="status")
@@ -201,6 +219,7 @@ class AgentTUI(App):
         self._new_agent(fresh=False)
         self.query_one(Prompt).focus()
         self.set_interval(0.5, self._status)
+        self.set_interval(0.2, self._activity)
         self._status()
 
     def on_unmount(self):
@@ -221,7 +240,7 @@ class AgentTUI(App):
         t.append(f"tools     {len(box.active)}" + (f", {len(box.hidden)} more through find_tools" if box.hidden else "")
                  + "\n")
         t.append(f"session   {self.agent.session.id}" + (f" (resumed, {resumed} messages)" if resumed else "") + "\n")
-        t.append("Enter sends · Esc stops · Shift+Tab approval · Ctrl+O details · /help", style=FAINT)
+        t.append("Enter sends · Esc stops · Shift+Tab approval · Ctrl+O reasoning and details · /help", style=FAINT)
         self._put(t, "welcome")
 
     def _put(self, content, classes: str) -> Static:
@@ -241,14 +260,35 @@ class AgentTUI(App):
             t.append(" · your answer?", style=HOT)
         elif self.stopping:
             t.append(" · stopping…", style=HOT)
-        elif self.running:
-            t.append(f" · working {time.monotonic() - self.t_turn:.0f} s", style=HOT)
-            t.append(" (esc)", style=FAINT)
         if self.queue:
             t.append(f" · {len(self.queue)} queued", style=HOT)
         if self.tps:
             t.append(f" · {self.tps:.0f} tok/s")
         self.query_one("#status", Static).update(t)
+
+    def _activity(self):
+        """The line above the message box while the model works: a blinking cat and what it is doing."""
+        line = self.query_one("#activity", Static)
+        show = self.running and not self.asking
+        if line.display != show:
+            line.display = show
+        if not show:
+            return
+        now = time.monotonic()
+        if not self.word or now - self.t_word > WORD_SECONDS:
+            self.word = random.choice([w for w in CAT_WORDS if w != self.word])
+            self.t_word = now
+        self.frame += 1
+        t = Text(no_wrap=True, overflow="ellipsis")
+        t.append(CAT_FACES[self.frame % len(CAT_FACES)] + " ", style=f"bold {AMBER}")
+        t.append(("Stopping" if self.stopping else self.word) + "…", style=HOT)
+        t.append(f"  ({now - self.t_turn:.0f} s", style=FAINT)
+        if self.pieces:
+            t.append(f" · {self.pieces} tokens", style=FAINT)
+        if self.doing:
+            t.append(f" · {self.doing}", style=FAINT)
+        t.append(" · esc to stop)", style=FAINT)
+        line.update(t)
 
     # ------------------------------------------------------------ the agent's events (worker thread -> here)
 
@@ -263,25 +303,27 @@ class AgentTUI(App):
             if self.kind != kind:
                 self._end_block()
                 self.kind, self.buf, self.t_block = kind, "", time.monotonic()
-                self.block = self._put("", kind)
+                # The reasoning is not shown as it is written: the cat is. It gets its line when it ends.
+                self.block = self._put("", kind) if kind == "text" else None
+                self.doing = "thinking" if kind == "think" else "writing"
             self.buf += d["text"]
-            if kind == "think":
-                tail = "\n".join(self.buf.strip().splitlines()[-THINK_TAIL:])
-                self.block.update(Text(tail, style=f"italic {FAINT}"))
-            else:
+            self.pieces += 1
+            if kind == "text":
                 self.block.update(Text(self.buf.lstrip("\n")))
-            self.log_view.scroll_end(animate=False)
+                self.log_view.scroll_end(animate=False)
             return
         self._end_block()
         if kind == "tool":
             t = Text("● ", style=AMBER)
             t.append(call_line(d["name"], d["args"]), style=TEXT)
+            self.doing = f"running {d['name']}"
             change = change_text(d["name"], d["args"])
             if change is not None and change.plain:
                 t.append("\n")
                 t.append_text(change)
             self._put(t, "tool")
         elif kind == "result":
+            self.doing = ""
             if self.declined:                   # said already, in one word
                 self.declined = False
                 return self._status()
@@ -308,16 +350,15 @@ class AgentTUI(App):
         """The block being streamed is done: the reasoning folds to a line, the answer becomes Markdown."""
         block, kind, buf = self.block, self.kind, self.buf.strip()
         self.block, self.kind, self.buf = None, "", ""
-        if block is None:
-            return
-        if not buf:
-            block.remove()
-        elif kind == "think":
-            seconds = time.monotonic() - self.t_block
-            self.folds.append((block, "think", f"{seconds:.0f}\n{buf}"))
-            self._fold(block, "think", f"{seconds:.0f}\n{buf}")
-        else:
-            self.log_view.mount(Markdown(buf, classes="answer"), after=block)
+        if kind == "think":
+            if buf:
+                full = f"{time.monotonic() - self.t_block:.0f}\n{buf}"
+                widget = self._put("", "think")
+                self.folds.append((widget, "think", full))
+                self._fold(widget, "think", full)
+        elif block is not None:
+            if buf:
+                self.log_view.mount(Markdown(buf, classes="answer"), after=block)
             block.remove()
             self.log_view.scroll_end(animate=False)
 
@@ -416,6 +457,7 @@ class AgentTUI(App):
 
     def _start(self, text: str):
         self.running, self.stopping, self.t_turn = True, False, time.monotonic()
+        self.pieces, self.doing, self.word = 0, "", ""
         self._put(Text("> " + text), "user")
         self._status()
         self.run_worker(lambda: self._turn(text), thread=True)
@@ -433,6 +475,7 @@ class AgentTUI(App):
     def _turn_done(self):
         self._end_block()
         self.running = self.stopping = False
+        self._activity()
         if self.queue:
             self._start(self.queue.pop(0))
         self._status()

@@ -166,7 +166,7 @@ mafdet agent --resume last
 
 È pensato per una scheda da 12-16 GB (il riferimento è una RTX 5070 Ti, dove Qwen3-14B sta tutto sulla GPU); su 6 GB solo un modello 4B è abbastanza veloce per un ciclo. Il contesto è il più grande tra 32k, 24k e 16k token che lascia il modello tutto sulla GPU (`--ctx` per sceglierlo).
 
-`mafdet agent` apre una conversazione che riempie il terminale, con il modello al lavoro dentro. Scrivi in basso; sopra, il suo ragionamento mentre viene scritto (ridotto a una riga quando ha finito), ogni chiamata a uno strumento con l'inizio del risultato, le modifiche come diff, la risposta in Markdown. Una chiamata che richiede la tua conferma chiede sul posto, mostrando cosa lancerebbe o cambierebbe.
+`mafdet agent` apre una conversazione che riempie il terminale, con il modello al lavoro dentro. Scrivi in basso; sopra, ogni chiamata a uno strumento con l'inizio del risultato, le modifiche come diff, la risposta in Markdown. Mentre il modello ragiona i suoi pensieri non si vedono: un gatto sbatte gli occhi accanto a quello che farebbe un gatto (`=^.^= Making biscuits…`, con i secondi e i token fin lì), e il ragionamento resta chiuso in una riga. Una chiamata che richiede la tua conferma chiede sul posto, mostrando cosa lancerebbe o cambierebbe.
 
 | Tasto | |
 |---|---|
