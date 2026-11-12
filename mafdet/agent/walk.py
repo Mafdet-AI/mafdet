@@ -21,6 +21,14 @@ The walk is driven by code, not by the model:
      a failure there is noted in the book and never stops the walk.
 
 The book is saved after every function: rerunning the same command goes on where it stopped.
+
+With --refine, once every function is named, a second pass goes from the top of the tree down over the
+functions that call others: each one is shown again with its first name and summary, its callees, and
+now its callers with the lines where they call it, and the model keeps the name or gives a better one
+(where.exe, 2026-11-12: the leaves were named well, the top badly, a wrong label on a callee travelling
+upward into its callers' names; the first pass never saw who calls a function). Then one more request
+writes a paragraph on what the program is, from the top of the tree and its imports, to the top of
+book.md.
 """
 from __future__ import annotations
 
@@ -56,6 +64,25 @@ RECORD = {"type": "function", "function": {
         "comment": {"type": "string", "description": "optional, a few lines"},
         "confidence": {"type": "string", "enum": ["low", "medium", "high"]}}}}}
 
+REFINE_SYSTEM = """You check the names given to the functions of a compiled program, from the top of the call tree down, for a reverse engineer.
+
+A first reading named every function bottom-up: it saw each function's code and what its callees do, never who calls it. Near the top of the tree that reading goes wrong: one vague or wrong label on a callee travels upward into the names of its callers.
+
+You get one function: its pseudo-code, the name and summary the first reading gave it, its callees, and its callers with the lines where they call it. All these names come from the same first reading and can be wrong too: trust the code over a name. The top of a C program is usually the runtime's startup calling main(argc, argv, ...); main often parses the command line (option strings compared with argv) before doing the work.
+
+Answer only by calling record_function, once:
+- name: the first name if the code and the callers support it; otherwise a better C identifier in snake_case that says what the function does, not how; no address in it.
+- summary: one line: what it does, with what inputs, what it returns, what it changes.
+- comment: optional, a few lines on what is not obvious (a constant, an algorithm, a data format).
+- confidence: high when the code says it plainly, medium for a reasonable reading, low for a guess.
+Read the code; do not invent what it does not show."""
+
+PROGRAM_SYSTEM = """You describe a compiled program for a reverse engineer, from what an analysis of its functions found.
+
+You get the top of its call tree (each function's given name and one-line summary, indented under its caller) and the functions it imports. The names were given by a model reading the code and can be wrong.
+
+Answer with one paragraph of plain text, at most 120 words: what the program is and does, how it is used (arguments, input, output), and anything worth a closer look (network, files, registry, processes, cryptography). Say what is uncertain. No headings, no list."""
+
 NO_CALL = ("You did not call record_function. Answer only with a call to record_function(name, summary, "
            "confidence), no other text.")
 C_KEYWORDS = {"auto", "break", "case", "char", "const", "continue", "default", "do", "double", "else", "enum",
@@ -66,6 +93,12 @@ NAME_MIN, NAME_MAX = 3, 60
 SUMMARY_CHARS = 300
 COMMENT_CHARS = 2000
 CALLEES_SHOWN = 60          # a dispatcher calling hundreds: the first ones, and a count
+CALLERS_SHOWN = 8           # --refine: callers shown with their call lines
+CALL_LINES = 3              # lines of each caller's code that call the function
+CALL_LINE_CHARS = 200
+PROGRAM_LINES = 120         # the tree's lines the program's summary reads
+PROGRAM_DEPTH = 4
+PROGRAM_IMPORTS = 120
 FIXED_TOKENS = 700          # system prompt, tool, the message's frame
 CODE_CHARS_PER_TOKEN = 2.8  # pseudo-code tokenizes worse than prose
 SAVE_EVERY = 25             # callees fetched between saves; book.md every this many functions
@@ -76,6 +109,11 @@ SAVE_EVERY = 25             # callees fetched between saves; book.md every this 
 # Discord encoding video, the 14B went from 40 to 5-27 tok/s (Windows paging its memory) and stayed at 39-47
 # at 16k and 8k (2026-11-12).
 WALK_CTX = 16384
+
+
+def names_rx(names) -> re.Pattern:
+    """Any of these names as a whole identifier (the longest first)."""
+    return re.compile(r"(?<![\w.])(?:" + "|".join(map(re.escape, sorted(names, key=len, reverse=True))) + r")(?![\w.])")
 
 
 def bottom_up(nodes: list[str], edges: dict[str, list[str]]) -> list[list[str]]:
@@ -165,7 +203,7 @@ class Walk:
                  max_tokens: int = 4096, temperature: float = 0.6, think: bool = True,
                  stop: threading.Event | None = None, max_functions: int = 0, time_limit: float = 0.0,
                  retry_failed: bool = False, ready_timeout: float = 1800.0, model_label: str = "",
-                 poll: float = 5.0):
+                 poll: float = 5.0, refine: bool = False):
         from .permissions import Permissions
         self.book = book
         self.server = server
@@ -185,6 +223,9 @@ class Walk:
         self.ready_timeout = ready_timeout
         self.poll = poll                                # seconds between looks at an import in progress
         self.model_label = model_label
+        self.refine = refine
+        self.sent = 0                                   # functions sent to the model in this run (--max-functions)
+        self._caller_code: dict[str, str] = {}
         self.adapter: Adapter | None = None
         self.mirror: dict[str, str] = {}                # op -> "" (written) or why not
 
@@ -199,6 +240,8 @@ class Walk:
         book = self.book
         run = {"started": book_now(), "model": self.model_label, "done": 0, "failed": 0, "skipped": 0,
                "seconds": 0.0, "prompt_tokens": 0, "completion_tokens": 0, "stopped": ""}
+        if self.refine:
+            run.update(kept=0, renamed=0, refine_failed=0)
         book.data["runs"].append(run)
         try:
             self.adapter = adapter = Adapter.connect(self.server, binary)
@@ -231,7 +274,9 @@ class Walk:
             if self.max_functions:
                 todo = todo[:self.max_functions]
             self.say(f"  to do    {len(todo)} functions, leaves first\n")
-            self._functions(todo, run, t0)
+            self._functions(todo, run, t0, self._one)
+            if self.refine and not run["stopped"]:
+                self._second_pass(order, run, t0)
         except KeyboardInterrupt:
             run["stopped"] = "interrupted"
         except (BackendError, OSError) as e:
@@ -305,7 +350,7 @@ class Walk:
                 self.say(f"  callees  {i}/{len(missing)}")
         book.save()
 
-    def _functions(self, todo: list[str], run: dict, t0: float):
+    def _functions(self, todo: list[str], run: dict, t0: float, one):
         book = self.book
         model_errors = backend_errors = 0
         for i, addr in enumerate(todo, 1):
@@ -316,13 +361,18 @@ class Walk:
                 run["stopped"] = "time limit"
                 self.say(f"  time limit reached: {len(todo) - i + 1} functions left for the next run")
                 return
+            if self.max_functions and self.sent >= self.max_functions:
+                run["stopped"] = "max functions"
+                self.say(f"  --max-functions reached: {len(todo) - i + 1} functions left for the next run")
+                return
             f = book.functions[addr]
+            self.sent += 1
             try:
-                result = self._one(f)
+                result = one(f)
             except Stopped:
                 run["stopped"] = "stopped"
                 return
-            status = f["status"]
+            status = result.get("count") or f["status"]
             run[status] = run.get(status, 0) + 1
             for k in ("prompt_tokens", "completion_tokens"):
                 run[k] += result.get(k, 0)
@@ -352,9 +402,15 @@ class Walk:
                 self.say(f"  the decompiler did not save its project: {why}")
 
     def _progress(self, i: int, n: int, f: dict, r: dict) -> str:
-        head = f"[{i}/{n}] {f['address']} {f['orig']}"
         tokens = f"{r.get('prompt_tokens', 0)}+{r.get('completion_tokens', 0)} tok"
         secs = f"{r.get('seconds', 0.0):.1f} s"
+        if r.get("count") in ("kept", "renamed", "refine_failed"):
+            head = f"[{i}/{n}] {f['address']} {r['before']}"
+            if r["count"] == "refine_failed":
+                return f"{head} kept, the second reading failed: {r['why']}  {secs}  {tokens}"
+            what = f"-> {f['name']}" if r["count"] == "renamed" else "kept"
+            return f"{head} {what}  [{f['confidence']}]  {secs}  {tokens}{r.get('mirror', '')}"
+        head = f"[{i}/{n}] {f['address']} {f['orig']}"
         if f["status"] == "done":
             tries = f", {f['steps']} tries" if f["steps"] > 1 else ""
             mirror = r.get("mirror", "")
@@ -388,14 +444,20 @@ class Walk:
         return text
 
     def rename_in(self, code: str) -> str:
-        """Default names in the code of functions already named -> their given names."""
+        """Default names in the code of functions already named -> their given names; and, after a
+        second reading renamed some, their first names (in a decompiler written back to) -> the new ones."""
         book = self.book
 
         def sub(m):
             a = book.resolve(m.group(0))
             g = book.functions.get(a) if a else None
             return g["name"] if g and g["status"] == "done" and g["name"] else m.group(0)
-        return DEFAULT_IN_TEXT.sub(sub, code)
+        code = DEFAULT_IN_TEXT.sub(sub, code)
+        stale = {g["first"]["name"]: g["name"] for g in book.functions.values()
+                 if g.get("first") and g["first"].get("name") and g["first"]["name"] != g["name"]}
+        if stale:
+            code = names_rx(stale).sub(lambda m: stale[m.group(0)], code)
+        return code
 
     def code_budget(self, callee_text: str) -> int:
         tokens = self.ctx - self.reserve - FIXED_TOKENS
@@ -426,7 +488,20 @@ class Walk:
         size = f" ({int(f['size'])} bytes)" if f.get("size") else ""
         user = (f"Function {f['orig']} at {f['address']}{size}:\n\n```c\n{body}\n```\n\n{callee_text}\n\n"
                 "Call record_function for this function.")
-        messages = [{"role": "system", "content": WALK_SYSTEM}, {"role": "user", "content": user}]
+        record, error, step = self._ask(WALK_SYSTEM, user, r)
+        if record:
+            end("done", "", step)
+            self.book.record(f["address"], **record)
+            r["mirror"] = self._write_back(f)
+            return r
+        # An engine gone is not the function's fault: it stays pending for the next run. An answer of the
+        # engine against this request (a prompt too long) is.
+        return end("pending" if r.get("engine_gone") else "failed", error, step)
+
+    def _ask(self, system: str, user: str, r: dict) -> tuple[dict | None, str, int]:
+        """A record_function call asked for, a wrong one told back once.
+        -> (the record or None, what went wrong, steps); the tokens and an engine's failure go into `r`."""
+        messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
         error = ""
         for step in (1, 2):
             try:
@@ -434,22 +509,14 @@ class Walk:
                                         think=self.think, should_stop=self.stop.is_set)
             except ModelError as e:
                 r["model_error"] = True
-                # An engine gone is not the function's fault: it stays pending for the next run. An
-                # answer of the engine against this request (a prompt too long) is.
-                gone = "does not answer" in str(e)
-                return end("pending" if gone else "failed", f"engine: {str(e)[:200]}", step)
+                r["engine_gone"] = "does not answer" in str(e)
+                return None, f"engine: {str(e)[:200]}", step
             r["prompt_tokens"] += reply.prompt_tokens
             r["completion_tokens"] += reply.completion_tokens
-            record = None
             for call in reply.tool_calls:
                 record, error = check(call)
                 if record:
-                    break
-            if record:
-                end("done", "", step)
-                self.book.record(f["address"], **record)
-                r["mirror"] = self._write_back(f)
-                return r
+                    return record, "", step
             if not reply.tool_calls:
                 error = "no record_function call" + (f" (cut at {self.max_tokens} tokens)"
                                                      if reply.finish == "length" else "")
@@ -460,15 +527,178 @@ class Walk:
                                      "content": f"error: {error}. Call record_function again, correctly."})
             else:
                 messages.append({"role": "user", "content": NO_CALL})
-        return end("failed", error, 2)
+        return None, error, 2
 
-    def _write_back(self, f: dict) -> str:
+    # ------------------------------------------------------------ the second pass (--refine)
+
+    def calls_others(self, f: dict) -> bool:
+        """Not a leaf: it calls at least one function of the program with code of its own."""
+        fs = self.book.functions
+        return any(c != f["address"] and c in fs and has_code(fs[c]) for c in f.get("callees") or [])
+
+    def _second_pass(self, order: list[str], run: dict, t0: float):
+        book, fs = self.book, self.book.functions
+        pending = [a for a in order if fs[a]["status"] == "pending"]
+        if pending:
+            self.say(f"\n  second pass: not yet, {len(pending)} functions are still to be named (rerun to go on)")
+            return
+        # From the top down: callers before callees, so each one sees its callers as they were read again.
+        todo = [a for a in reversed(order) if fs[a]["status"] == "done" and self.calls_others(fs[a])
+                and (not fs[a].get("refine") or self.retry_failed and fs[a]["refine"].startswith("failed"))]
+        leaves = sum(1 for f in fs.values() if f["status"] == "done" and not self.calls_others(f))
+        self.say(f"\n  second pass: {len(todo)} functions that call others, from the top down "
+                 f"({leaves} leaves keep their names)\n")
+        self._functions(todo, run, t0, self._again)
+        if not run["stopped"] and (todo or not book.data.get("program")):
+            self._program(run)
+
+    def call_lines(self, caller: str, names: set[str]) -> list[str]:
+        """The lines of a caller's code that call one of `names` (its own signature left out)."""
+        g = self.book.functions[caller]
+        code = self._caller_code.get(caller)
+        if code is None:
+            try:
+                code = self.adapter.code(caller) if has_code(g) else ""
+            except BackendError:
+                code = ""
+            self._caller_code[caller] = code
+        rx = names_rx(names)
+        out = []
+        for line in code.splitlines():
+            m = rx.search(line)
+            if not m or not re.match(r"\s*\(", line[m.end():]):
+                continue                                    # a mention, not a call
+            if line[:1] not in (" ", "\t") and line.rstrip().endswith(")"):
+                continue                                    # the caller's own signature, at column 0
+            line = self.rename_in(line.strip())
+            out.append(line if len(line) <= CALL_LINE_CHARS else line[:CALL_LINE_CHARS - 1] + "…")
+            if len(out) >= CALL_LINES:
+                break
+        return out
+
+    def caller_text(self, f: dict) -> str:
+        """Who calls the function, each with its one-line summary and the lines of its code that call it."""
+        fs, a = self.book.functions, f["address"]
+        callers = sorted((c for c in self.book.callers().get(a, []) if c in fs), key=sort_key)
+        if not callers:
+            return "Nothing in the program calls it directly: an entry point, or called through a pointer."
+        names = {n for n in (f["orig"], f["name"], (f.get("first") or {}).get("name")) if n}
+        lines = []
+        for c in callers[:CALLERS_SHOWN]:
+            lines.append("- " + self.book.line(fs[c], 300).split(" ", 1)[1])
+            lines += [f"    `{line}`" for line in self.call_lines(c, names)]
+        if len(callers) > CALLERS_SHOWN:
+            lines.append(f"- … and {len(callers) - CALLERS_SHOWN} more")
+        return "It is called by:\n" + "\n".join(lines)
+
+    def _again(self, f: dict) -> dict:
+        """The second reading of one function. When it changes the name or the summary, the book keeps the
+        first reading in `first`; `refine` says kept, renamed or failed, and a rerun skips what has one."""
+        t0 = time.perf_counter()
+        before = f["name"]
+        r = {"prompt_tokens": 0, "completion_tokens": 0, "seconds": 0.0, "before": before}
+
+        def end(outcome: str, why: str = ""):
+            r["seconds"] = time.perf_counter() - t0
+            r["count"], r["why"] = ("refine_failed" if why else outcome), why
+            f["refine"] = f"failed: {why}" if why else outcome
+            f["refine_seconds"] = round(r["seconds"], 2)
+            f["prompt_tokens"] += r["prompt_tokens"]
+            f["completion_tokens"] += r["completion_tokens"]
+            f["updated"] = book_now()
+            return r
+
+        try:
+            code = self.adapter.code(f["address"])
+        except BackendError as e:
+            r["backend_error"] = True
+            return end("failed", f"backend: {str(e)[:200]}")
+        callee_text = self.callee_text(f)
+        caller_text = self.caller_text(f)
+        body = clip(self.rename_in(code).strip("\n"), self.code_budget(callee_text + caller_text))
+        size = f", {int(f['size'])} bytes" if f.get("size") else ""
+        first = f"The first reading named it {f['name']} [{f['confidence']} confidence]: {f['summary']}"
+        if f.get("comment"):
+            first += "\n" + f["comment"]
+        user = (f"Function {f['name']} at {f['address']} (was {f['orig']}{size}):\n\n```c\n{body}\n```\n\n"
+                f"{first}\n\n{callee_text}\n\n{caller_text}\n\n"
+                "Call record_function for this function: keep its name or give a better one.")
+        record, error, _ = self._ask(REFINE_SYSTEM, user, r)
+        if not record:
+            return end("failed", error)
+        ops = [op for op, differs in (("rename", record["name"] != before),
+                                      ("comment", (record["summary"], record["comment"]) != (f["summary"], f["comment"])))
+               if differs]
+        if ops and not f.get("first"):
+            f["first"] = {k: f[k] for k in ("name", "summary", "comment", "confidence")}
+        if record["name"] != before:
+            f["name"] = self.book.unique(record["name"], f["address"])
+            self.book.by_name.setdefault(f["name"], f["address"])
+        f.update(summary=record["summary"], comment=record["comment"], confidence=record["confidence"])
+        if ops:
+            r["mirror"] = self._write_back(f, ops)
+        return end("renamed" if f["name"] != before else "kept")
+
+    def program_text(self) -> str:
+        """The top of the tree, indented, and the imports: what the program's paragraph is written from."""
+        book, fs = self.book, self.book.functions
+        lines: list[str] = []
+        seen: set[str] = set()
+        for root in book.roots():
+            stack = [(root, 0)]
+            while stack and len(lines) < PROGRAM_LINES:
+                a, depth = stack.pop()
+                f = fs.get(a)
+                if f is None or a in seen or not has_code(f):
+                    continue
+                seen.add(a)
+                lines.append("  " * depth + "- " + book.line(f, 240).split(" ", 1)[1])
+                if depth + 1 < PROGRAM_DEPTH:
+                    kids = [k for k in f.get("callees") or [] if k in fs and k != a and k not in seen]
+                    kids.sort(key=lambda k: (-book.reach(k), sort_key(k)))
+                    stack += [(k, depth + 1) for k in reversed(kids)]
+        imports = sorted({f["orig"].rsplit("::", 1)[-1] for f in fs.values() if f["flags"].get("external")}
+                         | {o.rsplit("::", 1)[-1] for f in fs.values() for o in f.get("outside") or []})
+        more = f" … and {len(imports) - PROGRAM_IMPORTS} more" if len(imports) > PROGRAM_IMPORTS else ""
+        info = book.data["binary"]
+        return (f"Program {info.get('name', '?')} ({info.get('size', '?')} bytes, {len(fs)} functions).\n\n"
+                "The top of its call tree:\n" + "\n".join(lines)
+                + ("\n\nIt imports: " + ", ".join(imports[:PROGRAM_IMPORTS]) + more if imports else "")
+                + "\n\nDescribe the program in one paragraph.")
+
+    def _program(self, run: dict):
+        """One paragraph on the whole program, kept in the book and put at the top of book.md."""
+        if self.stop.is_set():
+            return
+        t0 = time.perf_counter()
+        messages = [{"role": "system", "content": PROGRAM_SYSTEM}, {"role": "user", "content": self.program_text()}]
+        try:
+            reply = self.model.chat(messages, None, max_tokens=self.max_tokens, temperature=self.temperature,
+                                    think=self.think, should_stop=self.stop.is_set)
+        except ModelError as e:
+            self.say(f"  the program's paragraph: the engine failed ({str(e)[:200]})")
+            return
+        except Stopped:
+            run["stopped"] = "stopped"
+            return
+        run["prompt_tokens"] += reply.prompt_tokens
+        run["completion_tokens"] += reply.completion_tokens
+        text = " ".join(re.sub(r"<think>.*?</think>", "", reply.content, flags=re.S).split())
+        if not text:
+            self.say("  the program's paragraph: the model wrote nothing" + (
+                f" (cut at {self.max_tokens} tokens)" if reply.finish == "length" else ""))
+            return
+        self.book.data["program"] = {"summary": text, "model": self.model_label, "updated": book_now(),
+                                     "seconds": round(time.perf_counter() - t0, 1)}
+        self.say(f"\nthe program: {text}")
+
+    def _write_back(self, f: dict, ops=("rename", "comment")) -> str:
         """The name and the summary into the decompiler's database, when allowed. Returns a note for the
         progress line; what happened is in the book."""
         notes, a = [], self.adapter
         values = {"address": f["address"], "name": f["name"],
                   "comment": f["summary"] + (f"\n\n{f['comment']}" if f.get("comment") else "")}
-        for op in ("rename", "comment"):
+        for op in ops:
             if self.mirror.get(op, "x"):
                 continue
             why = a.write(op, **values)
@@ -486,6 +716,9 @@ class Walk:
                  f"skipped in {run['seconds']:.0f} s, {run['prompt_tokens']}+{run['completion_tokens']} tokens"
                  + (f", {run['seconds'] / analysed:.1f} s per function" if analysed else "")
                  + (f"; stopped: {run['stopped']}" if run.get("stopped") else ""))
+        if self.refine:
+            self.say(f"second pass: {run.get('kept', 0)} kept, {run.get('renamed', 0)} renamed, "
+                     f"{run.get('refine_failed', 0)} failed")
         self.say(f"the book: {len(self.book.functions)} functions, {c['done']} done, {c['known']} known, "
                  f"{c['skipped']} skipped, {c['failed']} failed, {c['pending']} pending; mean {mean:.1f} s per "
                  f"function\n  {self.book.dir / 'book.md'}")
@@ -536,9 +769,9 @@ def run(args) -> int:
                     allow=[str(p) for p in conf.get("allow") or []], ctx=args.ctx, max_tokens=args.max_tokens,
                     temperature=args.temperature, think=args.think, stop=stop,
                     max_functions=args.max_functions or 0, time_limit=(args.time_limit or 0) * 60,
-                    retry_failed=args.retry_failed, model_label=label_)
+                    retry_failed=args.retry_failed, model_label=label_, refine=getattr(args, "refine", False))
         result = walk.run(binary)
-        return 0 if not result.get("stopped") or result["stopped"] in ("time limit", "interrupted", "stopped") else 1
+        return 0 if not result.get("stopped") or result["stopped"] in ("time limit", "interrupted", "stopped", "max functions") else 1
     finally:
         stop.set()
         if walk is not None and walk.adapter is not None:

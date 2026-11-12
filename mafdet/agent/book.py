@@ -224,6 +224,9 @@ class Book:
                                     "pending": "not analysed yet", "failed": f"not understood ({f.get('reason')})",
                                     "skipped": f"skipped ({f.get('reason')})"}.get(f["status"], "")
         was = f" (was {f['orig']})" if f.get("name") and f["orig"] and f["orig"] != f["name"] else ""
+        first = (f.get("first") or {}).get("name")
+        if first and first != f.get("name"):
+            was = was[:-1] + f", first read as {first})" if was else f" (first read as {first})"
         text = f"{f['address']} {label(f)}{was} — {what}"
         return text if len(text) <= chars else text[:chars - 1] + "…"
 
@@ -255,8 +258,13 @@ class Book:
                f"- path: `{info.get('path', '')}`", f"- sha256: `{info.get('sha256', '')}`",
                f"- backend: {self.data['backend'].get('server', '?')} ({self.data['backend'].get('adapter', '?')})",
                f"- updated: {self.data.get('updated', '')}",
-               f"- functions: {len(fs)}: " + ", ".join(f"{n} {s}" for s, n in c.items() if n), "",
-               "## From the roots down", "",
+               f"- functions: {len(fs)}: " + ", ".join(f"{n} {s}" for s, n in c.items() if n), ""]
+        program = self.data.get("program") or {}
+        if program.get("summary"):
+            out += ["## The program", "", program["summary"], "",
+                    f"*Written by {program.get('model') or 'the model'} from the names and summaries below, "
+                    "which can be wrong.*", ""]
+        out += ["## From the roots down", "",
                "Each function once, the callees with the most below them first; later calls to it say *(above)*. "
                "The `calls:` line under a function names all it calls; imports and other named functions with "
                "nothing below them are only there.", ""]
@@ -319,7 +327,11 @@ class Book:
         for a in sorted(fs, key=sort_key):
             f = fs[a]
             cell = (f.get("summary") or "").replace("|", "\\|")
-            out.append(f"| `{a}` | {label(f)} | {f['orig'] if f.get('name') else ''} | {f['status']} | {cell} |")
+            was = f["orig"] if f.get("name") else ""
+            first = (f.get("first") or {}).get("name")
+            if first and first != f.get("name"):
+                was += f", first read as {first}"
+            out.append(f"| `{a}` | {label(f)} | {was} | {f['status']} | {cell} |")
         return "\n".join(out) + "\n"
 
     # ------------------------------------------------------------ for the model of a session
@@ -349,7 +361,9 @@ class Book:
         if not words:
             c = self.counts()
             roots = self.roots()[:20]
-            return (f"{self.data['binary'].get('name')}: {len(fs)} functions, "
+            program = (self.data.get("program") or {}).get("summary")
+            return ((f"What the program is (a model's reading): {program}\n" if program else "")
+                    + f"{self.data['binary'].get('name')}: {len(fs)} functions, "
                     + ", ".join(f"{n} {s}" for s, n in c.items() if n)
                     + (".\nRoots (called by nothing):\n" + "\n".join("  " + self.line(fs[r]) for r in roots)
                        if roots else ".") + "\nAsk with a query (words of a name or summary) or an address.")

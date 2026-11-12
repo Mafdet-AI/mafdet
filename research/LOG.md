@@ -189,14 +189,19 @@ costs 2.4 decoding steps. To speed up the 14B, take work away from the CPU.
      wrote all 86 names and comments into the Ghidra project and they survive a restart. Quality, one
      worker's reading of 23 functions: 10 right, 8 vague, 5 wrong, the leaves good and the top of the tree
      weak (main named `validate_config_and_initialize`: the typed options table read as "config", and the
-     label travels upward). Proposed next, none built:
-     - a second, top-down pass over the top layer once its callees are named (the top is where the names
-       were wrong; the first pass saw the callers' callees, never their callers);
+     label travels upward). Proposed next:
+     - **built 2026-11-12 (`--refine`, "Done and measured"), not run on a real binary**: a second, top-down
+       pass over the functions that call others, with their callers and call lines, then a paragraph on the
+       program at the top of `book.md`. To measure on the 4070 SUPER, where where.exe's book is (so
+       `--walk <the same copy> --mcp rea --refine` runs only the second pass, ~60 functions): the same 23
+       functions judged again against the first reading (10 right / 8 vague / 5 wrong), main and the
+       command-line parser first; how many names change; the cost (seconds per function, the prompt longer
+       by the callers' lines); whether the paragraph says what where.exe is;
      - symbols first where they exist (where.exe has a public PDB: with it the CRT functions, 3 of the 5
        wrong, would never reach the model). It costs the privacy `--no-symbols` keeps (no requests to
        Microsoft's symbol server, which name the sample): the user's choice, per binary;
      - the text of a message table for the message ids the code passes around;
-     - a summary of the program at the top of `book.md`;
+     - a summary of the program at the top of `book.md` (built, with `--refine`);
      - a mirror sync: an existing book written to a server that can write, and the backend recorded per name
        (the book is per binary, not per server: a Ghidra project already renamed gives a fresh book nothing
        to name);
@@ -269,6 +274,27 @@ costs 2.4 decoding steps. To speed up the 14B, take work away from the CPU.
      pyghidra-mcp ("Done and measured", 2026-11-12).
 
 ## Done and measured
+
+- **2026-11-12 · `--walk --refine`: a second pass from the top down, with the callers, and a paragraph on the
+  program; tested on fakes only (the RTX 2060 desktop: no Ghidra, no decompiler server, no book here).**
+  Built for the first walk's weakness (where.exe: the leaves named well, the top badly, a wrong label on a
+  callee travelling upward; the first pass sees a function's callees, never its callers). Once nothing is
+  pending, the functions that call at least one function with code of its own (not leaves: where.exe ~60 of
+  86) are read again in the reverse of the bottom-up order, callers before callees, each in a fresh
+  conversation: its own system prompt (`REFINE_SYSTEM`: the first reading's weakness, trust the code over a
+  name, the C runtime's startup calling main and main parsing the command line), the same `record_function`
+  tool, the code with the current names, the first reading's name, summary and confidence, its callees, and
+  its callers (8 at most), each with its summary and up to 3 lines of its code that call the function (the
+  caller's own signature left out, each caller's code fetched once). The model keeps the name or gives
+  another; the book keeps the first reading in `first`, `refine` says kept / renamed / failed, and a rerun
+  skips what has one (`--retry-failed` takes the failed again); a rename and a changed summary are written
+  back to the decompiler each only when it changed; code from a decompiler written back to says the first
+  names, which `rename_in` now turns into the new ones. Then one request without tools (`PROGRAM_SYSTEM`)
+  writes a paragraph from the top 4 levels of the tree (120 lines at most) and the imports: kept in the book
+  as `program`, at the top of `book.md` (marked as a model's reading) and in the `book` tool's overview;
+  asked again only when the second pass read something. `--max-functions` counts both passes; with
+  functions still pending, the second pass waits for a rerun. 4 tests (`tests/test_agent_refine.py`);
+  suite 298 passed.
 
 - **2026-11-12 · `--ctx 0` keeps 1 GB of the VRAM nvidia-smi says is free: 24k was a mistake on the 4070
   SUPER, 16k now.** With another app taking 1.6 GB of VRAM (Discord encoding video), Windows paged

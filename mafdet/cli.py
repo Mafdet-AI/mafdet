@@ -96,6 +96,7 @@ COMMANDS = [
              "mafdet agent --mcp rea --profile native-static", 'mafdet agent -p "what does main.c do?"',
              "mafdet agent --resume last", "mafdet agent --model qwen3-14b --mcp rea --profile native-static --web --save",
              "mafdet agent --walk C:\\samples\\crackme.exe --mcp rea --max-functions 50",
+             "mafdet agent --walk C:\\samples\\crackme.exe --mcp pyghidra --refine",
              "mafdet agent --mcp rea --book C:\\samples\\crackme.exe"),
             "use", common=False),
     Command("hunt", "the hunt", "simulate people typing and measure the wait after sending",
@@ -450,6 +451,11 @@ def _agent_args(p):
     p.add_argument("--retry-failed", action="store_true",
                    help="with --walk: try again the functions the model failed on, with the pending ones (not "
                         "those skipped for having no pseudo-code)")
+    p.add_argument("--refine", action="store_true",
+                   help="with --walk: once every function is named, read again from the top down those that call "
+                        "others, now with their callers and the lines that call them, keeping or changing each name; "
+                        "then a paragraph on the whole program at the top of book.md. Rerunning goes on where it "
+                        "stopped")
     p.add_argument("--book", default="", metavar="BINARY",
                    help="give the model the `book` tool: what a walk found about this binary (its path, or at "
                         "least 4 hex digits of the start of its sha256)")
