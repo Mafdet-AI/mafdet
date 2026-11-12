@@ -345,4 +345,34 @@ def test_cli_knows_the_agent():
     from mafdet.cli import build_parser
     args = build_parser().parse_args(["agent", "--mcp", "rea", "--mcp", "ghidra", "--profile", "native-static",
                                       "-p", "hello", "--approve", "edits"])
-    assert args.mcp == ["rea", "ghidra"] and args.think is True and args.ctx == 16384
+    assert args.mcp == ["rea", "ghidra"] and args.think is True and args.ctx == 0
+
+
+def test_the_context_follows_the_vram(monkeypatch, tmp_path):
+    """--ctx 0: the largest context that keeps the model all on the GPU, on the catalog's estimate."""
+    from mafdet import agent
+    from mafdet.core import catalog
+    from test_hardware_catalog import apple_m2_pro, nvidia_pc, reference_pc
+    gguf = tmp_path / "model.gguf"
+    gguf.write_bytes(b"")
+
+    def as_variant(variant_id):
+        v = catalog.find(variant_id)
+        monkeypatch.setattr(catalog, "header", lambda path: {"meta": {"general.architecture": "qwen3",
+                                                                      "qwen3.context_length": 40960}})
+        monkeypatch.setattr(catalog, "splits_with_cpu",
+                            lambda path, hw, ctx=8192: catalog.estimate(v, hw, "cuda", ctx)["placement"] != "gpu")
+
+    rtx_5070_ti = nvidia_pc("NVIDIA GeForce RTX 5070 Ti", 16303, 2000, 896)
+    as_variant("qwen3-14b:Q4_K_M")
+    assert agent.pick_ctx(str(gguf), rtx_5070_ti) == 24576               # 32k would put layers on the CPU
+    assert agent.pick_ctx(str(gguf), reference_pc()) == 16384            # split on 6 GB anyway: the floor
+    assert agent.pick_ctx(str(gguf), rtx_5070_ti, device="cpu") == 16384
+    assert agent.pick_ctx(str(gguf), apple_m2_pro()) == 16384
+    as_variant("qwen3-14b:IQ4_XS")
+    assert agent.pick_ctx(str(gguf), rtx_5070_ti) == 32768
+    as_variant("qwen3-8b:Q4_K_M")
+    assert agent.pick_ctx(str(gguf), rtx_5070_ti) == 32768
+    monkeypatch.setattr(catalog, "header", lambda path: {"meta": {"general.architecture": "x",
+                                                                  "x.context_length": 8192}})
+    assert agent.pick_ctx(str(gguf), rtx_5070_ti) == 16384               # trained on less than any of them

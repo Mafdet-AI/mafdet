@@ -190,8 +190,21 @@ costs 2.4 decoding steps. To speed up the 14B, take work away from the CPU.
      where the characters of one slimmed schema go (nested objects? enums?) and get under ~2k.
    - only 5 of rea's 207 tools carry `readOnlyHint`: without `allow` in mcp.json every call asks. Write the
      user's `~/.mafdet/mcp.json` for rea with them (`allow` for the static tools) and try a real binary.
-   - the reference machine for the agent is to be decided: on the 2060 only the 4B is usable in a loop
-     (59-68 tok/s here with thinking on), the 14B at 5 tok/s is not; the plan assumes 12-16 GB.
+   - **The agent's reference machine is the RTX 5070 Ti 16 GB (the user, 2026-11-12)**; the 2060 is the
+     degraded case (only the 4B is usable in a loop, 59-68 tok/s with thinking on and 16k, where it is already
+     split; the 14B at 5 tok/s is not). `--ctx 0`, the default, takes the largest of 32k/24k/16k that leaves
+     the model all on the GPU by the catalog's estimate (`agent.pick_ctx`). On the 5070 Ti (14,303 MiB free,
+     estimates, **none measured**): 14B Q4_K_M all on the GPU up to 24k (32k: partial, 70 → 52 tok/s),
+     IQ4_XS up to 32k (77 tok/s), the 8B up to 40k; the 30B-A3B is partial at any context (its experts in
+     RAM, ~54 tok/s estimated at 16k), so it gets 16k. To run on that machine, in this order:
+     1. `mafdet agent --model qwen3-14b -p "..."` on a small folder: does the server log say 41/41 layers at
+        24k, and what does a step cost (tok/s with thinking on, seconds to read a 4,000-character output)?
+     2. the same with `--model qwen3-14b:IQ4_XS` (32k) and with the 30B-A3B (`--ctx 16384` and `32768`):
+        which one is the agent's model there. The 30B-A3B writes as fast as the 14B on the 3060 and knows more.
+     3. a q8_0 KV cache with the model all on the GPU (`--llama-args="-ctk q8_0 -ctv q8_0" --ctx 32768` on
+        the Q4_K_M): half the KV memory, so 32k and more would fit; its speed all on the GPU is not measured
+        (on the split 14B it gave the same answers).
+     4. two slots (phase 3): what two sequences of the 14B write together on that card.
    - `--approve all` and a second listing of rea's tools were refused by Claude Code's own checks in that
      session: the shell tool was run only by the tests (`echo`), never by the model. To try by hand.
    - Tests on this machine: `test_local_models.py::test_delete_a_catalog_download` and

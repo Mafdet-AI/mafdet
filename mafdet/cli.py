@@ -402,7 +402,9 @@ def _agent_args(p):
                         "binary); the others stay reachable through find_tools")
     p.add_argument("--tools", default="",
                    help="MCP tools to start with, as comma-separated name patterns: \"procedure_*,xrefs\"")
-    p.add_argument("--ctx", type=int, default=16384, help="context in tokens (default: %(default)s)")
+    p.add_argument("--ctx", type=int, default=0,
+                   help="context in tokens (default: %(default)s, the largest of 32k, 24k and 16k that leaves "
+                        "the model all on the GPU; 16k when it is split with the CPU anyway)")
     p.add_argument("--max-tokens", type=int, default=4096,
                    help="longest reasoning and answer of one step, in tokens (default: %(default)s)")
     p.add_argument("--max-steps", type=int, default=40,

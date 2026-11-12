@@ -164,7 +164,9 @@ mafdet agent -p "cosa accetta check.py?"             # un compito, poi esce
 mafdet agent --resume last
 ```
 
-Cosa fa per un modello con 16k token di contesto e nessuno che lo controlli:
+È pensato per una scheda da 12-16 GB (il riferimento è una RTX 5070 Ti, dove Qwen3-14B sta tutto sulla GPU); su 6 GB solo un modello 4B è abbastanza veloce per un ciclo. Il contesto è il più grande tra 32k, 24k e 16k token che lascia il modello tutto sulla GPU (`--ctx` per sceglierlo).
+
+Cosa fa per un modello con un contesto piccolo e nessuno che lo controlli:
 
 - **Pochi strumenti, schemi corti.** Cinque suoi (`read_file`, che mostra un binario come dump esadecimale, `write_file`, `edit_file`, `search`, `shell`), circa 670 token. I server MCP si scrivono in `~/.mafdet/mcp.json`, nella forma che usano gli altri client. Un server di reverse engineering può elencare centinaia di strumenti (uno provato qui: 207, 3,4 MB di schemi): il modello parte con pochi (`--profile native-static`: 16 per l'analisi statica di un binario nativo, circa 3,8k token dopo aver accorciato gli schemi; `--tools`, o `tools` nel file) e gli altri li trova e li accende con `find_tools`.
 - **Output tagliati su misura.** L'output di uno strumento è ridotto a testa e coda (`--tool-chars`, 4.000) e conservato intero in `~/.mafdet/sessions/<id>/outputs`, dove il modello può leggere la parte che gli serve. Quando il contesto si riempie, gli output più vecchi vengono tolti in una volta sola.

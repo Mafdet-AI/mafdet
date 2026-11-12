@@ -130,12 +130,47 @@ def build_toolbox(args, workdir: Path, session):
     return box, servers, notes
 
 
+CONTEXTS = (32768, 24576, 16384)       # what --ctx 0 chooses among; the last one is the floor
+
+
+def pick_ctx(path: str, hw=None, device: str = "cuda") -> int:
+    """The largest context that leaves the model all on the GPU here, by the catalog's estimate: an
+    agent's prompt only grows, and a context that pushes layers to the CPU costs more than it gives
+    (Qwen3-14B Q4_K_M on 16 GB: 24k all on the GPU, 32k not). 16k when the model is split anyway, on
+    the CPU, and in unified memory, where the estimate has nothing to say."""
+    from ..core import catalog, hardware
+    try:
+        hw = hw or hardware.detect(refresh=True)
+        if device != "cuda" or not hw.gpu or hw.gpu.unified:
+            return CONTEXTS[-1]
+        meta = (catalog.header(Path(path)) or {}).get("meta") or {}
+        trained = meta.get(f"{meta.get('general.architecture', '')}.context_length") or CONTEXTS[0]
+        for ctx in CONTEXTS:
+            if ctx <= trained and not catalog.splits_with_cpu(path, hw, ctx):
+                return ctx
+    except Exception as e:                      # never a reason not to start
+        print(f"context left at {CONTEXTS[-1]}: {e}", file=sys.stderr)
+    return CONTEXTS[-1]
+
+
+def engine_ctx(url: str) -> int:
+    """The context of an engine already running: llama-server says it, the others get 16k."""
+    import urllib.request
+    try:
+        with urllib.request.urlopen(url.rstrip("/") + "/props", timeout=5) as r:
+            return int(json.loads(r.read())["default_generation_settings"]["n_ctx"])
+    except Exception:
+        return CONTEXTS[-1]
+
+
 def start_engine(args):
     """llama-server for the agent, through the app's LlamaServer: one slot with the whole context."""
     from ..llama_backend import LlamaServer, pick_device
     from ..proxy.launch import resolve_model
     path, alias, model_args = resolve_model(args.model)
     device = pick_device(args.device)
+    if not args.ctx:
+        args.ctx = pick_ctx(path, device=device)
     extra = model_args + ("--alias", alias) + tuple(args.llama_args.split())
     print(f"Starting llama-server: {alias} on the {'GPU' if device == 'cuda' else 'CPU'}, {args.ctx} tokens of "
           f"context, port {args.engine_port}", file=sys.stderr, flush=True)
@@ -163,6 +198,7 @@ def run(args) -> int:
     engine = None
     try:
         if args.url:
+            args.ctx = args.ctx or engine_ctx(args.url)
             model = ChatModel(args.url, args.model or "default", llama=args.engine == "llama", api_key=args.api_key)
             label = f"{model.model} at {args.url}"
         else:
