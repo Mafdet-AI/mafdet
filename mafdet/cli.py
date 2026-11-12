@@ -456,6 +456,12 @@ def _agent_args(p):
                         "others, now with their callers and the lines that call them, keeping or changing each name; "
                         "then a paragraph on the whole program at the top of book.md. Rerunning goes on where it "
                         "stopped")
+    p.add_argument("--kit", action="store_true",
+                   help="list MAFDET's catalog of tools the agent can install (need_tool), and what is installed")
+    p.add_argument("--install", default="", metavar="ID",
+                   help="install a tool of the catalog by hand (asks first), and write its MCP server into mcp.json")
+    p.add_argument("--no-install", action="store_true",
+                   help="no need_tool: the model cannot ask to install anything in this session")
     p.add_argument("--book", default="", metavar="BINARY",
                    help="give the model the `book` tool: what a walk found about this binary (its path, or at "
                         "least 4 hex digits of the start of its sha256)")

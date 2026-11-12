@@ -259,6 +259,10 @@ costs 2.4 decoding steps. To speed up the 14B, take work away from the CPU.
         the program re-imported, so there is something to name): seconds per function on that card against
         the 4070 SUPER's ~17 s, and the same names or not.
      5. two slots (phase 3): what two sequences of the 14B write together on that card.
+   - **need_tool (2026-11-12, "Done and measured")**: to try in a real session on the 5070 Ti, from a home
+     with nothing installed (`MAFDET_HOME` on a fresh folder): does the model ask for rea or pyghidra-mcp by
+     itself on a reverse-engineering task, is the question clear, do Ghidra (543 MB) and pyghidra-mcp's pip
+     install go through, and does the walk run on what it installed.
    - Not tried with a real model yet: the full-screen interface, the model running commands (`--approve all`
      used only by the walk, where the model has no tool but `record_function`; the shell tool run only by the
      tests), background jobs and `job`, the web tools. To try by hand.
@@ -274,6 +278,32 @@ costs 2.4 decoding steps. To speed up the 14B, take work away from the CPU.
      pyghidra-mcp ("Done and measured", 2026-11-12).
 
 ## Done and measured
+
+- **2026-11-12 · `need_tool`: the agent installs tools from MAFDET's own catalog, asked first; a real install
+  of Node.js and chrome-devtools-mcp on the RTX 2060 desktop.** Decided with the user: never a package name
+  or a URL from the model (it reads hostile content: a sample's strings, web pages; look-alike package names),
+  only the catalog `mafdet/agent/kit.json`, versions at least two weeks old, digests from the publishers
+  (nodejs.org's SHASUMS256.txt, Ghidra's release notes, Adoptium's API, PyPI's sha256, the npm registry's
+  sha512 integrity; fetched 2026-11-12): Node.js 22.23.5, Temurin JDK 21.0.13+9 (skipped when a Java 21 or
+  newer is found), Ghidra 12.1.4, rea-agents 6.9.0, pyghidra-mcp 0.3.0 (`--no-symbols`, its project in
+  `~/.mafdet/tools/data`), chrome-devtools-mcp 1.12.0 (`--isolated`: a temporary Chrome profile, not the
+  user's), frida-tools 14.11.0 (commands only, given to the model as full paths). `kit.py`: the plan (needs
+  first, nothing installed or found again), the download streamed and hashed (a mismatch, or more bytes than
+  the catalog says, installs nothing), archives unpacked with no path outside their folder and the single
+  top folder stripped, npm run by the catalog's Node on the verified tarball under its own prefix (the
+  command resolved from the package's `bin`), pip in a venv of its own on the verified wheel or sdist,
+  `installed.json`, the MCP entry written into `mcp.json` (an entry of the user's with the same name kept;
+  MAFDET's own rewritten from the catalog) and the server started in the session, its tools added
+  (`tools` / `allow` per entry). Permissions: a Tool can now `assess` its own call; an install asks in every
+  mode, "always" counts once, nobody to ask means declined; ids in `auto_install` (agent.json) go without
+  asking unless a tool output of the same turn names the tool (the loop now passes the turn's messages).
+  `--kit`, `--install ID`, `--no-install`; the system prompt says to use need_tool and never install through
+  the shell (the shell itself is not blocked: a prompt rule, not a guard). The schema costs ~250 tokens.
+  Real, on this desktop (temporary MAFDET_HOME): node + chrome-devtools-mcp downloaded, verified and
+  installed in 18 s, the server started from mcp.json with 32 tools (15 in the list by the catalog, 9 of
+  them reads allowed). 11 tests (`tests/test_agent_kit.py`, no network); suite 309 passed. Not tried: the
+  model asking for a tool by itself in a real session, Ghidra's 543 MB and the pip installs for real, Linux
+  and macOS.
 
 - **2026-11-12 · `--walk --refine`: a second pass from the top down, with the callers, and a paragraph on the
   program; tested on fakes only (the RTX 2060 desktop: no Ghidra, no decompiler server, no book here).**

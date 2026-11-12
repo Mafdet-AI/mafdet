@@ -263,10 +263,14 @@ def test_search_results(site, monkeypatch):
 
 def test_the_web_is_off_unless_asked_for(tmp_path):
     from mafdet import agent
-    args = argparse.Namespace(tools="", profile="", mcp=[], web=False, search_url="")
+    args = argparse.Namespace(tools="", profile="", mcp=[], web=False, search_url="", no_install=True)
     box, _, _ = agent.build_toolbox(args, tmp_path, memory=Memory())
     assert set(box.active) == {"read_file", "write_file", "edit_file", "search", "shell", "job", "note", "todo"}
     assert len(json.dumps(box.specs())) < 3600                           # eight tools: about 1,100 tokens
+    args.no_install = False                                              # need_tool by default: ~250 tokens more
+    box, _, _ = agent.build_toolbox(args, tmp_path, memory=Memory())
+    assert "need_tool" in box.active and len(json.dumps(box.active["need_tool"].spec())) < 1200
+    args.no_install = True
     args.web = True
     box, _, _ = agent.build_toolbox(args, tmp_path, memory=Memory())
     assert {"web_search", "web_fetch"} <= set(box.active)

@@ -30,6 +30,9 @@ class Tool:
     risk: str = "read"                                       # read, write or exec
     outside: Callable[[dict], bool] = lambda args: False     # does this call leave the working folder?
     source: str = "mafdet"
+    # (args, the messages of this turn) -> (risk, what to tell the person): a tool whose risk depends on the
+    # call (need_tool: nothing to download, or a download to approve). None: `risk`, always.
+    assess: Callable | None = None
 
     def spec(self) -> dict:
         return {"type": "function", "function": {"name": self.name, "description": self.description,

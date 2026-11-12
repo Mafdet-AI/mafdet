@@ -473,6 +473,15 @@ class AgentTUI(App):
     def _show_ask(self, tool, args: dict, why: str):
         t = Text()
         t.append(f"{tool.name}", style=f"bold {AMBER}")
+        if tool.risk == "install":                  # what, how big, from where, why: the whole of it, no "always"
+            t.append("  installs from MAFDET's catalog\n", style=DIM)
+            t.append(why + "\n", style=TEXT)
+            t.append("Install it?  ", style=TEXT)
+            t.append("y", style=f"bold {HOT}")
+            t.append(" yes   ")
+            t.append("n", style=f"bold {HOT}")
+            t.append(" no (esc)")
+            return self._open_ask(t)
         t.append(f"  {why}\n", style=DIM)
         change = change_text(tool.name, args)
         if tool.name == "shell":
@@ -491,6 +500,9 @@ class AgentTUI(App):
         t.append(f" always for {tool.name}   ")
         t.append("n", style=f"bold {HOT}")
         t.append(" no (esc)")
+        self._open_ask(t)
+
+    def _open_ask(self, t):
         ask = self.query_one("#ask", Static)
         ask.update(t)
         ask.display = True

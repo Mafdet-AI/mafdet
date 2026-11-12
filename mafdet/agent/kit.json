@@ -1,0 +1,125 @@
+{
+ "_note": "MAFDET's catalog of tools the agent may install (kit.py). Versions pinned, every download checked against the digest written here: sha256 from the publisher (nodejs.org SHASUMS256.txt, Ghidra's release notes, Adoptium's API, PyPI), the npm registry's sha512 integrity. Versions at least two weeks old when added. Checked 2026-11-12.",
+ "tools": {
+  "node": {
+   "name": "Node.js",
+   "version": "22.23.5",
+   "what": "JavaScript runtime, for the MCP servers written in JavaScript (rea, chrome-devtools-mcp)",
+   "license": "MIT",
+   "home": "https://nodejs.org",
+   "kind": "archive",
+   "files": {
+    "windows-x64": {"url": "https://nodejs.org/dist/v22.23.5/node-v22.23.5-win-x64.zip", "sha256": "4a191082e9706866830379d577d2cc8a50c776fcd9436a8d061b063ed0d9a0e3", "mb": 33},
+    "linux-x64": {"url": "https://nodejs.org/dist/v22.23.5/node-v22.23.5-linux-x64.tar.xz", "sha256": "cdeb8670a0c81f51b4dc4ac61919f9b1ad917b304bf8221eb939570663d240f8", "mb": 30},
+    "macos-arm64": {"url": "https://nodejs.org/dist/v22.23.5/node-v22.23.5-darwin-arm64.tar.gz", "sha256": "e7131995759b61a0170b646010d2ad35a5d37b4cb0d471f3e8317eac6f742f3d", "mb": 48},
+    "macos-x64": {"url": "https://nodejs.org/dist/v22.23.5/node-v22.23.5-darwin-x64.tar.gz", "sha256": "c53383238206b9ae4db23c5d8a63645e2e753bec8ab51a49cc81939aa64e9422", "mb": 50}
+   },
+   "exe": {"windows": "node.exe", "other": "bin/node"}
+  },
+  "jdk": {
+   "name": "Eclipse Temurin JDK",
+   "version": "21.0.13+9",
+   "what": "Java 21, which Ghidra runs on",
+   "license": "GPL-2.0 with Classpath exception",
+   "home": "https://adoptium.net",
+   "kind": "archive",
+   "detect": {"java": 21},
+   "files": {
+    "windows-x64": {"url": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.13%2B9/OpenJDK21U-jdk_x64_windows_hotspot_21.0.13_9.zip", "sha256": "a4dbaa05fca4bd89d84584e58c459bd732efebb1722af80ab13c6516832004f9", "mb": 196},
+    "linux-x64": {"url": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.13%2B9/OpenJDK21U-jdk_x64_linux_hotspot_21.0.13_9.tar.gz", "sha256": "d7f5d5cf865a2902b70ff549b97586a7d3f234e016f041ab447ea740c7d66d1c", "mb": 198},
+    "linux-arm64": {"url": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.13%2B9/OpenJDK21U-jdk_aarch64_linux_hotspot_21.0.13_9.tar.gz", "sha256": "e3522e707fc7dbe2a72c30746b1e7068301a0213ecd213d4491f35a14eb55578", "mb": 196},
+    "macos-arm64": {"url": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.13%2B9/OpenJDK21U-jdk_aarch64_mac_hotspot_21.0.13_9.tar.gz", "sha256": "bf036b35b071bfb2f54f2c0af8ee8d88afa95ee6eb3dce02c0f94cfc2524d04a", "mb": 191, "root": "Contents/Home"},
+    "macos-x64": {"url": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.13%2B9/OpenJDK21U-jdk_x64_mac_hotspot_21.0.13_9.tar.gz", "sha256": "9aa1d1c17ae5467a022679e7e0af5c00797d94ac462ed1a46f4db07a8a34a6dd", "mb": 185, "root": "Contents/Home"}
+   },
+   "exe": {"windows": "bin/java.exe", "other": "bin/java"}
+  },
+  "ghidra": {
+   "name": "Ghidra",
+   "version": "12.1.4",
+   "what": "the NSA's decompiler and disassembler, run headless by the MCP servers",
+   "license": "Apache-2.0",
+   "home": "https://github.com/NationalSecurityAgency/ghidra",
+   "kind": "archive",
+   "needs": ["jdk"],
+   "files": {
+    "any": {"url": "https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.1.4_build/ghidra_12.1.4_PUBLIC_20260921.zip", "sha256": "ddac49f903da9d5bac833e5cc79395098b9c33cfd3279be5f31bd00387d2d4db", "mb": 543}
+   }
+  },
+  "rea": {
+   "name": "rea-agents",
+   "version": "6.9.0",
+   "what": "an MCP server for reverse engineering: native binaries through Ghidra, web pages, Electron, Frida, Android (on Windows it reads and does not rename)",
+   "tasks": "reverse engineering, decompile, disassemble, binary, exe, dll, malware, crackme, frida, electron, browser, android, apk",
+   "license": "MIT",
+   "home": "https://www.npmjs.com/package/rea-agents",
+   "kind": "npm",
+   "needs": ["node"],
+   "wants": ["ghidra"],
+   "package": "rea-agents",
+   "bin": "rea-agents",
+   "files": {"any": {"url": "https://registry.npmjs.org/rea-agents/-/rea-agents-6.9.0.tgz", "integrity": "sha512-KqDn1UR5BMqHoQ3MGAnPuWiSKwgdFaz1L/uUNgrKt+1W8kPtgYP8AWEOXIF1lDIOBVyPuYIIst2iamo1Wf3r8g==", "mb": 190}},
+   "mcp": {
+    "name": "rea",
+    "command": "{exe:node}",
+    "args": ["{bin:rea}", "mcp"],
+    "env": {"GHIDRA_INSTALL_DIR": "{dir?:ghidra}", "JAVA_HOME": "{dir?:jdk}"},
+    "profile": "native-static",
+    "allow": ["open_binary", "close_binary", "binary_overview", "list_segments", "list_procedures", "search_procedures", "procedure_info", "procedure_pseudo_code", "procedure_assembly", "procedure_callers", "procedure_callees", "search_strings", "xrefs", "read_bytes"]
+   }
+  },
+  "pyghidra-mcp": {
+   "name": "pyghidra-mcp",
+   "version": "0.3.0",
+   "what": "an MCP server on a Ghidra project kept on disk: decompile, search, and write names and comments back",
+   "tasks": "reverse engineering, decompile, rename functions, ghidra project, binary, exe, dll",
+   "license": "see its home page",
+   "home": "https://github.com/clearbluejar/pyghidra-mcp",
+   "kind": "pip",
+   "needs": ["ghidra"],
+   "package": "pyghidra-mcp",
+   "files": {"any": {"url": "https://files.pythonhosted.org/packages/4f/f3/3928286fe1789a1f0279e05e88b5a80bfe0569e81e4f0505b35e2f60c756/pyghidra_mcp-0.3.0-py3-none-any.whl", "sha256": "dcedfd2c218b77e8637df1849df49512e409ae6c96dbfe0e83d978739454a6fa", "mb": 400}},
+   "mcp": {
+    "name": "pyghidra",
+    "command": "{script:pyghidra-mcp:pyghidra-mcp}",
+    "args": ["--transport", "stdio", "--project-path", "{data:pyghidra-mcp}", "--project-name", "mafdet", "--no-symbols"],
+    "env": {"GHIDRA_INSTALL_DIR": "{dir:ghidra}", "JAVA_HOME": "{dir?:jdk}"},
+    "allow": ["decompile_function", "search_symbols_by_name", "list_project_binaries", "list_imports", "list_xrefs"],
+    "_note": "--no-symbols: without it Ghidra asks Microsoft's symbol server for the PDB, a request that names the sample"
+   }
+  },
+  "chrome-devtools-mcp": {
+   "name": "chrome-devtools-mcp",
+   "version": "1.12.0",
+   "what": "an MCP server driving Google Chrome through DevTools: open pages, click, read the console and the network, run scripts in a page",
+   "tasks": "browser, chrome, web page, devtools, javascript, network requests, console, screenshot",
+   "license": "Apache-2.0",
+   "home": "https://github.com/ChromeDevTools/chrome-devtools-mcp",
+   "kind": "npm",
+   "needs": ["node"],
+   "requires": "Google Chrome installed",
+   "package": "chrome-devtools-mcp",
+   "bin": "chrome-devtools-mcp",
+   "files": {"any": {"url": "https://registry.npmjs.org/chrome-devtools-mcp/-/chrome-devtools-mcp-1.12.0.tgz", "integrity": "sha512-lAGpH0zXT1ZdaPefP1KK/MvxwihOlu7VGQ7p4wbhD9OhN17vUC4KWk/ImUYR9DE4s+7r4r0ySV4xr2OkTa7ZMA==", "mb": 40}},
+   "mcp": {
+    "name": "chrome-devtools",
+    "command": "{exe:node}",
+    "args": ["{bin:chrome-devtools-mcp}", "--isolated"],
+    "tools": ["new_page", "navigate_page", "list_pages", "select_page", "take_snapshot", "click", "fill", "press_key", "wait_for", "evaluate_script", "list_console_messages", "get_console_message", "list_network_requests", "get_network_request", "take_screenshot"],
+    "allow": ["list_pages", "select_page", "take_snapshot", "take_screenshot", "wait_for", "list_console_messages", "get_console_message", "list_network_requests", "get_network_request"],
+    "_note": "--isolated: a temporary Chrome profile, not the user's own (their logins and cookies)"
+   }
+  },
+  "frida-tools": {
+   "name": "frida-tools",
+   "version": "14.11.0",
+   "what": "Frida's command-line tools (frida, frida-ps, frida-trace): inject JavaScript into a running process to trace and change it",
+   "tasks": "frida, instrument, hook, inject, trace calls, running process, dynamic analysis",
+   "license": "wxWindows Library Licence",
+   "home": "https://frida.re",
+   "kind": "pip",
+   "package": "frida-tools",
+   "scripts": ["frida", "frida-ps", "frida-trace", "frida-ls-devices"],
+   "files": {"any": {"url": "https://files.pythonhosted.org/packages/b0/32/74291d04038ead2a361c7464e707ef935cb75a1011ee5d1e220c2849d39e/frida_tools-14.11.0.tar.gz", "sha256": "b8c772e59502be43b76df9feccadd5d342b5ca325066dd0c2384e63fa88da921", "mb": 60}}
+  }
+ }
+}

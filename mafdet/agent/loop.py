@@ -64,6 +64,7 @@ class Agent:
         """One turn of the user: returns the model's final answer ("" when it was cut short)."""
         self.stop.clear()
         self._add({"role": "user", "content": text})
+        self.turn_start = len(self.messages)
         try:
             return self._steps()
         except Stopped:                     # what the model was writing is dropped; the history stays valid
@@ -261,7 +262,8 @@ class Agent:
         missing = [k for k in tool.parameters.get("required") or [] if k not in args]
         if missing:
             return self._result(call, f"error: {name} needs {', '.join(missing)}", 0.0)
-        if not self.permissions.allowed(tool, args):
+        turn = self.messages[getattr(self, "turn_start", len(self.messages)):]
+        if not self.permissions.allowed(tool, args, turn):
             self.emit("declined", name=name)
             return self._result(call, "The user declined this call. Do not repeat it: go on another way, "
                                       "or say what you need and why.", 0.0)
