@@ -27,6 +27,7 @@ from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import VerticalScroll
+from textual.css.query import NoMatches
 from textual.message import Message
 from textual.theme import Theme
 from textual.widgets import Markdown, Static, TextArea
@@ -325,11 +326,17 @@ class AgentTUI(App):
             t.append(f" · {len(self.queue)} queued", style=HOT)
         if self.tps:
             t.append(f" · {self.tps:.0f} tok/s")
-        self.query_one("#status", Static).update(t)
+        try:
+            self.query_one("#status", Static).update(t)
+        except NoMatches:                       # the timer fired while the app is closing
+            pass
 
     def _activity(self):
         """The line above the message box while the model works: a blinking cat and what it is doing."""
-        line = self.query_one("#activity", Static)
+        try:
+            line = self.query_one("#activity", Static)
+        except NoMatches:                       # the timer fired while the app is closing
+            return
         show = self.running and not self.asking
         if line.display != show:
             line.display = show
@@ -539,8 +546,7 @@ class AgentTUI(App):
 
     def _compact(self):
         try:
-            if not self.agent.compact():
-                self._emit("error", text="nothing to summarize yet")
+            self.agent.compact()                # when it does not, it says why
         except Exception as e:
             self._emit("error", text=f"{type(e).__name__}: {e}")
         try:

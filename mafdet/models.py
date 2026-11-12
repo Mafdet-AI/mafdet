@@ -80,13 +80,22 @@ def run(args) -> int:
 
 
 def delete(console: Console, variant_id: str) -> int:
-    """Delete a downloaded model from the disk: a variant id, or a bare model id when one quantization is on disk."""
+    """Delete a downloaded model from the disk: a variant id, or a bare model id when one quantization is on disk.
+    A bare id counts only the copies MAFDET can delete, in the models folder: one in the Hugging Face cache
+    stays there, so it neither makes the id ambiguous nor is it chosen."""
     v = catalog.find(variant_id)
     if v is not None and ":" not in variant_id and not variant_id.startswith(catalog.LOCAL_PREFIX):
-        on_disk = [x for x in catalog.variants() if x.model["id"] == v.model["id"] and catalog.local_path(x)]
+        copies = [(x, catalog.local_path(x)) for x in catalog.variants() if x.model["id"] == v.model["id"]]
+        copies = [(x, path) for x, path in copies if path]
+        on_disk = [x for x, path in copies if catalog.deletable(path)]
         if len(on_disk) > 1:
             console.print(f"[red]{variant_id} is on the disk in {len(on_disk)} quantizations[/]: say which, "
                           + " or ".join(x.id for x in on_disk))
+            return 1
+        if not on_disk and copies:
+            console.print(f"[red]{variant_id} is only in the Hugging Face cache[/] ("
+                          + ", ".join(f"{x.id} at {path}" for x, path in copies)
+                          + "): MAFDET only deletes its own downloads, the cache's files stay where they are")
             return 1
         v = on_disk[0] if on_disk else v
     if v is None:

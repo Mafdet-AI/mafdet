@@ -5,10 +5,11 @@ Servers are named in ~/.mafdet/mcp.json, in the shape other MCP clients use:
 
     {"mcpServers": {"rea": {"command": "npx", "args": ["-y", "rea-agents", "mcp"],
                             "tools": ["open_binary", "procedure_*"],
-                            "allow": ["list_*", "search_*", "procedure_*", "xrefs"]}}}
+                            "allow": ["list_procedures", "procedure_pseudo_code", "xrefs"]}}}
 
 `tools` are the ones the model starts with, `allow` the ones that run without asking (name
 patterns, both): a server's tool asks first unless the server marks it read-only, and few do.
+Exact names are safer in `allow`: in rea, `list_*` also matches the adb and Frida tools.
 
 A reverse-engineering server can list two hundred tools, and their schemas alone would not fit in
 the context. So only some are given to the model (`tools` in the file, --tools, or a --profile),
@@ -22,6 +23,7 @@ import fnmatch
 import json
 import os
 import queue
+import re
 import shutil
 import subprocess
 import threading
@@ -30,12 +32,16 @@ from pathlib import Path
 from .tools import Tool
 
 PROTOCOL = "2025-06-18"
-DESCRIPTION_CHARS = 200
-PARAMETER_CHARS = 100
-TOOL_CHARS = 450                # a tool's description and schema together, about 150 tokens
+# What the model reads of a tool, in characters. Descriptions keep whole sentences while they fit: the
+# first one says what the tool does, the rest of a server's description is mostly caveats per backend.
+DESCRIPTION_CHARS = 160
+PARAMETER_CHARS = 80            # a required parameter's description (and any nested one)
+OPTIONAL_CHARS = 48             # an optional parameter's: the model can leave it out
+TOOL_CHARS = 450                # a tool's description and schema together, about 100 tokens
 # Schema keywords the model does not need to write a call: names, and checks the server makes anyway.
 DROPPED = {"$schema", "$id", "$comment", "title", "additionalProperties", "examples", "pattern", "format",
-           "minLength", "maxLength", "minItems", "maxItems", "uniqueItems", "deprecated"}
+           "minLength", "maxLength", "minItems", "maxItems", "uniqueItems", "deprecated", "minimum", "maximum",
+           "exclusiveMinimum", "exclusiveMaximum", "multipleOf", "readOnly", "writeOnly"}
 
 # Tools by task, as glob patterns on their names (any server's). The first is for static analysis of
 # a native binary: open it, look around, read a function, follow references, write names back.
@@ -170,7 +176,7 @@ def _slim(schema):
         if k in DROPPED:
             continue
         if k == "description" and isinstance(v, str):
-            v = _short(v, PARAMETER_CHARS)
+            v = _clip(v, PARAMETER_CHARS)
         # the keys of `properties` are parameter names, not schema keywords: one may be called "title"
         out[k] = {name: _slim(p) for name, p in v.items()} if k == "properties" and isinstance(v, dict) else _slim(v)
     return out
@@ -193,36 +199,63 @@ def _flat(prop, chars: int):
     if isinstance(prop.get("items"), dict) and "type" in prop["items"]:
         out["items"] = {"type": prop["items"]["type"]}
     if chars and isinstance(prop.get("description"), str):
-        out["description"] = _short(prop["description"], chars)
+        out["description"] = _clip(prop["description"], chars)
     return out or {"type": "string"}
 
 
 def _budget(description: str, schema: dict) -> tuple[str, dict]:
-    """Cut a tool's schema, a level at a time, until it is under TOOL_CHARS or bare: sixteen tools of a
+    """Cut a tool's schema, a level at a time, until it is under TOOL_CHARS: sixteen tools of a
     reverse-engineering server took 3.8k tokens with their schemas only slimmed, a quarter of 16k.
-    Nothing a call needs goes: every parameter keeps its name and type, `required` stays."""
+    An optional parameter's description is short from the start. Nothing a call needs goes: every
+    parameter keeps its name, type and short enum, `required` stays, and a required parameter keeps
+    a few words however many parameters the tool has (it is the one the model must get right)."""
     def size() -> int:
         return len(description) + len(json.dumps(schema, ensure_ascii=False))
 
     props = schema.get("properties")
-    if size() <= TOOL_CHARS or not isinstance(props, dict):
+    if not isinstance(props, dict):
         return description, schema
     required = set(schema.get("required") or [])
+    schema = {k: v for k, v in schema.items() if k != "required" or required}   # "required": [] says nothing
+    schema["properties"] = {name: p if name in required or not isinstance(p, dict) or
+                            not isinstance(p.get("description"), str) else
+                            {**p, "description": _clip(p["description"], OPTIONAL_CHARS)}
+                            for name, p in props.items()}
+    if size() <= TOOL_CHARS:
+        return description, schema
     schema = {k: v for k, v in schema.items() if k in ("type", "properties", "required")}
-    for level in (60, 0):                           # nested schemas flattened; then the optional ones bare
-        schema["properties"] = {name: _flat(p, 60 if (name in required or level) else 0)
-                                for name, p in props.items()}
+    # Nested schemas flattened; then the optional parameters bare; then fewer words for the required ones
+    # and the tool. The last level is where a tool of many parameters stays, above the budget if it must.
+    for req, opt, words in ((PARAMETER_CHARS, OPTIONAL_CHARS, 0), (PARAMETER_CHARS, 0, 0), (60, 0, 110)):
+        if words:
+            description = _clip(description, words)
+        schema["properties"] = {name: _flat(p, req if name in required else opt) for name, p in props.items()}
         if size() <= TOOL_CHARS:
-            return description, schema
-    description = _short(description, 110)
-    if size() > TOOL_CHARS:                         # as bare as it gets: a tool of many parameters stays above
-        schema["properties"] = {name: _flat(p, 0) for name, p in props.items()}
+            break
     return description, schema
 
 
 def _short(text: str, n: int) -> str:
+    """The first n characters of a text, cut between words."""
     text = " ".join(str(text).split())
     return text if len(text) <= n else text[:n - 1].rsplit(" ", 1)[0] + "…"
+
+
+def _clip(text: str, n: int) -> str:
+    """A description in at most n characters: whole sentences while they fit, else the first clause
+    (up to a `;`, `:` or a dash), else the words that fit. The first sentence usually says what a thing
+    does, and a sentence cut in the middle costs as much as a whole one and says less."""
+    text = " ".join(str(text).split())
+    if len(text) <= n:
+        return text
+    # A sentence ends at . ! ? before a capital or a digit: "0x... selectors" and "e.g. this" go on.
+    ends = [m.start() + 1 for m in re.finditer(r"[.!?](?= [A-Z0-9(\"'`])", text) if m.start() < n]
+    if ends:
+        return text[:ends[-1]]
+    clauses = [m.start() for m in re.finditer(r"[;:](?= )| [-–—] ", text) if 0 < m.start() < n]
+    if clauses and clauses[-1] >= n // 3:
+        return text[:clauses[-1]]
+    return _short(text, n)
 
 
 def as_tool(server: McpServer, spec: dict, name: str = "", allow: list[str] | tuple[str, ...] = ()) -> Tool:
@@ -234,7 +267,7 @@ def as_tool(server: McpServer, spec: dict, name: str = "", allow: list[str] | tu
     schema.setdefault("properties", {})
     read_only = (bool((spec.get("annotations") or {}).get("readOnlyHint"))
                  or any(fnmatch.fnmatch(remote, p) for p in allow))
-    description, schema = _budget(_short(spec.get("description") or remote, DESCRIPTION_CHARS), schema)
+    description, schema = _budget(_clip(spec.get("description") or remote, DESCRIPTION_CHARS), schema)
     return Tool(name or remote, description, schema,
                 lambda args: server.call(remote, args), "read" if read_only else "exec", source=server.name)
 
@@ -268,34 +301,40 @@ class Toolbox:
             self.active.pop("find_tools", None)
             return
         self.active["find_tools"] = Tool(
-            "find_tools", f"Look among {len(self.hidden)} more tools by what they do, and turn some on.",
-            {"type": "object", "required": [],
+            "find_tools", f"Look among {len(self.hidden)} more tools by what they do, and turn some on. "
+                          "A tool not in your list may be one of them: turn it on by name.",
+            {"type": "object",
              "properties": {"query": {"type": "string", "description": "words describing what is needed"},
                             "enable": {"type": "array", "items": {"type": "string"},
                                        "description": "names of tools to turn on"}}},
             self.find)
 
     def find(self, args: dict) -> str:
-        out = []
+        out, enabled = [], []
         for name in args.get("enable") or []:
             tool = self.hidden.pop(str(name), None)
             if tool is None:
                 out.append(f"{name}: " + ("already on" if name in self.active else "no such tool"))
             else:
                 self.active[tool.name] = tool
+                enabled.append(tool.name)
                 out.append(f"{name}: on, call it from the next step")
         words = str(args.get("query") or "").lower().split()
         if words:
+            # The search runs on the tools still off: one just turned on is reported above, not as "no match"
+            # (the first real session got "on" and then "no tool matches" for the same tool).
             scored = []
             for tool in self.hidden.values():
                 text = f"{tool.name} {tool.description}".lower()
                 score = sum(3 if w in tool.name.lower() else 1 for w in words if w in text)
                 if score:
                     scored.append((-score, tool.name, tool))
+            if scored and enabled:
+                out.append("Other tools that match, still off:")
             out += [f"{t.name}: {_short(t.description, 140)}" for _, _, t in sorted(scored)[:8]]
-            if not scored:
+            if not scored and not enabled:
                 out.append("no tool matches: try other words")
-            elif not args.get("enable"):
+            elif scored and not args.get("enable"):
                 out.append("Turn on the ones needed with find_tools(enable=[names]).")
         self._finder()
         return "\n".join(out) or "give a query, or names to enable"
@@ -304,7 +343,27 @@ class Toolbox:
         return self.active.get(name)
 
     def specs(self) -> list[dict]:
-        return [t.spec() for t in self.active.values()]
+        """The active tools as the chat request's `tools`. An optional parameter described in an earlier
+        tool with the same words is not described again: the model reads the tools together, and a
+        server repeats the same optional `document` in a dozen of them. A tool turned on later goes at
+        the end, so the specs before it stay the same (and so does the prompt's cached start)."""
+        seen, out = set(), []
+        for t in self.active.values():
+            spec = t.spec()
+            params = spec["function"]["parameters"]
+            props = params.get("properties") if isinstance(params, dict) else None
+            if isinstance(props, dict):
+                required, slim = set(params.get("required") or []), {}
+                for name, p in props.items():
+                    if name not in required and isinstance(p, dict) and isinstance(p.get("description"), str):
+                        key = (name, p["description"])
+                        if key in seen:
+                            p = {k: v for k, v in p.items() if k != "description"}
+                        seen.add(key)
+                    slim[name] = p
+                spec["function"]["parameters"] = {**params, "properties": slim}
+            out.append(spec)
+        return out
 
 
 def log_path(session_dir: Path, name: str) -> str:

@@ -42,8 +42,12 @@ GPU_EFFICIENCY = 0.62          # share of the GPU's bandwidth llama.cpp reaches 
                                # (K-quants: 0.60 on the 2060, 0.60-0.65 on the 4070 SUPER)
 RAM_EFFICIENCY = 0.9           # the same for system RAM, against hardware.ram_bandwidth_gbs()
 # llama.cpp's --fit leaves 1024 MiB free (its default --fit-target) after the model, the KV cache and
-# the compute buffers (~180 MiB); the CUDA context takes ~100 more than nvidia-smi counts as used.
-VRAM_RESERVE_MB = 1300
+# the compute buffers. FIT_TARGET_MB is that margin over llama.cpp's own projection (which counts the
+# compute buffers): what the agent's --ctx 0 keeps free of what nvidia-smi says is free. VRAM_RESERVE_MB is
+# the same against the weights and the KV cache alone: + the compute buffers (~180 MiB) + the CUDA
+# context (~100 more than nvidia-smi counts as used).
+FIT_TARGET_MB = 1024
+VRAM_RESERVE_MB = FIT_TARGET_MB + 276
 RAM_RESERVE_MB = 2500          # the system and the app itself
 PCIE_GBS = 12.0                # weights left on the CPU are streamed to the GPU for long prefills
 GPU_PREFILL_FLOPS_PER_GBS = 0.051e12   # usable prefill compute, from the card's bandwidth class (2060: 4B 2,141 tok/s)
@@ -247,6 +251,12 @@ def in_models_dir(path: str | Path) -> bool:
     return os.path.normcase(os.path.abspath(path)).startswith(root + os.sep)
 
 
+def deletable(path: str | None) -> bool:
+    """Whether a model on the disk at `path` (local_path's answer) is one MAFDET may delete: not a copy in the
+    Hugging Face cache, nor a file added from elsewhere. What the listing marks, and what a bare id counts."""
+    return bool(path) and in_models_dir(path)
+
+
 def _owned_files(v: Variant) -> list[Path]:
     """The files on disk a variant stands for: its parts (a split model), and the .part of a download
     stopped halfway. Only the ones that exist."""
@@ -338,17 +348,21 @@ def save_measurement(v: Variant, hw: Hardware, device: str, result: dict):
 
 # ---- estimate ----------------------------------------------------------------
 
-def splits_with_cpu(path: str, hw: Hardware, ctx: int = 8192) -> bool:
-    """Whether llama.cpp will put part of this GGUF on the CPU here (the same estimate as the catalog's)."""
+def splits_with_cpu(path: str, hw: Hardware, ctx: int = 8192, kv: str = "f16") -> bool:
+    """Whether llama.cpp will put part of this GGUF on the CPU here (the same estimate as the catalog's),
+    with a KV cache of type `kv`."""
     info = header(Path(path))
     if info is None or not hw.gpu or hw.gpu.unified:
         return False
     v = Variant(local_model(Path(path), info), gguf.quant_label(Path(path).name), "", str(path), info["bytes"])
-    return estimate(v, hw, "cuda", ctx)["placement"] == "partial"
+    return estimate(v, hw, "cuda", ctx, kv)["placement"] == "partial"
 
 
-def kv_bytes_per_token(model: dict) -> int:
-    return 2 * model["layers"] * model["kv_heads"] * model["head_dim"] * 2      # keys and values, f16
+KV_BYTES = {"f16": 2.0, "q8_0": 34 / 32}       # bytes per value of the KV cache (q8_0: 32 values and a scale in 34)
+
+
+def kv_bytes_per_token(model: dict, kv: str = "f16") -> float:
+    return 2 * model["layers"] * model["kv_heads"] * model["head_dim"] * KV_BYTES[kv]     # keys and values
 
 
 def ada(name: str) -> bool:
@@ -372,14 +386,14 @@ def gpu_prefill_flops_per_gbs(gpu) -> float:
     return GPU_PREFILL_FLOPS_PER_GBS
 
 
-def estimate(v: Variant, hw: Hardware, device: str = "auto", ctx: int = 8192) -> dict:
-    """Where the model runs here and how fast, before downloading it."""
+def estimate(v: Variant, hw: Hardware, device: str = "auto", ctx: int = 8192, kv: str = "f16") -> dict:
+    """Where the model runs here and how fast, before downloading it (`kv`: the KV cache's type)."""
     m = v.model
     gpu = hw.gpu if device in ("auto", "cuda") else None
     weights_mb = v.bytes / 2**20
     embd_mb = weights_mb * m.get("cpu_embd_b", 0.0) / m["params_b"]      # in RAM, one row read per token
     layers_mb = weights_mb - embd_mb
-    kv_mb = kv_bytes_per_token(m) * ctx / 2**20
+    kv_mb = kv_bytes_per_token(m, kv) * ctx / 2**20
     total_mb = weights_mb + kv_mb
     if gpu:
         room = max(0.0, gpu.vram_free_mb - VRAM_RESERVE_MB)
@@ -484,7 +498,7 @@ def entry(v: Variant, hw: Hardware, device: str = "auto", ctx: int = 8192, typin
             "default": v.quant == preferred_quant(v.model, hw, device, ctx), "tier": v.model["tier"],
             "params_b": v.model["params_b"], "active_b": v.model["active_b"],
             "reason_ahead": v.model["reason_ahead"], "bytes": v.bytes, "installed": bool(path),
-            "path": path, "deletable": bool(path) and in_models_dir(path), **e}
+            "path": path, "deletable": deletable(path), **e}
 
 
 def recommend(entries: list[dict]) -> str | None:

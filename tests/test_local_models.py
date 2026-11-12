@@ -308,3 +308,49 @@ def test_the_command_deletes_by_bare_id(tmp_path):
     assert delete(out, "qwen3-4b") == 0 and not (root / v.file).exists()
     assert "qwen3-4b:Q5_K_M deleted" in out.file.getvalue()
     assert delete(out, "qwen3-4b") == 1 and "not on the disk" in out.file.getvalue()
+
+
+def _in_hf_cache(hf_home, v):
+    """A copy of a variant in the (test's own) Hugging Face cache, laid out as huggingface_hub keeps it."""
+    repo = hf_home / "hub" / f"models--{v.repo.replace('/', '--')}"
+    (repo / "refs").mkdir(parents=True)
+    (repo / "refs" / "main").write_text("0123abcd", encoding="utf-8")
+    path = repo / "snapshots" / "0123abcd" / v.file
+    path.parent.mkdir(parents=True)
+    path.write_bytes(b"\0" * 16)
+    return path
+
+
+def test_a_bare_id_counts_only_what_mafdet_can_delete(tmp_path, hf_home):
+    import io
+    from rich.console import Console
+    from mafdet.models import delete
+    root = config.models_dir()
+    cached = catalog.find("qwen3-4b:Q4_K_M")
+    in_cache = _in_hf_cache(hf_home, cached)
+    assert catalog.local_path(cached) == str(in_cache)                     # on the disk, but not MAFDET's
+    out = Console(file=io.StringIO(), width=300)
+    # Only in the Hugging Face cache: said so, and nothing goes.
+    assert delete(out, "qwen3-4b") == 1
+    said = out.file.getvalue()
+    assert "only in the Hugging Face cache" in said and "qwen3-4b:Q4_K_M" in said and in_cache.exists()
+    assert "say which" not in said
+    # One copy in the models folder and one in the cache: the folder's goes, without asking; the cache's stays.
+    mine = catalog.find("qwen3-4b:Q5_K_M")
+    (root / mine.file).write_bytes(b"\0" * mine.bytes)
+    out = Console(file=io.StringIO(), width=300)
+    assert delete(out, "qwen3-4b") == 0
+    assert "qwen3-4b:Q5_K_M deleted" in out.file.getvalue() and "say which" not in out.file.getvalue()
+    assert not (root / mine.file).exists() and in_cache.exists()
+    # Two in the models folder: which one is asked, and the cache's is not offered.
+    for q in ("Q5_K_M", "Q6_K"):
+        x = catalog.find(f"qwen3-4b:{q}")
+        (root / x.file).write_bytes(b"\0" * x.bytes)
+    out = Console(file=io.StringIO(), width=300)
+    assert delete(out, "qwen3-4b") == 1
+    said = out.file.getvalue()
+    assert "in 2 quantizations" in said and "qwen3-4b:Q5_K_M or qwen3-4b:Q6_K" in said and "Q4_K_M" not in said
+    # The listing (the window, the terminal app) marks the same thing.
+    entries = {e["id"]: e for e in catalog.listing(machine())["models"]}
+    assert entries["qwen3-4b:Q4_K_M"]["installed"] and not entries["qwen3-4b:Q4_K_M"]["deletable"]
+    assert entries["qwen3-4b:Q6_K"]["deletable"]

@@ -14,7 +14,8 @@ import pytest
 
 from mafdet.agent import mcp, web
 from mafdet.agent.loop import Agent
-from mafdet.agent.memory import Memory, compact, memory_tools, tail_from, transcript
+from mafdet.agent.context import STUB
+from mafdet.agent.memory import SUMMARIZE, Memory, memory_tools, summarize, tail_from, transcript
 from mafdet.agent.model import Reply
 from mafdet.agent.permissions import Permissions
 from mafdet.agent.shell import Shell
@@ -119,27 +120,45 @@ def long_history(n=6):
     return msgs
 
 
-def test_compaction_keeps_the_summary_the_notes_and_the_last_turns():
+def test_compaction_keeps_the_summary_the_notes_and_the_last_turns(tmp_path):
     msgs = long_history()
     assert tail_from(msgs) == 10                                         # the last two calls, with their results
+    assert tail_from(msgs[:4]) == 2 and tail_from(msgs[:2]) == 2         # fewer turns than asked: what there is
     text = transcript(msgs[1:10], 100_000)
     assert text.startswith("USER: find the key") and 'AGENT CALLS read_file({"n": 0})' in text
     assert "RESULT: output 0 x" in text and len(text) < 4000             # outputs cut short
     assert transcript(msgs[1:10], 300).startswith("[the start of the session is not shown]")
-    memory = Memory()
-    memory.add_note("the key is XORed with 0x5A")
-    memory.set_todo([{"task": "decode", "done": False}])
-    model = Script(Reply(content="The user wants the key. main reads DATA."))
-    new = compact(msgs, model, memory, limit_tokens=12000, ratio=1 / 3)
+    model = Script(Reply(content="Task: find the key. Established: main reads DATA."))
+    assert summarize(msgs[1:10], model, 12000, 1 / 3).startswith("Task: find the key.")
     asked, tools = model.seen[0]
-    assert tools is None and asked[0]["role"] == "system" and "USER: find the key" in asked[1]["content"]
+    assert tools is None and asked[0] == {"role": "system", "content": SUMMARIZE}
+    request = asked[1]["content"]                                        # the transcript, then the instruction again
+    assert "<transcript>\nUSER: find the key" in request and request.rstrip().endswith("in your own words.")
+    assert "do not repeat them, and do not say whether there are any" in SUMMARIZE
+    assert summarize(msgs[1:2], Script(), 12000, 1 / 3) == ""            # no turn of the agent: nothing to ask
+    assert summarize(msgs[1:10], Script(Reply(content="")), 12000, 1 / 3) is None
+
+    session = Session()
+    paths = {}
+    for i in range(6):                                                   # the whole outputs, on disk as the loop keeps them
+        paths[f"c{i}"] = session.save_output("read_file", msgs[2 * i + 3]["content"], f"c{i}")
+    agent = Agent(Script(Reply(content="Task: find the key. Established: main reads DATA.")),
+                  mcp.Toolbox(builtin_tools(tmp_path)), Permissions("ask"), session, system="sys", ctx=12000,
+                  max_tokens=1000, tool_chars=1000)
+    agent.memory.add_note("the key is XORed with 0x5A")
+    agent.memory.set_todo([{"task": "decode", "done": False}])
+    agent.messages = [dict(m) for m in msgs]
+    agent.paths = dict(paths)
+    assert agent.compact()
+    new = agent.messages
     assert [m["role"] for m in new] == ["system", "user", "assistant", "tool", "assistant", "tool"]
-    assert new[0] == msgs[0] and new[2:] == msgs[10:]
+    assert new[0] == msgs[0] and new[2] == msgs[10] and new[4] == msgs[12]   # the model's own calls stay
+    assert new[3]["content"] == STUB + f"; the whole of it is in {paths['c4']}: read_file it (offset, limit) to get it back]"
+    assert new[5]["content"].startswith("output 5 xxx") and paths["c5"] in new[5]["content"]   # the most recent: a head
+    assert len(new[5]["content"].split("\n[... the rest")[0]) <= 500      # at most half of --tool-chars
     summary = new[1]["content"]
-    assert "The user wants the key. main reads DATA." in summary and "the key is XORed with 0x5A" in summary
+    assert "Task: find the key. Established: main reads DATA." in summary and "the key is XORed with 0x5A" in summary
     assert "[ ] decode" in summary and "find the key in check.exe" in summary
-    assert compact(msgs[:3], Script(), memory, 12000, 1 / 3) is None     # too little to summarize
-    assert compact(msgs, Script(Reply(content="")), memory, 12000, 1 / 3) is None
 
 
 def test_the_agent_compacts_when_leaving_outputs_out_is_not_enough(tmp_path):
@@ -270,8 +289,11 @@ def test_a_heavy_schema_is_cut_to_the_budget():
     server = argparse.Namespace(name="fake")
     tool = mcp.as_tool(server, spec)
     props = tool.parameters["properties"]
-    # Ten parameters: bare names and types are already above the budget, and nothing a call needs is dropped.
-    assert len(json.dumps(spec)) > 2800 and len(tool.description) + len(json.dumps(tool.parameters)) < 560
+    # Ten parameters: bare names and types are already above the budget, and nothing a call needs is dropped:
+    # the required parameter keeps a few words, the description whole sentences.
+    assert len(json.dumps(spec)) > 2800 and len(tool.description) + len(json.dumps(tool.parameters)) < 620
+    assert tool.description == "Decompile one analyzed procedure. " * 2 + "Decompile one analyzed procedure."
+    assert props["address"]["description"] == "The procedure's address or symbol."
     few = {"name": "f", "description": spec["description"], "inputSchema": {
         "type": "object", "required": ["address"],
         "properties": {k: v for k, v in spec["inputSchema"]["properties"].items() if not k.startswith("flag")}}}
@@ -287,6 +309,63 @@ def test_a_heavy_schema_is_cut_to_the_budget():
     light = {"name": "xrefs", "description": "References to an address.",
              "inputSchema": {"type": "object", "properties": {"address": {"type": "string", "description": "hex"}}}}
     assert mcp.as_tool(server, light).parameters["properties"]["address"] == {"type": "string", "description": "hex"}
+
+
+def test_descriptions_keep_whole_sentences_or_the_first_clause():
+    clip = mcp._clip
+    long = ("Decompile one analyzed procedure by symbol name or address. Ghidra also accepts file-offset:0x... "
+            "selectors and falls back to a source mapping. Hopper may return null.")
+    first = "Decompile one analyzed procedure by symbol name or address."
+    assert clip(long, 100) == first
+    assert clip(long, 150) == first + " Ghidra also accepts file-offset:0x... selectors and falls back to a source mapping."
+    assert clip("The active target's provider document name; use open_binary to switch targets", 48) == \
+        "The active target's provider document name"
+    assert clip("A rather long sentence without any stop that goes on and on and on", 30) == "A rather long sentence…"
+    assert clip("Short; fine", 48) == "Short; fine"
+
+
+def test_rea_like_schemas_are_cheap_and_still_complete():
+    """Sixteen tools shaped like a reverse-engineering server's (long descriptions full of per-backend
+    caveats, the same optional `document` everywhere): the active ones cost what a 16k context can pay,
+    and every parameter keeps name, type, required and enum."""
+    caveat = ("Ghidra terminal-call assumptions that may cut the analyzed body are reported in Evidence "
+              "limitations; Hopper preserves observed names. ")
+    document = {"description": "The active target's provider document name; use open_binary to switch targets",
+                "type": "string"}
+    specs = [{"name": f"procedure_{i}", "annotations": {"readOnlyHint": False},
+              "description": f"Return thing {i} for one analyzed procedure identified by symbol or address. " + caveat * 3,
+              "inputSchema": {"type": "object", "$schema": "https://json-schema.org/draft/2020-12/schema",
+                              "additionalProperties": False, "examples": [{"procedure": "main"}],
+                              "required": ["procedure"],
+                              "properties": {"procedure": {"type": "string", "description": "The procedure name or address"},
+                                             "mode": {"default": "literal", "type": "string", "enum": ["literal", "regex"]},
+                                             "length": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+                                             "document": document}}} for i in range(16)]
+    specs += [{**specs[0], "name": "late"}, {**specs[0], "name": "other"}]
+    server = argparse.Namespace(name="rea", list_tools=lambda: specs)
+    box = mcp.Toolbox()
+    box.add_server(server, ["procedure_*"])
+    sent = box.specs()
+    assert [s["function"]["name"] for s in sent][16:] == ["find_tools"]
+    size = len(json.dumps(sent[:16], ensure_ascii=False))
+    assert size < 16 * 500 and len(json.dumps(specs[:16])) > 2.4 * size           # ~16 x 110 tokens
+    first, later = sent[0]["function"], sent[1]["function"]
+    assert first["description"] == "Return thing 0 for one analyzed procedure identified by symbol or address."
+    params = later["parameters"]
+    assert params["required"] == ["procedure"] and set(params["properties"]) == {"procedure", "mode", "length", "document"}
+    assert params["properties"]["procedure"]["description"] == "The procedure name or address"   # required: always said
+    assert params["properties"]["mode"]["enum"] == ["literal", "regex"]
+    assert params["properties"]["length"] == {"type": "integer"}                     # the server checks bounds
+    # The same optional parameter, said once: the first tool describes it, the others give name and type.
+    assert first["parameters"]["properties"]["document"]["description"] == "The active target's provider document name"
+    assert params["properties"]["document"] == {"type": "string"}
+    assert box.get("procedure_1").parameters["properties"]["document"]["description"]   # the tool itself keeps it
+    # A tool turned on later goes at the end: what was sent before stays the same, the prompt's start too.
+    box.find({"enable": ["late"]})
+    again = box.specs()
+    assert again[:16] == sent[:16] and [s["function"]["name"] for s in again][16:] == ["find_tools", "late"]
+    assert "description" not in again[-1]["function"]["parameters"]["properties"]["document"]
+    assert "required" not in again[16]["function"]["parameters"]                      # find_tools: no empty list
 
 
 # ---------------------------------------------------------------- the interface
@@ -335,7 +414,8 @@ def test_tui_shows_a_resumed_session_and_the_todo_list(tmp_path):
 
 
 def test_tui_compact_command(tmp_path):
-    model = Streams(Reply(content="one"), Reply(content="two"), Reply(content="three"),
+    long = " and so on" * 150                   # long enough that a summary makes it smaller
+    model = Streams(Reply(content="one" + long), Reply(content="two" + long), Reply(content="three"),
                     Reply(content="The user asked three things."))
 
     async def go():

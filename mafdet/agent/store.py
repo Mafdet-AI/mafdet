@@ -1,6 +1,9 @@
 """A session on disk, in ~/.mafdet/sessions/<id>/:
     transcript.jsonl    every message as it entered the conversation (tool outputs as the model saw them)
+    notes.md            the model's notes, one line each, as they are written
+    todo.md             the model's to-do list as it was last set ("- [x] step" when done)
     outputs/            the tool outputs in full, for the model to read the parts that were cut
+    outputs.jsonl       which tool call each of them belongs to
 and next to the sessions, mcp-<name>.log: what each MCP server wrote on its standard error.
 """
 from __future__ import annotations
@@ -60,6 +63,14 @@ class Session:
             return []
         return [line[2:] for line in lines if line.startswith("- ")]
 
+    def todo(self) -> list[dict]:
+        try:
+            lines = (self.dir / "todo.md").read_text(encoding="utf-8").splitlines()
+        except OSError:
+            return []
+        return [{"task": line[6:], "done": line[3] in "xX"} for line in lines
+                if line[:3] == "- [" and line[4:6] == "] " and line[6:].strip()]
+
     def messages(self) -> list[dict]:
         """The conversation so far, without a tail left half done (tool calls with no result)."""
         out = []
@@ -83,9 +94,27 @@ class Session:
                 return out[:i]
         return out
 
-    def save_output(self, tool: str, text: str) -> str:
+    def save_output(self, tool: str, text: str, call_id: str = "") -> str:
         self._n += 1
         name = "".join(c if c.isalnum() or c in "-_" else "_" for c in tool)[:40]
         path = self.dir / "outputs" / f"{self._n:03d}-{name}.txt"
         path.write_text(text, encoding="utf-8", newline="")
+        if call_id:                                 # which call it belongs to, for a resumed session
+            with open(self.dir / "outputs.jsonl", "a", encoding="utf-8") as f:
+                f.write(json.dumps({"id": call_id, "path": str(path)}) + "\n")
         return str(path)
+
+    def output_paths(self) -> dict[str, str]:
+        """tool_call_id -> the file with that call's whole output."""
+        out = {}
+        try:
+            with open(self.dir / "outputs.jsonl", encoding="utf-8") as f:
+                for line in f:
+                    try:
+                        row = json.loads(line)
+                        out[row["id"]] = row["path"]
+                    except (ValueError, KeyError, TypeError):
+                        continue
+        except OSError:
+            pass
+        return out

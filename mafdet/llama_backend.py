@@ -18,6 +18,7 @@ import atexit
 import http.client
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -25,6 +26,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
+from pathlib import Path
 from types import SimpleNamespace
 
 from . import DEFAULT_MODEL
@@ -443,14 +445,86 @@ class LlamaPrefill:
         return out
 
 
-def kv_in_8_bits(model_path: str, ctx: int) -> bool:
+def kv_in_8_bits(model_path: str, ctx: int, hw=None) -> bool:
     """True when the model will not fit all in VRAM here (then its KV cache goes to q8_0)."""
     try:
         from .core import catalog, hardware
-        return catalog.splits_with_cpu(model_path, hardware.detect(refresh=True), ctx)
+        return catalog.splits_with_cpu(model_path, hw or hardware.detect(refresh=True), ctx)
     except Exception as e:                     # never a reason not to start
         print(f"KV cache left at f16: {e}", file=sys.stderr)
         return False
+
+
+def _fit_params(model_path: str, ctx: int, kv: str, *more: str) -> str | None:
+    """llama-fit-params' output for this model, context and KV cache, as LlamaServer loads it (one slot,
+    flash attention). None when this build has no llama-fit-params or it fails."""
+    exe = find_llama_server(required=False)
+    if not exe:
+        return None
+    fit = os.path.join(os.path.dirname(exe), "llama-fit-params" + (".exe" if os.name == "nt" else ""))
+    if not os.path.exists(fit):
+        return None
+    try:
+        return subprocess.run([fit, "-m", model_path, "-c", str(ctx), "-np", "1", "-fa", "on", "-ctk", kv, "-ctv", kv,
+                               *more], capture_output=True, text=True, timeout=120,
+                              creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def fitted_layers(model_path: str, ctx: int, kv: str = "f16") -> int | None:
+    """How many layers llama.cpp's own fit (what `-ngl auto` runs) puts on the GPU at this context and KV
+    cache, asked through llama-fit-params: -1 for all of them. None when this build has no llama-fit-params
+    or it fails. It sees the free memory as CUDA does, which on Windows is more than nvidia-smi says
+    (RTX 4070 SUPER with the desktop on it: 11,069 MiB against 9,683)."""
+    m = re.search(r"-ngl (-?\d+)", _fit_params(model_path, ctx, kv) or "")
+    return int(m.group(1)) if m else None
+
+
+def projected_mb(model_path: str, ctx: int, kv: str = "f16") -> int | None:
+    """The VRAM llama.cpp projects for this model all on the GPU at this context and KV cache (weights, KV
+    cache and compute buffers: `llama-fit-params --fit-print on`, one row per device, MiB). None without
+    llama-fit-params, on a build too old for --fit-print, or over more than one GPU. Qwen3-14B IQ4_XS with
+    q8_0: 9,048 MiB at 16k, 9,736 at 24k, 10,424 at 32k (7,335 of weights, 352-368 of compute)."""
+    rows = []
+    for line in (_fit_params(model_path, ctx, kv, "-fitp", "on") or "").splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and parts[0] != "Host" and all(p.isdigit() for p in parts[1:]):
+            rows.append(sum(int(p) for p in parts[1:]))
+    return rows[0] if len(rows) == 1 else None
+
+
+def gpu_fit(model_path: str, ctx: int, hw) -> tuple[bool, int | None]:
+    """Whether LlamaServer would load this model all on the GPU at this context, and the MiB nvidia-smi's
+    free memory would keep after it (None when not known). With the KV cache the server would give it (q8_0
+    when f16 would split, `kv_in_8_bits`).
+
+    On an NVIDIA card: llama.cpp's projected use plus catalog.FIT_TARGET_MB must fit in what nvidia-smi says
+    is free right now. llama.cpp's own fit counts the same margin against CUDA's free memory, which on Windows
+    is ~1.3 GB more than nvidia-smi's (the RTX 4070 SUPER at idle: 11,069 MiB against ~10,000): by it, the
+    14B IQ4_XS was all on the GPU at 24k, with ~0.5 GB left by nvidia-smi, and Windows paged the server's
+    memory out as soon as another app took VRAM (43 -> 5-27 tok/s; 16k on the same desktop: 39-47).
+    Elsewhere (AMD, or no --fit-print): how many layers llama.cpp's fit puts on the GPU, else the catalog's
+    estimate with that cache."""
+    from .core import catalog
+    kv = "q8_0" if kv_in_8_bits(model_path, ctx, hw) else "f16"
+    gpu = hw.gpu
+    if gpu and gpu.backend == "cuda" and not gpu.unified:            # its free memory is nvidia-smi's
+        need = projected_mb(model_path, ctx, kv)
+        if need is not None:
+            left = gpu.vram_free_mb - need
+            return left >= catalog.FIT_TARGET_MB, left
+    layers = fitted_layers(model_path, ctx, kv)
+    if layers is None:
+        return not catalog.splits_with_cpu(model_path, hw, ctx, kv), None
+    meta = (catalog.header(Path(model_path)) or {}).get("meta") or {}
+    blocks = int(meta.get(f"{meta.get('general.architecture', '')}.block_count") or 0)
+    return layers < 0 or (blocks > 0 and layers > blocks), None    # the output layer counts as one more
+
+
+def all_on_gpu(model_path: str, ctx: int, hw) -> bool:
+    """`gpu_fit` without the memory left."""
+    return gpu_fit(model_path, ctx, hw)[0]
 
 
 def setup_llama(args, device: str | None = None, n_slots: int = 1, pool: int = 0):

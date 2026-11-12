@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from mafdet.agent import mcp
-from mafdet.agent.context import STUB, Context, ContextFull, clip
+from mafdet.agent.context import STUB, Context, ContextFull, clip, stub
 from mafdet.agent.loop import Agent
 from mafdet.agent.model import ChatModel, ModelError, Reply
 from mafdet.agent.permissions import Permissions
@@ -150,7 +150,7 @@ def test_old_outputs_are_left_out_when_the_context_fills():
         msgs.append({"role": "tool", "tool_call_id": f"c{i}", "content": "x" * 1500})
     assert ctx.fit(msgs, [], {"c0": "out/0.txt"}) == 4
     outs = [m["content"] for m in msgs if m["role"] == "tool"]
-    assert outs[0] == STUB + "; it is in out/0.txt]" and outs[1].startswith(STUB)
+    assert outs[0] == stub("out/0.txt") and "out/0.txt: read_file it" in outs[0] and outs[1].startswith(STUB)
     assert outs[4] == outs[5] == "x" * 1500                              # the last two are never touched
     assert ctx.fit(msgs, []) == 0
     msgs.append({"role": "user", "content": "y" * 9000})
@@ -349,33 +349,125 @@ def test_cli_knows_the_agent():
 
 
 def test_the_context_follows_the_vram(monkeypatch, tmp_path):
-    """--ctx 0: the largest context that keeps the model all on the GPU, on the catalog's estimate."""
-    from mafdet import agent
+    """--ctx 0: the largest context that keeps the model all on the GPU, as LlamaServer will load it: a q8_0
+    KV cache when f16 would split. Here on the catalog's estimate (no llama-fit-params), which keeps
+    VRAM_RESERVE_MB free of nvidia-smi's free memory past the weights and the KV cache: the 5070 Ti (14,303 MiB
+    free) takes 32k for the 14B Q4_K_M with q8_0 (8,585 + 2,720 MiB, 1.7 GB to spare past the reserve)."""
+    from mafdet import agent, llama_backend
     from mafdet.core import catalog
     from test_hardware_catalog import apple_m2_pro, nvidia_pc, reference_pc
     gguf = tmp_path / "model.gguf"
     gguf.write_bytes(b"")
+    monkeypatch.setattr(llama_backend, "fitted_layers", lambda path, ctx, kv="f16": None)
+    monkeypatch.setattr(llama_backend, "projected_mb", lambda path, ctx, kv="f16": None)
 
     def as_variant(variant_id):
         v = catalog.find(variant_id)
         monkeypatch.setattr(catalog, "header", lambda path: {"meta": {"general.architecture": "qwen3",
                                                                       "qwen3.context_length": 40960}})
-        monkeypatch.setattr(catalog, "splits_with_cpu",
-                            lambda path, hw, ctx=8192: catalog.estimate(v, hw, "cuda", ctx)["placement"] != "gpu")
+        monkeypatch.setattr(catalog, "splits_with_cpu", lambda path, hw, ctx=8192, kv="f16":
+                            catalog.estimate(v, hw, "cuda", ctx, kv)["placement"] != "gpu")
 
     rtx_5070_ti = nvidia_pc("NVIDIA GeForce RTX 5070 Ti", 16303, 2000, 896)
     as_variant("qwen3-14b:Q4_K_M")
-    assert agent.pick_ctx(str(gguf), rtx_5070_ti) == 24576               # 32k would put layers on the CPU
+    # 32k with f16 would split, so LlamaServer gives it q8_0, and with q8_0 it is all on the GPU.
+    assert catalog.splits_with_cpu(str(gguf), rtx_5070_ti, 32768)
+    assert not catalog.splits_with_cpu(str(gguf), rtx_5070_ti, 32768, "q8_0")
+    assert agent.pick_ctx(str(gguf), rtx_5070_ti) == 32768
     assert agent.pick_ctx(str(gguf), reference_pc()) == 16384            # split on 6 GB anyway: the floor
     assert agent.pick_ctx(str(gguf), rtx_5070_ti, device="cpu") == 16384
     assert agent.pick_ctx(str(gguf), apple_m2_pro()) == 16384
-    as_variant("qwen3-14b:IQ4_XS")
-    assert agent.pick_ctx(str(gguf), rtx_5070_ti) == 32768
+    rtx_4070_super = nvidia_pc("NVIDIA GeForce RTX 4070 SUPER", 12282, 2599, 504)    # with this desktop's 2.6 GB
+    assert agent.pick_ctx(str(gguf), rtx_4070_super) == 16384            # even with q8_0, by the catalog's estimate
     as_variant("qwen3-8b:Q4_K_M")
     assert agent.pick_ctx(str(gguf), rtx_5070_ti) == 32768
     monkeypatch.setattr(catalog, "header", lambda path: {"meta": {"general.architecture": "x",
                                                                   "x.context_length": 8192}})
     assert agent.pick_ctx(str(gguf), rtx_5070_ti) == 16384               # trained on less than any of them
+
+
+def test_the_context_keeps_a_gigabyte_of_what_nvidia_smi_says_is_free(monkeypatch, tmp_path):
+    """On an NVIDIA card: llama.cpp's projected use (llama-fit-params --fit-print), with the KV cache
+    LlamaServer will choose, plus FIT_TARGET_MB must fit in nvidia-smi's free memory, not in CUDA's larger
+    figure. Qwen3-14B IQ4_XS with q8_0, as measured: 9,048 MiB at 16k, 9,736 at 24k, 10,424 at 32k. The RTX
+    4070 SUPER at idle (2,169 MiB in use: 10,113 free) takes 16k (1.0 GB left), where llama.cpp's own fit
+    keeps 24k all on the GPU with 0.4 GB left; the 5070 Ti (14,303 free) takes 32k (3.8 GB left)."""
+    from mafdet import agent, llama_backend
+    from mafdet.core import catalog
+    from test_hardware_catalog import nvidia_pc
+    gguf = tmp_path / "model.gguf"
+    gguf.write_bytes(b"")
+    monkeypatch.setattr(catalog, "header", lambda path: {"meta": {"general.architecture": "qwen3",
+                                                                  "qwen3.context_length": 40960,
+                                                                  "qwen3.block_count": 40}})
+    monkeypatch.setattr(catalog, "splits_with_cpu", lambda path, hw, ctx=8192, kv="f16": True)
+    measured = {("q8_0", 16384): 9048, ("q8_0", 24576): 9736, ("q8_0", 32768): 10424}
+    asked = []
+
+    def projected(path, ctx, kv="f16"):
+        asked.append((kv, ctx))
+        return measured[kv, ctx]
+
+    monkeypatch.setattr(llama_backend, "projected_mb", projected)
+    monkeypatch.setattr(llama_backend, "fitted_layers", lambda *a, **k: pytest.fail("nvidia-smi knows"))
+    idle = nvidia_pc("NVIDIA GeForce RTX 4070 SUPER", 12282, 2169, 504)
+    assert agent.choose_ctx(str(gguf), idle) == (16384, "24k would leave 0.4 GB of VRAM")
+    assert asked == [("q8_0", 32768), ("q8_0", 24576), ("q8_0", 16384)]  # the cache the server will give it
+    assert llama_backend.gpu_fit(str(gguf), 16384, idle) == (True, 1065)
+    assert llama_backend.gpu_fit(str(gguf), 24576, idle) == (False, 377)
+    rtx_5070_ti = nvidia_pc("NVIDIA GeForce RTX 5070 Ti", 16303, 2000, 896)
+    assert agent.choose_ctx(str(gguf), rtx_5070_ti) == (32768, "3.8 GB of VRAM left")
+    discord = nvidia_pc("NVIDIA GeForce RTX 4070 SUPER", 12282, 2169 + 1600, 504)   # encoding video
+    assert agent.choose_ctx(str(gguf), discord) == (16384, "the smallest: it would need 0.5 GB more VRAM "
+                                                           "than is free")
+
+
+def test_without_nvidia_smi_the_context_asks_llama_cpp_fit(monkeypatch, tmp_path):
+    """Where nvidia-smi does not say the free memory (an AMD card through Vulkan), llama-fit-params says how
+    many layers `-ngl auto` puts on the GPU, asked with the KV cache LlamaServer will choose. The RTX 4070
+    SUPER's numbers with Qwen3-14B IQ4_XS: f16 splits at every context (40 of 41 layers at 16k), q8_0 is all
+    on the GPU at 16k and 24k (-1), 39 at 32k."""
+    from mafdet import agent, llama_backend
+    from mafdet.core import catalog
+    from mafdet.core.hardware import amd_gpu
+    from test_hardware_catalog import nvidia_pc
+    gguf = tmp_path / "model.gguf"
+    gguf.write_bytes(b"")
+    monkeypatch.setattr(catalog, "header", lambda path: {"meta": {"general.architecture": "qwen3",
+                                                                  "qwen3.context_length": 40960,
+                                                                  "qwen3.block_count": 40}})
+    monkeypatch.setattr(catalog, "splits_with_cpu", lambda path, hw, ctx=8192, kv="f16": True)
+    measured = {("f16", 16384): 40, ("q8_0", 16384): -1, ("q8_0", 24576): -1, ("q8_0", 32768): 39}
+    asked = []
+
+    def fit(path, ctx, kv="f16"):
+        asked.append((kv, ctx))
+        return measured.get((kv, ctx), 30)
+
+    monkeypatch.setattr(llama_backend, "fitted_layers", fit)
+    monkeypatch.setattr(llama_backend, "projected_mb", lambda *a, **k: pytest.fail("not on Vulkan"))
+    hw = nvidia_pc("x", 12288, 0, 504)
+    hw.gpus = [amd_gpu("AMD Radeon RX 7700 XT", 12288, 0, "")]
+    assert agent.choose_ctx(str(gguf), hw) == (24576, "32k would not be all on the GPU")
+    assert asked == [("q8_0", 32768), ("q8_0", 24576)]                   # the cache the server will give it
+    monkeypatch.setattr(catalog, "splits_with_cpu", lambda path, hw, ctx=8192, kv="f16": False)
+    assert not llama_backend.all_on_gpu(str(gguf), 16384, hw)            # f16 by the estimate, 40/41 by the fit
+    measured[("f16", 16384)] = 41
+    assert llama_backend.all_on_gpu(str(gguf), 16384, hw)                # 41 of 40 blocks + output: all
+    # An NVIDIA build too old for --fit-print: the same.
+    monkeypatch.setattr(llama_backend, "projected_mb", lambda path, ctx, kv="f16": None)
+    monkeypatch.setattr(catalog, "splits_with_cpu", lambda path, hw, ctx=8192, kv="f16": True)
+    assert agent.pick_ctx(str(gguf), nvidia_pc("NVIDIA GeForce RTX 4070 SUPER", 12282, 2169, 504)) == 24576
+
+
+def test_projected_mb_reads_fit_print(monkeypatch):
+    """`llama-fit-params --fit-print on` prints one row per device: weights, context (KV), compute (MiB)."""
+    from mafdet import llama_backend
+    out = {"one": "CUDA0 7335 1360 352 \nHost 417 0 56 \n", "two": "CUDA0 5000 600 300\nCUDA1 2000 600 300\n",
+           "old": "-c 16384 -ngl -1\n", "none": None}
+    monkeypatch.setattr(llama_backend, "_fit_params", lambda path, ctx, kv, *more: out[path])
+    assert llama_backend.projected_mb("one", 16384, "q8_0") == 9047
+    assert [llama_backend.projected_mb(k, 16384) for k in ("two", "old", "none")] == [None, None, None]
 
 
 # ---------------------------------------------------------------- the terminal interface

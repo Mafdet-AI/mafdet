@@ -94,7 +94,9 @@ COMMANDS = [
             "it uses an engine already running.",
             ("mafdet agent", "mafdet agent --model qwen3-14b --workdir C:\\samples\\crackme",
              "mafdet agent --mcp rea --profile native-static", 'mafdet agent -p "what does main.c do?"',
-             "mafdet agent --resume last", "mafdet agent --model qwen3-14b --mcp rea --profile native-static --web --save"),
+             "mafdet agent --resume last", "mafdet agent --model qwen3-14b --mcp rea --profile native-static --web --save",
+             "mafdet agent --walk C:\\samples\\crackme.exe --mcp rea --max-functions 50",
+             "mafdet agent --mcp rea --book C:\\samples\\crackme.exe"),
             "use", common=False),
     Command("hunt", "the hunt", "simulate people typing and measure the wait after sending",
             "Simulates a person typing a message (clean: start to finish; messy: typos, backspaces and an "
@@ -417,7 +419,8 @@ def _agent_args(p):
                    help="MCP tools to start with, as comma-separated name patterns: \"procedure_*,xrefs\"")
     p.add_argument("--ctx", type=int, default=0,
                    help="context in tokens (default: %(default)s, the largest of 32k, 24k and 16k that leaves "
-                        "the model all on the GPU; 16k when it is split with the CPU anyway)")
+                        "the model all on the GPU with 1 GB of VRAM still free; 16k when it is split with the "
+                        "CPU anyway, and for --walk; with --url, the engine's own)")
     p.add_argument("--max-tokens", type=int, default=4096,
                    help="longest reasoning and answer of one step, in tokens (default: %(default)s)")
     p.add_argument("--max-steps", type=int, default=40,
@@ -430,6 +433,26 @@ def _agent_args(p):
     p.add_argument("--system", default="", metavar="FILE", help="a text file added to the system prompt")
     p.add_argument("--resume", default="", metavar="ID",
                    help="go on with a session of ~/.mafdet/sessions (its id, or `last`)")
+    p.add_argument("--walk", default="", metavar="BINARY",
+                   help="name every function of this binary, leaves first, through the decompiler of --mcp "
+                        "(the first one given): one short conversation per function, unattended, 16k of context "
+                        "unless --ctx says otherwise (with --url: the engine's), into the binary's book (~/.mafdet/binaries/<first 16 hex "
+                        "digits of its sha256>/book.json and book.md). The book belongs to the binary, not to "
+                        "the server: walking it again, through the same server or another, goes on where it "
+                        "stopped. Names are written back to the decompiler only where --approve or `allow` in "
+                        "mcp.json lets them")
+    p.add_argument("--max-functions", type=int, default=0, metavar="N",
+                   help="with --walk: send at most N functions to the model in this run, then stop; the next "
+                        "run goes on (default: all)")
+    p.add_argument("--time-limit", type=float, default=0, metavar="MINUTES",
+                   help="with --walk: start no function after this many minutes from the start of the run, "
+                        "opening the binary included (default: none)")
+    p.add_argument("--retry-failed", action="store_true",
+                   help="with --walk: try again the functions the model failed on, with the pending ones (not "
+                        "those skipped for having no pseudo-code)")
+    p.add_argument("--book", default="", metavar="BINARY",
+                   help="give the model the `book` tool: what a walk found about this binary (its path, or at "
+                        "least 4 hex digits of the start of its sha256)")
     p.add_argument("--device", default="auto", choices=["auto", "cuda", "cpu"],
                    help="where llama-server runs the model (default: %(default)s)")
     p.add_argument("--engine-port", type=int, default=8079, help="where llama-server listens (default: %(default)s)")
