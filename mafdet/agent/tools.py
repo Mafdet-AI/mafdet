@@ -11,6 +11,7 @@ import fnmatch
 import os
 import re
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -46,8 +47,16 @@ def _int(desc: str) -> dict:
     return {"type": "integer", "description": desc}
 
 
-def builtin_tools(workdir: Path, read_roots: tuple[Path, ...] = ()) -> list[Tool]:
-    """The five tools, on `workdir`. Reads inside `read_roots` (the session's saved outputs) count as inside."""
+def _kill(proc: subprocess.Popen):
+    """The command and what it started: PowerShell's children outlive it otherwise."""
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True)
+    proc.kill()
+
+
+def builtin_tools(workdir: Path, read_roots: tuple[Path, ...] = (), stop=None) -> list[Tool]:
+    """The five tools, on `workdir`. Reads inside `read_roots` (the session's saved outputs) count as inside.
+    `stop` (a threading.Event) ends a shell command that is still running."""
     workdir = workdir.resolve()
     roots = (workdir,) + tuple(Path(r).resolve() for r in read_roots)
 
@@ -135,12 +144,27 @@ def builtin_tools(workdir: Path, read_roots: tuple[Path, ...] = ()) -> list[Tool
         timeout = min(600, max(1, int(a.get("timeout") or 60)))
         argv = (["powershell", "-NoProfile", "-NonInteractive", "-Command", a["command"]] if os.name == "nt"
                 else ["sh", "-c", a["command"]])
-        try:
-            r = subprocess.run(argv, cwd=workdir, capture_output=True, timeout=timeout, stdin=subprocess.DEVNULL)
-        except subprocess.TimeoutExpired:
-            return f"error: still running after {timeout} s, stopped (a longer `timeout`, up to 600, if it needs it)"
-        out = (r.stdout + r.stderr).decode("utf-8", "replace").strip()
-        return (out or "[no output]") + (f"\n[exit code {r.returncode}]" if r.returncode else "")
+        proc = subprocess.Popen(argv, cwd=workdir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                stdin=subprocess.DEVNULL)
+        end, why = time.monotonic() + timeout, ""
+        while True:
+            try:
+                data, _ = proc.communicate(timeout=0.2)
+                break
+            except subprocess.TimeoutExpired:
+                if stop is not None and stop.is_set():
+                    why = "error: stopped by the user"
+                elif time.monotonic() > end:
+                    why = (f"error: still running after {timeout} s, stopped "
+                           "(a longer `timeout`, up to 600, if it needs it)")
+                if why:
+                    _kill(proc)
+                    data, _ = proc.communicate()
+                    break
+        out = data.decode("utf-8", "replace").strip()
+        if why:
+            return (out + "\n" if out else "") + why
+        return (out or "[no output]") + (f"\n[exit code {proc.returncode}]" if proc.returncode else "")
 
     def out(key: str):
         return lambda a: not inside(a.get(key) or ".")

@@ -166,6 +166,21 @@ mafdet agent --resume last
 
 It is meant for a card with 12-16 GB (the reference is an RTX 5070 Ti, where Qwen3-14B is all on the GPU); on 6 GB only a 4B model is fast enough for a loop. The context is the largest of 32k, 24k and 16k tokens that leaves the model all on the GPU (`--ctx` to choose).
 
+`mafdet agent` opens a conversation that fills the terminal, with the model at work in it. You write at the bottom; above, its reasoning as it is written (folded to a line when done), every tool call with the start of its result, edits as a diff, the answer as Markdown. A call that needs your approval asks in place, with what it would run or change.
+
+| Key | |
+|---|---|
+| Enter | send; while the model works the message waits and is sent when it is done |
+| Shift+Enter (or Ctrl+J) | a new line |
+| Esc | stop the model (a running command too), or say no to a question |
+| `y` / `a` / `n` | at a question: yes, always for this tool, no |
+| Shift+Tab | what runs without asking: ask → edits → all |
+| Ctrl+O | reasoning and tool outputs in full, or folded |
+| Up / Down | your earlier messages |
+| `/help` `/tools` `/new` `/approve` `/quit` | |
+
+A `MAFDET.md` (or `AGENTS.md`) in the working folder is read at the start as instructions for that folder: what the sample is, what has been found, how to build. `--plain` gives the same conversation as plain lines, and `-p` or a pipe one task with no interface.
+
 What it does for a model with a small context and no supervision of its own:
 
 - **Few tools, short schemas.** Five of its own (`read_file`, which shows a binary as a hex dump, `write_file`, `edit_file`, `search`, `shell`), about 670 tokens. MCP servers are named in `~/.mafdet/mcp.json`, in the shape other clients use. A reverse-engineering server can list hundreds of tools (one tried here: 207, 3.4 MB of schemas): the model starts with a few (`--profile native-static`: 16 for static analysis of a native binary, about 3.8k tokens after cutting their schemas; `--tools`, or `tools` in the file) and finds and turns on the others with `find_tools`.
@@ -173,7 +188,7 @@ What it does for a model with a small context and no supervision of its own:
 - **It asks first.** Reading inside the working folder runs by itself; writing, commands and MCP tools not marked read-only ask (`--approve edits` lets it write in the folder, `--approve all` run commands too: for a VM or a throwaway folder). A call that reaches outside the folder always asks. In `mcp.json`, `"allow": ["list_*", "procedure_*"]` names the tools of a server you trust to run without asking. Analysing a binary is reading; running it is not: do that in a VM.
 - **Its mistakes are told back to it**: arguments that are not JSON, a tool that does not exist, a call you declined, a tool that failed.
 
-Where it stands: the loop and the MCP client work (Qwen3-4B on the RTX 2060 read a file and explained it in two steps; the client lists a real server's 207 tools), and nothing is measured yet. Next: the analysis of a binary from the leaves of its call graph up, with names and comments written back to the decompiler's database as the model's memory; reading and thinking ahead on the function under the analyst's cursor; a benchmark on crackmes with a known answer. The plan is in `research/LOG.md`.
+Where it stands: the loop and the MCP client work (Qwen3-4B on the RTX 2060 read a file and explained it in two steps; the client lists a real server's 207 tools), the interface is checked only headless on a scripted model, and nothing is measured yet. Next: the analysis of a binary from the leaves of its call graph up, with names and comments written back to the decompiler's database as the model's memory; reading and thinking ahead on the function under the analyst's cursor; a benchmark on crackmes with a known answer. The plan is in `research/LOG.md`.
 
 ## Requirements
 

@@ -213,6 +213,24 @@ costs 2.4 decoding steps. To speed up the 14B, take work away from the CPU.
 
 ## Done and measured
 
+- **2026-11-12 · `mafdet agent` opens a full-screen conversation, as Claude Code does (the user: "like my
+  behaviour and yours here, in this window").** `mafdet/agent/tui.py` (Textual, the app's amber theme): the
+  log above, a multi-line message box, a status line (model, tokens used of the budget, approval, tok/s).
+  Reasoning streams as its last 6 lines and folds to "thought for N s"; a tool call is one line with the first
+  4 lines of its result, `edit_file` and `write_file` as a diff; the answer streams as text and becomes
+  Markdown when done. Approvals ask in place (y / a / n, Esc is no) with the command or the diff. Esc stops the
+  turn: the stream to llama-server is closed (`model.Stopped`), a running shell command is killed with its
+  children (`taskkill /T` on Windows), every tool call left gets "interrupted by the user", so the history
+  stays valid. A message sent while the model works is queued. Shift+Tab cycles ask → edits → all, Ctrl+O
+  unfolds, Up/Down recall messages, `/help /tools /new /approve /quit`. `MAFDET.md` or `AGENTS.md` of the
+  working folder joins the system prompt (6,000 characters at most). `--plain` keeps the line-by-line
+  conversation; `-p` and a pipe never open the interface. One `stop` event shared by the agent and the shell
+  tool; `run()` builds agents through one factory (`/new`). 23 tests, the interface driven headless by
+  Textual's pilot on a scripted model: **not yet seen in a real terminal on a real model** — the first thing
+  to try by hand (`mafdet agent --model qwen3-4b` on this machine), looking at: Shift+Enter (terminals that
+  do not tell it from Enter: Ctrl+J), the speed of the display at 75+ tok/s (each piece redraws the block),
+  Markdown of a long answer, Esc during the reading of a long prompt (it is seen only at the next piece).
+
 - **2026-11-12 · `mafdet agent`, phase 1: the loop, five tools, approvals, the context budget, an MCP client;
   tried once for real, nothing measured.** `mafdet/agent/` (no new dependency: the MCP client is JSON-RPC on
   stdio, written here). `model.py`: one streamed `/v1/chat/completions` with `tools`, `cache_prompt` and

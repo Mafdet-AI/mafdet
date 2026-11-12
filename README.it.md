@@ -166,6 +166,21 @@ mafdet agent --resume last
 
 È pensato per una scheda da 12-16 GB (il riferimento è una RTX 5070 Ti, dove Qwen3-14B sta tutto sulla GPU); su 6 GB solo un modello 4B è abbastanza veloce per un ciclo. Il contesto è il più grande tra 32k, 24k e 16k token che lascia il modello tutto sulla GPU (`--ctx` per sceglierlo).
 
+`mafdet agent` apre una conversazione che riempie il terminale, con il modello al lavoro dentro. Scrivi in basso; sopra, il suo ragionamento mentre viene scritto (ridotto a una riga quando ha finito), ogni chiamata a uno strumento con l'inizio del risultato, le modifiche come diff, la risposta in Markdown. Una chiamata che richiede la tua conferma chiede sul posto, mostrando cosa lancerebbe o cambierebbe.
+
+| Tasto | |
+|---|---|
+| Invio | invia; mentre il modello lavora il messaggio aspetta e parte quando ha finito |
+| Maiusc+Invio (o Ctrl+J) | una nuova riga |
+| Esc | ferma il modello (anche un comando in corso), o risponde no a una domanda |
+| `y` / `a` / `n` | a una domanda: sì, sempre per questo strumento, no |
+| Maiusc+Tab | cosa parte senza chiedere: ask → edits → all |
+| Ctrl+O | ragionamento e output degli strumenti per intero, o ridotti |
+| Su / Giù | i tuoi messaggi precedenti |
+| `/help` `/tools` `/new` `/approve` `/quit` | |
+
+Un `MAFDET.md` (o `AGENTS.md`) nella cartella di lavoro viene letto all'avvio come istruzioni per quella cartella: cos'è il campione, cosa è stato trovato, come si compila. `--plain` dà la stessa conversazione come righe semplici, e `-p` o una pipe un solo compito senza interfaccia.
+
 Cosa fa per un modello con un contesto piccolo e nessuno che lo controlli:
 
 - **Pochi strumenti, schemi corti.** Cinque suoi (`read_file`, che mostra un binario come dump esadecimale, `write_file`, `edit_file`, `search`, `shell`), circa 670 token. I server MCP si scrivono in `~/.mafdet/mcp.json`, nella forma che usano gli altri client. Un server di reverse engineering può elencare centinaia di strumenti (uno provato qui: 207, 3,4 MB di schemi): il modello parte con pochi (`--profile native-static`: 16 per l'analisi statica di un binario nativo, circa 3,8k token dopo aver accorciato gli schemi; `--tools`, o `tools` nel file) e gli altri li trova e li accende con `find_tools`.
@@ -173,7 +188,7 @@ Cosa fa per un modello con un contesto piccolo e nessuno che lo controlli:
 - **Prima chiede.** Leggere dentro la cartella di lavoro parte da solo; scrivere, lanciare comandi e gli strumenti MCP non marcati di sola lettura chiedono (`--approve edits` lo lascia scrivere nella cartella, `--approve all` anche lanciare comandi: per una VM o una cartella da buttare). Una chiamata che esce dalla cartella chiede sempre. In `mcp.json`, `"allow": ["list_*", "procedure_*"]` elenca gli strumenti di un server di cui ti fidi, che partono senza chiedere. Analizzare un binario è leggere; eseguirlo no: quello va fatto in una VM.
 - **I suoi errori gli vengono detti**: argomenti che non sono JSON, uno strumento che non esiste, una chiamata che hai rifiutato, uno strumento fallito.
 
-A che punto è: il ciclo e il client MCP funzionano (Qwen3-4B sulla RTX 2060 ha letto un file e l'ha spiegato in due passi; il client elenca i 207 strumenti di un server vero), e niente è ancora misurato. Poi: l'analisi di un binario dalle foglie del grafo delle chiamate in su, con nomi e commenti scritti nel database del decompilatore come memoria del modello; lettura e ragionamento in anticipo sulla funzione sotto il cursore dell'analista; un benchmark su crackme con risposta nota. Il piano è in `research/LOG.md`.
+A che punto è: il ciclo e il client MCP funzionano (Qwen3-4B sulla RTX 2060 ha letto un file e l'ha spiegato in due passi; il client elenca i 207 strumenti di un server vero), l'interfaccia è verificata solo senza schermo su un modello finto, e niente è ancora misurato. Poi: l'analisi di un binario dalle foglie del grafo delle chiamate in su, con nomi e commenti scritti nel database del decompilatore come memoria del modello; lettura e ragionamento in anticipo sulla funzione sotto il cursore dell'analista; un benchmark su crackme con risposta nota. Il piano è in `research/LOG.md`.
 
 ## Requisiti
 

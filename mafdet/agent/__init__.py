@@ -5,6 +5,7 @@ debugger) in a loop, until the task is done; the harness keeps the prompt inside
 asks before anything that changes the machine. Built first for reverse engineering and security
 study, where the binary should not leave the machine.
 
+    tui.py          the conversation in the terminal: what `mafdet agent` opens
     loop.py         the loop, and what a local model gets wrong told back to it
     model.py        one streamed chat completion with tools (llama-server, or any OpenAI-compatible engine)
     tools.py        read_file, write_file, edit_file, search, shell
@@ -100,11 +101,13 @@ def ask_in_terminal(tool, args: dict, why: str) -> str:
         return "n"
 
 
-def build_toolbox(args, workdir: Path, session):
+def build_toolbox(args, workdir: Path, stop=None):
     """The five tools, plus the MCP servers named with --mcp. Returns (toolbox, servers, their instructions)."""
     from . import mcp
+    from .store import sessions_dir
     from .tools import builtin_tools
-    box = mcp.Toolbox(builtin_tools(workdir, read_roots=(session.dir,)))
+    # Reads of the saved outputs of any session count as inside: /new changes session, not tools.
+    box = mcp.Toolbox(builtin_tools(workdir, read_roots=(sessions_dir(),), stop=stop))
     servers, notes = [], []
     known = mcp.configured()
     patterns = [p.strip() for p in (args.tools or "").split(",") if p.strip()]
@@ -121,7 +124,7 @@ def build_toolbox(args, workdir: Path, session):
                                 ': write it as {"mcpServers": {"%s": {"command": "...", "args": [...]}}}.' % name))
         print(f"MCP server {name}: starting...", file=sys.stderr, flush=True)
         server = mcp.McpServer(name, conf["command"], conf.get("args") or [], conf.get("env"), conf.get("cwd"),
-                               log=mcp.log_path(session.dir, name))
+                               log=mcp.log_path(sessions_dir(), name))
         servers.append(server)
         own = [str(p) for p in conf.get("tools") or []]
         box.add_server(server, (patterns + own) or None, [str(p) for p in conf.get("allow") or []])
@@ -178,8 +181,25 @@ def start_engine(args):
                        log_name="agent-server"), alias
 
 
+PROJECT_FILES = ("MAFDET.md", "AGENTS.md")     # instructions of the folder, added to the system prompt
+PROJECT_CHARS = 6000
+
+
+def project_notes(workdir: Path) -> str:
+    for name in PROJECT_FILES:
+        try:
+            text = (workdir / name).read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+        if text:
+            return f"Instructions of this folder ({name}):\n{text[:PROJECT_CHARS]}"
+    return ""
+
+
 def run(args) -> int:
     """`mafdet agent`."""
+    import threading
+
     from .loop import Agent
     from .model import ChatModel
     from .permissions import Permissions
@@ -190,11 +210,13 @@ def run(args) -> int:
         raise SystemExit(f"{workdir} is not a folder.")
     session = Session.find(args.resume) if args.resume else Session()
     history = session.messages() if args.resume else None
-    interactive = bool(sys.stdin and sys.stdin.isatty())
-    box, servers, notes = build_toolbox(args, workdir, session)
-    extra = "\n\n".join(notes)
+    interactive = bool(sys.stdin and sys.stdin.isatty() and sys.stdout and sys.stdout.isatty())
+    stop = threading.Event()
+    box, servers, notes = build_toolbox(args, workdir, stop)
+    notes.insert(0, project_notes(workdir))
     if args.system:
-        extra = Path(args.system).read_text(encoding="utf-8") + ("\n\n" + extra if extra else "")
+        notes.insert(0, Path(args.system).read_text(encoding="utf-8"))
+    system = system_prompt(workdir, "\n\n".join(n for n in notes if n))
     engine = None
     try:
         if args.url:
@@ -205,14 +227,23 @@ def run(args) -> int:
             engine, alias = start_engine(args)
             model = ChatModel(engine.url, alias)
             label = alias
-        agent = Agent(model, box, Permissions(args.approve, ask_in_terminal if interactive else None), session,
-                      system=system_prompt(workdir, extra), ctx=args.ctx, max_tokens=args.max_tokens,
-                      max_steps=args.max_steps, tool_chars=args.tool_chars, temperature=args.temperature,
-                      think=args.think, emit=Printer(), history=history)
+
+        def make_agent(emit, ask, mode=args.approve, fresh=False):
+            return Agent(model, box, Permissions(mode, ask), Session() if fresh else session, system=system,
+                         ctx=args.ctx, max_tokens=args.max_tokens, max_steps=args.max_steps,
+                         tool_chars=args.tool_chars, temperature=args.temperature, think=args.think, emit=emit,
+                         history=None if fresh else history, stop=stop)
+
+        if interactive and not args.prompt and not args.plain:
+            from .tui import AgentTUI
+            AgentTUI(make_agent, label=label, workdir=str(workdir), mode=args.approve).run()
+            return 0
+        agent = make_agent(Printer(), ask_in_terminal if interactive else None)
         spec_tokens = len(json.dumps(box.specs())) // 3
         print(f"MAFDET agent · {label} · {workdir}\n"
               f"  tools     {len(box.active)} (about {spec_tokens} tokens)"
               + (f", {len(box.hidden)} more through find_tools" if box.hidden else "") + "\n"
+              f"  context   {args.ctx} tokens\n"
               f"  approval  {args.approve}" + ("" if interactive or args.approve == "all" else
                                                " (no terminal to ask in: what would ask is declined)") + "\n"
               f"  session   {session.id}" + (f" (resumed, {len(history)} messages)" if history else ""),
@@ -236,16 +267,13 @@ def run(args) -> int:
                     print(f"  {t.name:<24} {t.risk:<5} {t.source:<8} {t.description[:80]}")
                 continue
             if text == "/new":
-                session = Session()
-                agent = Agent(model, box, agent.permissions, session, system=agent.messages[0]["content"],
-                              ctx=args.ctx, max_tokens=args.max_tokens, max_steps=args.max_steps,
-                              tool_chars=args.tool_chars, temperature=args.temperature, think=args.think,
-                              emit=Printer())
-                print(f"  session   {session.id}", file=sys.stderr)
+                agent = make_agent(Printer(), ask_in_terminal, fresh=True)
+                print(f"  session   {agent.session.id}", file=sys.stderr)
                 continue
             if text:
                 _turn(agent, text)
     finally:
+        stop.set()
         for server in servers:
             server.close()
         if engine is not None:

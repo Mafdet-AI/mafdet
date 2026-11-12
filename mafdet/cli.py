@@ -88,7 +88,9 @@ COMMANDS = [
             "named in ~/.mafdet/mcp.json) in a loop, until the task is done. Built first for reverse engineering "
             "and security study on your own machine. Reading inside the working folder runs by itself; writing "
             "and commands ask first (--approve). Tool outputs are cut to fit a local model's context, and kept "
-            "whole in ~/.mafdet/sessions. With --url it uses an engine already running.",
+            "whole in ~/.mafdet/sessions. In a terminal it opens a full-screen conversation (Esc stops the model, "
+            "Shift+Tab changes the approval, Ctrl+O shows the details); --plain or -p for plain lines. With --url "
+            "it uses an engine already running.",
             ("mafdet agent", "mafdet agent --model qwen3-14b --workdir C:\\samples\\crackme",
              "mafdet agent --mcp rea --profile native-static", 'mafdet agent -p "what does main.c do?"',
              "mafdet agent --resume last"), "use", common=False),
@@ -391,6 +393,8 @@ def _agent_args(p):
                         "(default: the one chosen in the app). It needs a chat template with tool calls")
     p.add_argument("--workdir", default=".", help="the folder the agent works in (default: this one)")
     p.add_argument("-p", "--prompt", default="", help="one task, then exit (without it: a conversation)")
+    p.add_argument("--plain", action="store_true",
+                   help="the conversation as plain lines in the terminal, instead of the full-screen interface")
     p.add_argument("--approve", default="ask", choices=["ask", "edits", "all"],
                    help="ask: writes, commands and tools not marked read-only ask first; edits: writes inside "
                         "the working folder run by themselves; all: commands too, for a VM or a throwaway "

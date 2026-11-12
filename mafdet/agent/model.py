@@ -18,6 +18,10 @@ class ModelError(RuntimeError):
     pass
 
 
+class Stopped(Exception):
+    """The user stopped the turn (Esc in the terminal app)."""
+
+
 @dataclass
 class Reply:
     content: str = ""
@@ -49,8 +53,9 @@ class ChatModel:
         self.timeout = timeout
 
     def chat(self, messages: list[dict], tools: list[dict] | None = None, *, max_tokens: int = 4096,
-             temperature: float = 0.6, think: bool = True, on_delta=None) -> Reply:
-        """One assistant turn. `on_delta(kind, text)` gets "think" and "text" pieces as they are written."""
+             temperature: float = 0.6, think: bool = True, on_delta=None, should_stop=None) -> Reply:
+        """One assistant turn. `on_delta(kind, text)` gets "think" and "text" pieces as they are written;
+        `should_stop()` turning true ends it with Stopped, and the engine stops writing."""
         body: dict = {"model": self.model, "messages": messages, "stream": True, "max_tokens": max_tokens,
                       "temperature": temperature, "stream_options": {"include_usage": True}}
         if tools:
@@ -76,6 +81,8 @@ class ChatModel:
         calls: dict[int, dict] = {}
         with resp:
             for raw in resp:
+                if should_stop is not None and should_stop():
+                    raise Stopped                 # leaving the `with` closes the stream: llama-server stops there
                 line = raw.decode("utf-8", "replace").strip()
                 if not line.startswith("data:"):
                     continue

@@ -9,10 +9,11 @@ conversation is written to disk as it goes (`store.py`).
 from __future__ import annotations
 
 import json
+import threading
 import time
 
 from .context import Context, ContextFull, clip
-from .model import ModelError, Reply
+from .model import ModelError, Reply, Stopped
 from .mcp import Toolbox
 from .permissions import Permissions
 from .store import Session
@@ -23,7 +24,8 @@ SAVE_FROM = 400          # outputs longer than this are also kept whole on disk
 class Agent:
     def __init__(self, model, toolbox: Toolbox, permissions: Permissions, session: Session, *, system: str,
                  ctx: int = 16384, max_tokens: int = 4096, max_steps: int = 40, tool_chars: int = 4000,
-                 temperature: float = 0.6, think: bool = True, emit=None, history: list[dict] | None = None):
+                 temperature: float = 0.6, think: bool = True, emit=None, history: list[dict] | None = None,
+                 stop: threading.Event | None = None):
         self.model = model
         self.toolbox = toolbox
         self.permissions = permissions
@@ -38,6 +40,7 @@ class Agent:
         self.messages: list[dict] = [{"role": "system", "content": system}]
         self.paths: dict[str, str] = {}                 # tool_call_id -> the file with its whole output
         self.tokens = 0                                 # the prompt of the last request, as the engine counted it
+        self.stop = stop or threading.Event()           # set it to end the turn (Esc); the tools see it too
         if history:
             self.messages += history
         else:
@@ -49,9 +52,14 @@ class Agent:
 
     def run(self, text: str) -> str:
         """One turn of the user: returns the model's final answer ("" when it was cut short)."""
+        self.stop.clear()
         self._add({"role": "user", "content": text})
         try:
             return self._steps()
+        except Stopped:                     # what the model was writing is dropped; the history stays valid
+            self._close_calls("interrupted by the user")
+            self.emit("stopped")
+            return ""
         except KeyboardInterrupt:
             self._close_calls("interrupted by the user")
             raise
@@ -78,7 +86,8 @@ class Agent:
             try:
                 reply: Reply = self.model.chat(self.messages, tools, max_tokens=self.max_tokens,
                                                temperature=self.temperature, think=self.think,
-                                               on_delta=lambda kind, piece: self.emit(kind, text=piece))
+                                               on_delta=lambda kind, piece: self.emit(kind, text=piece),
+                                               should_stop=self.stop.is_set)
             except ModelError as e:
                 self.emit("error", text=str(e))
                 return ""
@@ -93,6 +102,8 @@ class Agent:
                                             + ("" if reply.content else ", before any answer"))
                 return reply.content
             for call in reply.tool_calls:
+                if self.stop.is_set():
+                    raise Stopped
                 self._call(call)
         self.emit("error", text=f"stopped after {self.max_steps} steps (--max-steps): say `continue` to go on")
         return ""

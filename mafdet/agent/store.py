@@ -1,7 +1,7 @@
 """A session on disk, in ~/.mafdet/sessions/<id>/:
     transcript.jsonl    every message as it entered the conversation (tool outputs as the model saw them)
     outputs/            the tool outputs in full, for the model to read the parts that were cut
-    mcp-<name>.log      what each MCP server wrote on its standard error
+and next to the sessions, mcp-<name>.log: what each MCP server wrote on its standard error.
 """
 from __future__ import annotations
 

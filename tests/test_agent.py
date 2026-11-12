@@ -376,3 +376,175 @@ def test_the_context_follows_the_vram(monkeypatch, tmp_path):
     monkeypatch.setattr(catalog, "header", lambda path: {"meta": {"general.architecture": "x",
                                                                   "x.context_length": 8192}})
     assert agent.pick_ctx(str(gguf), rtx_5070_ti) == 16384               # trained on less than any of them
+
+
+# ---------------------------------------------------------------- the terminal interface
+
+class Streams(Script):
+    """A scripted model that streams what it says, as the real client does."""
+
+    def chat(self, messages, tools=None, on_delta=None, **kw):
+        reply = super().chat(messages, tools)
+        if reply.reasoning:
+            on_delta("think", reply.reasoning)
+        if reply.content:
+            on_delta("text", reply.content)
+        reply.completion_tokens = 10
+        return reply
+
+
+def tui_on(tmp_path, model, mode="ask"):
+    from mafdet.agent.tui import AgentTUI
+    stop = threading.Event()
+    box = mcp.Toolbox(builtin_tools(tmp_path, stop=stop))
+
+    def make(emit, ask, mode=mode, fresh=False):
+        return Agent(model, box, Permissions(mode, ask), Session(), system="sys", emit=emit, stop=stop)
+    return AgentTUI(make, label="fake-model", workdir=str(tmp_path), mode=mode)
+
+
+async def until(pilot, check, seconds=10.0):
+    for _ in range(int(seconds / 0.05)):
+        if check():
+            return
+        await pilot.pause(0.05)
+    raise AssertionError("still waiting")
+
+
+def shown(app) -> str:
+    from textual.widgets import Markdown, Static
+    out = []
+    for w in app.query("#log > *"):
+        out.append(w.source if isinstance(w, Markdown) else str(w.render()) if isinstance(w, Static) else "")
+    return "\n".join(out)
+
+
+def test_tui_a_turn_with_a_tool(tmp_path):
+    import asyncio
+    (tmp_path / "a.txt").write_text("hello\n")
+
+    model = Streams(Reply(reasoning="I will read it.", tool_calls=[call("read_file", {"path": "a.txt"})]),
+                    Reply(content="It says **hello**. [not markup]"))
+
+    async def go():
+        app = tui_on(tmp_path, model)
+        async with app.run_test(size=(110, 40)) as pilot:
+            await pilot.press(*"what is in a.txt?")
+            await pilot.press("shift+enter")                 # a second line, not a send
+            await pilot.press(*"ok")
+            assert not app.running
+            await pilot.press("enter")
+            await until(pilot, lambda: not app.running and len(model.seen) == 2)
+            await pilot.pause(0.2)
+            text = shown(app)
+            assert "> what is in a.txt?\nok" in text
+            assert "∴ thought for" in text and "I will read it." not in text     # folded
+            assert "● read_file  path=a.txt" in text and "⎿ 1\thello" in text
+            assert "It says **hello**. [not markup]" in text                     # the answer, as Markdown
+            assert app.used == 110
+            await pilot.press("ctrl+o")
+            await pilot.pause(0.1)
+            assert "I will read it." in shown(app)
+            await pilot.press("up")                          # the earlier message comes back
+            assert app.query_one("#prompt").text == "what is in a.txt?\nok"
+            await pilot.press("ctrl+c")                      # clears it
+            assert app.query_one("#prompt").text == ""
+            await pilot.press("shift+tab")
+            assert app.mode == "edits" and app.agent.permissions.mode == "edits"
+            await pilot.press(*"/tools", "enter")
+            await pilot.pause(0.1)
+            assert "write_file" in shown(app)
+    asyncio.run(go())
+
+
+def test_tui_asks_before_a_write_and_esc_says_no(tmp_path):
+    import asyncio
+    model = Streams(Reply(tool_calls=[call("write_file", {"path": "x.txt", "content": "one\ntwo"}, "c1")]),
+                    Reply(tool_calls=[call("write_file", {"path": "y.txt", "content": "no"}, "c2")]),
+                    Reply(content="done"))
+
+    async def go():
+        app = tui_on(tmp_path, model)
+        async with app.run_test(size=(110, 40)) as pilot:
+            await pilot.press(*"write", "enter")
+            await until(pilot, lambda: app.asking)
+            asked = str(app.query_one("#ask").render())
+            assert "write_file" in asked and "writes a file" in asked and "+ one" in asked
+            await pilot.press("y")
+            await until(pilot, lambda: app.asking and len(model.seen) == 2)
+            assert (tmp_path / "x.txt").read_text() == "one\ntwo"
+            await pilot.press("escape")                      # no to the second
+            await until(pilot, lambda: not app.running)
+            await pilot.pause(0.2)
+            assert not (tmp_path / "y.txt").exists()
+            assert "⎿ declined" in shown(app) and "done" in shown(app) and "The user declined" not in shown(app)
+            assert not app.query_one("#prompt").disabled
+    asyncio.run(go())
+
+
+def test_tui_esc_stops_and_a_message_typed_meanwhile_waits(tmp_path):
+    import asyncio
+    release = threading.Event()
+
+    class Slow(Streams):
+        started = False
+
+        def chat(self, messages, tools=None, on_delta=None, should_stop=None, **kw):
+            if not self.started:
+                self.started = True
+                on_delta("text", "thinking about it")
+                while not should_stop() and not release.is_set():
+                    release.wait(0.02)
+                if should_stop():
+                    from mafdet.agent.model import Stopped
+                    raise Stopped
+            return super().chat(messages, tools, on_delta=on_delta)
+
+    model = Slow(Reply(content="first"), Reply(content="second"))
+
+    async def go():
+        app = tui_on(tmp_path, model)
+        async with app.run_test(size=(110, 40)) as pilot:
+            await pilot.press(*"one", "enter")
+            await until(pilot, lambda: app.running and model.started)
+            await pilot.press(*"two", "enter")               # the model is busy: queued
+            assert app.queue == ["two"]
+            release.set()
+            await until(pilot, lambda: not app.running and not app.queue and len(model.seen) == 2)
+            await pilot.pause(0.2)
+            assert "> two" in shown(app) and "second" in shown(app) and "third" not in shown(app)
+
+        release.clear()
+        model2 = Slow(Reply(content="after the stop"))
+        app = tui_on(tmp_path, model2)
+        async with app.run_test(size=(110, 40)) as pilot:
+            await pilot.press(*"one", "enter")
+            await until(pilot, lambda: app.running and model2.started)
+            await pilot.press("escape")
+            await until(pilot, lambda: not app.running)
+            await pilot.pause(0.2)
+            assert "⎿ stopped" in shown(app)
+            assert [m["role"] for m in app.agent.messages] == ["system", "user"]
+            await pilot.press(*"again", "enter")
+            await until(pilot, lambda: not app.running and "after the stop" in shown(app))
+    asyncio.run(go())
+
+
+def test_the_shell_stops_with_the_turn(tmp_path):
+    stop = threading.Event()
+    shell = {t.name: t for t in builtin_tools(tmp_path, stop=stop)}["shell"]
+    threading.Timer(0.5, stop.set).start()
+    import time
+    t0 = time.monotonic()
+    out = shell.run({"command": "Start-Sleep 30" if sys.platform == "win32" else "sleep 30"})
+    assert "stopped by the user" in out and time.monotonic() - t0 < 10
+    stop.clear()
+    assert "still running after 1 s" in shell.run({"command": "Start-Sleep 30" if sys.platform == "win32" else "sleep 30",
+                                                   "timeout": 1})
+
+
+def test_folder_instructions_reach_the_system_prompt(tmp_path):
+    from mafdet import agent
+    assert agent.project_notes(tmp_path) == ""
+    (tmp_path / "MAFDET.md").write_text("The sample is packed with UPX.")
+    assert "packed with UPX" in agent.system_prompt(tmp_path, agent.project_notes(tmp_path))
