@@ -1,6 +1,7 @@
 """A fake decompiler MCP server on stdio, for the walk (`tests/test_agent_walk.py`), over a small
 synthetic call graph: a leaf alone, a chain, a diamond, a 2-cycle, self-recursion, an import and one
-huge function. Its answers have the shapes the real servers gave on a PE (Ghidra 12.1.4, 2026-11-12):
+huge function; and a few strings (list_strings, search_strings: shapes guessed, not seen on a real
+server). Its other answers have the shapes the real servers gave on a PE (Ghidra 12.1.4, 2026-11-12):
 
     python agent_fake_re.py rea        rea-agents 6.9.0: an evidence envelope in structuredContent (and as
                                        JSON in the text); addresses 0x1000, the import EXTERNAL:0x1 named
@@ -44,6 +45,7 @@ GRAPH = {
     0x8000: [0x8000],                                              # self-recursion
     0x9000: [0x2200],                                              # huge
 }
+STRINGS = ["%d\n", "ok", "Usage: target [/s] pattern...", "target.cfg", "Adds the numbers it is given."]
 names = {a: f"FUN_{a:08x}" for a in GRAPH}
 if os.environ.get("FAKE_RE_ENTRY") == "1":
     GRAPH[0x500] = [0x1000]
@@ -134,6 +136,8 @@ def rea_tools():
             {"name": "set_comment", "annotations": {"destructiveHint": True},
              "inputSchema": {"type": "object", "required": ["address", "comment"],
                              "properties": {"address": {"type": "string"}, "comment": {"type": "string"}}}},
+            {"name": "list_strings", "annotations": ro,
+             "inputSchema": {"type": "object", "properties": {"limit": {"type": "integer"}, "document": {"type": "string"}}}},
             {"name": "frida_attach", "inputSchema": {"type": "object", "properties": {}}}]
 
 
@@ -160,6 +164,8 @@ def rea_call(name, args):
         return text_result({"result": None})
     if name == "binary_session":
         return rea_session()
+    if name == "list_strings":
+        return rea_answer(name, [{"address": hex(0x9000 + i), "value": s} for i, s in enumerate(STRINGS)])
     if name == "list_procedures":
         items = [{"address": addr(IMPORT), "value": listed_name(IMPORT),
                   "symbol": {"primary": True, "dynamic": False, "external": True, "type": "function", "source": "imported"},
@@ -235,7 +241,7 @@ def pyghidra_tools():
     b = {"binary_name": {"type": "string"}}
     return [{"name": n, "inputSchema": {"type": "object", "properties": b}} for n in
             ("decompile_function", "search_symbols_by_name", "list_project_binaries", "rename_function", "save",
-             "set_comment", "list_imports", "list_xrefs", "import_binary")]
+             "set_comment", "list_imports", "list_xrefs", "import_binary", "search_strings")]
 
 
 def pyghidra_call(name, args):
@@ -256,6 +262,9 @@ def pyghidra_call(name, args):
     mine = [p for p in project["programs"] if wanted in (p["name"], p["name"].lstrip("/"))]
     if not mine or mine[0]["name"] == "/other.dll-1a2b3c":
         return error(f"Binary {wanted} not found. Available binaries: {[p['name'] for p in project['programs']]}")
+    if name == "search_strings":
+        return fast({"strings": [{"value": s, "address": f"{0x9000 + i:08x}"} for i, s in enumerate(STRINGS)
+                                 if str(args.get("query") or "") in s]})
     if name == "search_symbols_by_name":
         return fast({"symbols": [{"name": names[a], "address": addr(a), "type": "Function", "namespace": "Global",
                                   "source": "DEFAULT" if names[a].startswith("FUN_") else "USER_DEFINED",

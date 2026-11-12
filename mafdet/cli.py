@@ -449,7 +449,21 @@ def _agent_args(p):
                         "opening the binary included (default: none)")
     p.add_argument("--retry-failed", action="store_true",
                    help="with --walk: try again the functions the model failed on, with the pending ones (not "
-                        "those skipped for having no pseudo-code)")
+                        "those skipped for having no pseudo-code); with --revise, those its review failed on too")
+    p.add_argument("--revise", action="store_true",
+                   help="with --walk: once every function is named, a second pass from the roots down: a "
+                        "summary of the program first, then each function again with its callers, the program "
+                        "and its first name as a draft to keep unless wrong (about as long as the first pass). "
+                        "The first names stay in the book beside the new ones; a book already walked only does "
+                        "what is left of it. For measuring: --revise-skip-high leaves out the functions named "
+                        "with high confidence, --revise-no-program and --revise-no-callers leave that piece out "
+                        "of the prompt")
+    p.add_argument("--revise-depth", type=int, default=None, metavar="N",
+                   help="with --walk: --revise, only for the functions within N calls of a root (0: the roots "
+                        "only); the rest keep their first names")
+    p.add_argument("--revise-skip-high", action="store_true", help=argparse.SUPPRESS)
+    p.add_argument("--revise-no-program", action="store_true", help=argparse.SUPPRESS)
+    p.add_argument("--revise-no-callers", action="store_true", help=argparse.SUPPRESS)
     p.add_argument("--book", default="", metavar="BINARY",
                    help="give the model the `book` tool: what a walk found about this binary (its path, or at "
                         "least 4 hex digits of the start of its sha256)")

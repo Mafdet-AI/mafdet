@@ -21,6 +21,20 @@ The walk is driven by code, not by the model:
      a failure there is noted in the book and never stops the walk.
 
 The book is saved after every function: rerunning the same command goes on where it stopped.
+
+The second pass (`--revise`), once the first is complete: a function at the top was named knowing only
+what is below it (main became `validate_config_and_initialize` in where.exe, 2026-11-12). So:
+  7. the program's summary first: one conversation with one tool, `record_program`, from the file's
+     name, its imports by library, the top of the call tree as the first pass named it, and some of its
+     strings when the server lists them (an optional operation of `backend.py`);
+  8. then every function the first pass named, from the roots down (the reverse of the first pass's
+     order; a cycle by address), each in a fresh conversation with its own fixed system prompt and the
+     same tool: the program's summary, its callers (reviewed already, so a correction flows down), its
+     pseudo-code and callees with the current names, and its first name and summary as a draft to keep
+     unless wrong. The book keeps the first pass's record next to the second's (`book.revise`); a
+     changed name or summary is written back as in step 6. `--revise-depth`, `--revise-skip-high` and
+     `--max-functions` (counted over both passes) limit it; `--revise-no-program` and
+     `--revise-no-callers` leave a piece out of its prompt, to measure what each brings.
 """
 from __future__ import annotations
 
@@ -58,6 +72,46 @@ RECORD = {"type": "function", "function": {
 
 NO_CALL = ("You did not call record_function. Answer only with a call to record_function(name, summary, "
            "confidence), no other text.")
+
+# The second pass (--revise): the same tool, its own system prompt, the same for every function of the pass
+# and for every variant (--revise-no-program, --revise-no-callers change only the user's message), so the
+# prefix stays cached and a variant's effect is its message's.
+REVISE_SYSTEM = """You review the names given to the functions of a compiled program, for a reverse engineer.
+
+A first reading named every function from the bottom up: each one was named seeing only its own pseudo-code and the functions it calls, never what calls it or what the program is. Those names are mostly right at the bottom of the call tree and often wrong near the top, where a word read in one function (config, buffer, handle) travels up into the names of its callers.
+
+Now the functions come again from the top down, one at a time. You get what the program is and the functions that call this one, when they are known (the callers were reviewed already), its pseudo-code with the names given so far, the functions it calls, and the first reading's name and summary as a draft.
+
+Answer only by calling record_function, once:
+- name: keep the draft's name when it is right. Change it only when it is wrong or misleading in the light of the callers and of what the program does, not for style or for a synonym. A new name is a C identifier in snake_case that says what the function does, not how; no address in it.
+- summary: one line: what it does, with what inputs, what it returns, what it changes; the draft's, corrected where it is wrong.
+- comment: optional, a few lines on what is not obvious (a constant, an algorithm, a data format).
+- confidence: high when the code says it plainly, medium for a reasonable reading, low for a guess.
+The callers say what the function is for; the code says what it does: do not invent what the code does not show."""
+
+PROGRAM_SYSTEM = """You describe a compiled program for a reverse engineer, from what a first reading of it found.
+
+You get the file's name, the functions it imports grouped by library, the top of its call tree with the names and one-line summaries the first reading gave, and, when available, some of the strings in the binary. Each function was named seeing only the functions it calls, so the names near the top can be wrong: trust the imports and the strings over the names.
+
+Answer only by calling record_program, once:
+- summary: 2 to 4 sentences: what the program is (a command-line tool, a service, a library, an installer, a game, malware of some kind...), what it does, and how it is used (its inputs, its outputs). Say what the evidence shows; when a part is a guess, say so."""
+
+RECORD_PROGRAM = {"type": "function", "function": {
+    "name": "record_program",
+    "description": "Record what the program is and what it does.",
+    "parameters": {"type": "object", "required": ["summary"], "properties": {
+        "summary": {"type": "string", "description": "2 to 4 sentences"}}}}}
+
+NO_CALL_PROGRAM = ("You did not call record_program. Answer only with a call to record_program(summary), "
+                   "no other text.")
+PROGRAM_CHARS = 1200        # the program's summary, at most
+PROGRAM_DEPTH = 6           # levels of the call tree shown for it, at most (roots are level 1)
+PROGRAM_FUNCTIONS = 60      # functions of the tree shown, at most, chosen level by level
+IMPORT_LIBRARIES = 12       # libraries shown, the ones with the most imports first
+IMPORTS_PER_LIBRARY = 30
+STRINGS_SHOWN = 40          # string literals shown, those with a space first (messages, usage lines)
+STRING_CHARS = 120
+CALLERS_SHOWN = 12          # callers in a function's revise prompt
 C_KEYWORDS = {"auto", "break", "case", "char", "const", "continue", "default", "do", "double", "else", "enum",
               "extern", "float", "for", "goto", "if", "inline", "int", "long", "register", "restrict", "return",
               "short", "signed", "sizeof", "static", "struct", "switch", "typedef", "union", "unsigned", "void",
@@ -130,16 +184,24 @@ def bottom_up(nodes: list[str], edges: dict[str, list[str]]) -> list[list[str]]:
     return out
 
 
-def check(call: dict) -> tuple[dict | None, str]:
-    """A record_function call -> (the record, "") or (None, what is wrong with it)."""
-    if call.get("name") != "record_function":
-        return None, f"there is no tool {call.get('name')!r}: the only tool is record_function"
+def arguments(call: dict, tool: str) -> tuple[dict | None, str]:
+    """A call of the one tool of a conversation -> (its arguments, "") or (None, what is wrong with it)."""
+    if call.get("name") != tool:
+        return None, f"there is no tool {call.get('name')!r}: the only tool is {tool}"
     try:
         args = json.loads(call.get("arguments") or "{}")
         if not isinstance(args, dict):
             raise ValueError("not an object")
     except ValueError as e:
         return None, f"the arguments are not a JSON object ({e})"
+    return args, ""
+
+
+def check(call: dict) -> tuple[dict | None, str]:
+    """A record_function call -> (the record, "") or (None, what is wrong with it)."""
+    args, error = arguments(call, "record_function")
+    if args is None:
+        return None, error
     name = str(args.get("name") or "").strip().strip("`'\"").removesuffix("()").strip()
     if not name:
         return None, "name is missing"
@@ -160,12 +222,36 @@ def check(call: dict) -> tuple[dict | None, str]:
     return {"name": name, "summary": summary, "comment": comment, "confidence": confidence}, ""
 
 
+def check_program(call: dict) -> tuple[dict | None, str]:
+    """A record_program call -> ({"summary"}, "") or (None, what is wrong with it)."""
+    args, error = arguments(call, "record_program")
+    if args is None:
+        return None, error
+    summary = " ".join(str(args.get("summary") or "").split())
+    if not summary:
+        return None, "summary is missing"
+    if len(summary) < 20:
+        return None, f"summary {summary!r} is too short: 2 to 4 sentences on what the program is and does"
+    if len(summary) > PROGRAM_CHARS:
+        cut = summary[:PROGRAM_CHARS]
+        end = cut.rfind(". ")
+        summary = cut[:end + 1] if end > PROGRAM_CHARS // 2 else cut.rsplit(" ", 1)[0] + "…"
+    return {"summary": summary}, ""
+
+
+def top_down(components: list[list[str]]) -> list[str]:
+    """The second pass's order: the reverse of the first's components (callers before callees), each
+    component kept in its order (by address): a stable order inside cycles."""
+    return [a for comp in reversed(components) for a in comp]
+
+
 class Walk:
     def __init__(self, book: Book, server, model, *, permissions=None, allow=(), out=None, ctx: int = 16384,
                  max_tokens: int = 4096, temperature: float = 0.6, think: bool = True,
                  stop: threading.Event | None = None, max_functions: int = 0, time_limit: float = 0.0,
                  retry_failed: bool = False, ready_timeout: float = 1800.0, model_label: str = "",
-                 poll: float = 5.0):
+                 poll: float = 5.0, revise: bool = False, revise_depth: int | None = None,
+                 revise_skip_high: bool = False, revise_program: bool = True, revise_callers: bool = True):
         from .permissions import Permissions
         self.book = book
         self.server = server
@@ -187,6 +273,14 @@ class Walk:
         self.model_label = model_label
         self.adapter: Adapter | None = None
         self.mirror: dict[str, str] = {}                # op -> "" (written) or why not
+        # The second pass and its scope; `program` and `callers` are the pieces of its prompt, each
+        # switchable to measure what it brings (recorded per function in `revision.with`).
+        self.revise = revise
+        self.revise_depth = revise_depth                # None: every function the model named
+        self.revise_skip_high = revise_skip_high        # leave out what the first pass named with high confidence
+        self.revise_with = {"program": revise_program, "callers": revise_callers}
+        self._callers: dict[str, list[str]] | None = None
+        self._facts_counts: dict[str, int] = {}
 
     def say(self, text: str):
         self.out.write(text + "\n")
@@ -223,15 +317,17 @@ class Walk:
                      f"{c['done']} done before, {c['pending']} pending, {c['failed']} failed")
             book.save()
             self._callees()
-            order = [a for comp in bottom_up(sorted(book.functions, key=sort_key),
-                                             {a: f.get("callees") or [] for a, f in book.functions.items()})
-                     for a in comp]
+            components = bottom_up(sorted(book.functions, key=sort_key),
+                                   {a: f.get("callees") or [] for a, f in book.functions.items()})
+            order = [a for comp in components for a in comp]
             todo = [a for a in order if book.functions[a]["status"] == "pending"
                     or self.retry_failed and book.functions[a]["status"] == "failed"]
             if self.max_functions:
                 todo = todo[:self.max_functions]
             self.say(f"  to do    {len(todo)} functions, leaves first\n")
             self._functions(todo, run, t0)
+            if self.revise and not run["stopped"]:
+                self._second_pass(top_down(components), run, t0, sent=len(todo))
         except KeyboardInterrupt:
             run["stopped"] = "interrupted"
         except (BackendError, OSError) as e:
@@ -305,30 +401,33 @@ class Walk:
                 self.say(f"  callees  {i}/{len(missing)}")
         book.save()
 
-    def _functions(self, todo: list[str], run: dict, t0: float):
+    def _functions(self, todo: list[str], run: dict, t0: float, one=None, progress=None):
+        """The functions of a pass, one by one (`one` analyses one: the first pass's `_one` by default),
+        the book saved after each; stops on a stop, the time limit, or errors in a row."""
         book = self.book
+        one, progress = one or self._one, progress or self._progress
         model_errors = backend_errors = 0
         for i, addr in enumerate(todo, 1):
             if self.stop.is_set():
                 run["stopped"] = "stopped"
                 return
-            if self.time_limit and time.monotonic() - t0 > self.time_limit:
-                run["stopped"] = "time limit"
-                self.say(f"  time limit reached: {len(todo) - i + 1} functions left for the next run")
+            if self._out_of_time(run, t0, len(todo) - i + 1):
                 return
             f = book.functions[addr]
             try:
-                result = self._one(f)
+                result = one(f)
             except Stopped:
                 run["stopped"] = "stopped"
                 return
-            status = f["status"]
+            status = result.get("status") or f["status"]
             run[status] = run.get(status, 0) + 1
+            if result.get("renamed"):
+                run["renamed"] = run.get("renamed", 0) + 1
             for k in ("prompt_tokens", "completion_tokens"):
                 run[k] += result.get(k, 0)
             model_errors = model_errors + 1 if result.get("model_error") else 0
             backend_errors = backend_errors + 1 if result.get("backend_error") else 0
-            self.say(self._progress(i, len(todo), f, result))
+            self.say(progress(i, len(todo), f, result))
             # A kill keeps the run's record up to the last function (it said 0 s after one, 2026-11-12).
             run["seconds"], run["ended"] = round(time.monotonic() - t0, 1), book_now()
             book.save(md=i % SAVE_EVERY == 0)
@@ -342,6 +441,13 @@ class Walk:
                 run["stopped"] = "the server failed five times in a row"
                 self.say("! the server failed five times in a row: stopping (rerun to go on)")
                 return
+
+    def _out_of_time(self, run: dict, t0: float, left: int) -> bool:
+        if self.time_limit and time.monotonic() - t0 > self.time_limit:
+            run["stopped"] = "time limit"
+            self.say(f"  time limit reached: {left} functions left for the next run")
+            return True
+        return False
 
     def _save_backend(self):
         """The names and comments written back, onto the decompiler's disk (a project server keeps them
@@ -363,23 +469,24 @@ class Walk:
 
     # ------------------------------------------------------------ one function
 
+    @staticmethod
+    def function_line(g: dict, here: str = "") -> str:
+        """Another function as the model reads it: `- name — one-line summary` (or what it is)."""
+        if g["address"] == here:
+            return f"- {g['orig']} — this function itself (it is recursive)"
+        if g["status"] == "done":
+            return f"- {g['name']} — {g['summary']}"
+        if g["status"] == "known":
+            return f"- {g['orig']} — " + ("imported" if g["flags"].get("external") else
+                                          "a thunk (a jump to the function of that name)"
+                                          if g["flags"].get("thunk") else "named in the binary")
+        return f"- {g['orig']} — not named yet"
+
     def callee_text(self, f: dict) -> str:
         """What the model reads after the code: each callee as `name — one-line summary`."""
         fs = self.book.functions
-        lines = []
         callees = f.get("callees") or []
-        for c in callees[:CALLEES_SHOWN]:
-            g = fs[c]
-            if c == f["address"]:
-                lines.append(f"- {g['orig']} — this function itself (it is recursive)")
-            elif g["status"] == "done":
-                lines.append(f"- {g['name']} — {g['summary']}")
-            elif g["status"] == "known":
-                lines.append(f"- {g['orig']} — " + ("imported" if g["flags"].get("external") else
-                                                    "a thunk (a jump to the function of that name)"
-                                                    if g["flags"].get("thunk") else "named in the binary"))
-            else:
-                lines.append(f"- {g['orig']} — not named yet")
+        lines = [self.function_line(fs[c], f["address"]) for c in callees[:CALLEES_SHOWN]]
         if len(callees) > CALLEES_SHOWN:
             lines.append(f"- … and {len(callees) - CALLEES_SHOWN} more")
         text = "It calls:\n" + "\n".join(lines) if lines else "It calls no other function of the program."
@@ -401,6 +508,58 @@ class Walk:
         tokens = self.ctx - self.reserve - FIXED_TOKENS
         return max(1500, int(tokens * CODE_CHARS_PER_TOKEN) - len(callee_text) - 300)
 
+    def _ask(self, messages: list[dict], tools: list[dict], check_call, no_call: str, r: dict):
+        """The exchange of a conversation with one tool: the model asked, its call checked, a wrong answer
+        or none told back once. -> (record, "", steps, "done") or (None, why, steps, status): "failed", or
+        "pending" when the engine does not answer (not the function's fault: the next run takes it)."""
+        tool = tools[0]["function"]["name"]
+        error = ""
+        for step in (1, 2):
+            try:
+                reply = self.model.chat(messages, tools, max_tokens=self.max_tokens, temperature=self.temperature,
+                                        think=self.think, should_stop=self.stop.is_set)
+            except ModelError as e:
+                r["model_error"] = True
+                # An engine gone is not the function's fault: it stays pending for the next run. An
+                # answer of the engine against this request (a prompt too long) is.
+                gone = "does not answer" in str(e)
+                return None, f"engine: {str(e)[:200]}", step, "pending" if gone else "failed"
+            r["prompt_tokens"] += reply.prompt_tokens
+            r["completion_tokens"] += reply.completion_tokens
+            record = None
+            for call in reply.tool_calls:
+                record, error = check_call(call)
+                if record:
+                    break
+            if record:
+                return record, "", step, "done"
+            if not reply.tool_calls:
+                error = f"no {tool} call" + (f" (cut at {self.max_tokens} tokens)" if reply.finish == "length" else "")
+            messages.append(reply.message())
+            if reply.tool_calls:
+                for call in reply.tool_calls:
+                    messages.append({"role": "tool", "tool_call_id": call["id"],
+                                     "content": f"error: {error}. Call {tool} again, correctly."})
+            else:
+                messages.append({"role": "user", "content": no_call})
+        return None, error, 2, "failed"
+
+    def _code(self, f: dict, r: dict) -> tuple[str | None, str]:
+        """The function's pseudo-code -> (code, "") or (None, why there is none: failed / skipped)."""
+        try:
+            code = self.adapter.code(f["address"])
+        except BackendError as e:
+            r["backend_error"] = True
+            return None, f"backend: {str(e)[:200]}"
+        if not code.strip():
+            return None, "the decompiler gave no pseudo-code"
+        return code, ""
+
+    @staticmethod
+    def heading(f: dict) -> str:
+        size = f" ({int(f['size'])} bytes)" if f.get("size") else ""
+        return f"Function {f['orig']} at {f['address']}{size}"
+
     def _one(self, f: dict) -> dict:
         """Analyse one function; the book entry is changed only when it ends (a stop leaves it as it was)."""
         t0 = time.perf_counter()
@@ -412,63 +571,31 @@ class Walk:
                      prompt_tokens=r["prompt_tokens"], completion_tokens=r["completion_tokens"], updated=book_now())
             return r
 
-        try:
-            code = self.adapter.code(f["address"])
-        except BackendError as e:
-            r["backend_error"] = True
-            return end("failed", f"backend: {str(e)[:200]}")
-        if not code.strip():
-            return end("skipped", "the decompiler gave no pseudo-code")
+        code, why = self._code(f, r)
+        if code is None:
+            return end("failed" if r.get("backend_error") else "skipped", why)
         f["code_chars"] = len(code)
         callee_text = self.callee_text(f)
         budget = self.code_budget(callee_text)
         body = clip(self.rename_in(code).strip("\n"), budget)
-        size = f" ({int(f['size'])} bytes)" if f.get("size") else ""
-        user = (f"Function {f['orig']} at {f['address']}{size}:\n\n```c\n{body}\n```\n\n{callee_text}\n\n"
+        user = (f"{self.heading(f)}:\n\n```c\n{body}\n```\n\n{callee_text}\n\n"
                 "Call record_function for this function.")
         messages = [{"role": "system", "content": WALK_SYSTEM}, {"role": "user", "content": user}]
-        error = ""
-        for step in (1, 2):
-            try:
-                reply = self.model.chat(messages, [RECORD], max_tokens=self.max_tokens, temperature=self.temperature,
-                                        think=self.think, should_stop=self.stop.is_set)
-            except ModelError as e:
-                r["model_error"] = True
-                # An engine gone is not the function's fault: it stays pending for the next run. An
-                # answer of the engine against this request (a prompt too long) is.
-                gone = "does not answer" in str(e)
-                return end("pending" if gone else "failed", f"engine: {str(e)[:200]}", step)
-            r["prompt_tokens"] += reply.prompt_tokens
-            r["completion_tokens"] += reply.completion_tokens
-            record = None
-            for call in reply.tool_calls:
-                record, error = check(call)
-                if record:
-                    break
-            if record:
-                end("done", "", step)
-                self.book.record(f["address"], **record)
-                r["mirror"] = self._write_back(f)
-                return r
-            if not reply.tool_calls:
-                error = "no record_function call" + (f" (cut at {self.max_tokens} tokens)"
-                                                     if reply.finish == "length" else "")
-            messages.append(reply.message())
-            if reply.tool_calls:
-                for call in reply.tool_calls:
-                    messages.append({"role": "tool", "tool_call_id": call["id"],
-                                     "content": f"error: {error}. Call record_function again, correctly."})
-            else:
-                messages.append({"role": "user", "content": NO_CALL})
-        return end("failed", error, 2)
+        record, error, steps, status = self._ask(messages, [RECORD], check, NO_CALL, r)
+        if record:
+            end("done", "", steps)
+            self.book.record(f["address"], **record)
+            r["mirror"] = self._write_back(f)
+            return r
+        return end(status, error, steps)
 
-    def _write_back(self, f: dict) -> str:
+    def _write_back(self, f: dict, ops=("rename", "comment")) -> str:
         """The name and the summary into the decompiler's database, when allowed. Returns a note for the
         progress line; what happened is in the book."""
         notes, a = [], self.adapter
         values = {"address": f["address"], "name": f["name"],
                   "comment": f["summary"] + (f"\n\n{f['comment']}" if f.get("comment") else "")}
-        for op in ("rename", "comment"):
+        for op in ops:
             if self.mirror.get(op, "x"):
                 continue
             why = a.write(op, **values)
@@ -477,18 +604,257 @@ class Walk:
                 notes.append(f"{op} failed")
         return ("  (" + ", ".join(notes) + ")") if notes else ""
 
+    # ------------------------------------------------------------ the second pass (--revise)
+
+    def _second_pass(self, order: list[str], run: dict, t0: float, sent: int):
+        """From the roots down, every function the first pass named, again: with the program's summary,
+        its callers (reviewed already) and its first name as a draft. Only once the first pass is complete."""
+        book, fs = self.book, self.book.functions
+        pending = sum(1 for f in fs.values() if f["status"] == "pending")
+        if pending:
+            self.say(f"\nsecond pass: waits for the first ({pending} functions still to name; rerun to go on)")
+            return
+        run["revise"] = {"depth": self.revise_depth, "skip_high": self.revise_skip_high, **self.revise_with}
+        todo = [a for a in order if fs[a]["status"] == "done" and (
+            "revision" not in fs[a] or self.retry_failed and fs[a]["revision"].get("status") == "failed")]
+        scope = ""
+        if self.revise_depth is not None:
+            depth = book.depths(order)
+            todo = [a for a in todo if depth.get(a, 1 << 30) <= self.revise_depth]
+            scope += f", within {self.revise_depth} calls of a root"
+        if self.revise_skip_high:
+            todo = [a for a in todo if (fs[a].get("first") or fs[a]).get("confidence") != "high"]
+            scope += ", not those named with high confidence"
+        if self.max_functions:
+            left = max(0, self.max_functions - sent)
+            if len(todo) > left:
+                scope += f", {left} of {len(todo)} in this run (--max-functions)"
+            todo = todo[:left]
+        reviewed = sum(1 for f in fs.values() if (f.get("revision") or {}).get("status") == "done")
+        self.say(f"\nsecond pass  {len(todo)} functions, from the roots down{scope} ({reviewed} reviewed before)")
+        if not todo:
+            return
+        if self.revise_with["program"] and (book.data.get("program") or {}).get("status") != "done":
+            if self.stop.is_set() or self._out_of_time(run, t0, len(todo)):
+                run["stopped"] = run["stopped"] or "stopped"
+                return
+            try:
+                self._program(run)
+            except Stopped:
+                run["stopped"] = "stopped"
+                return
+            book.save()
+        self._callers = book.callers()
+        for callers in self._callers.values():
+            callers.sort(key=sort_key)
+        self._functions(todo, run, t0, one=self._revise_one, progress=self._revise_progress)
+
+    def program_facts(self) -> str:
+        """What the program's summary is written from: the file, its imports by library, the top of its call
+        tree as the first pass named it, and some of its strings when the server lists them."""
+        book, fs = self.book, self.book.functions
+        info = book.data["binary"]
+        size = f" ({info['size']:,} bytes)" if info.get("size") else ""
+        c = book.counts()
+        parts = [f"File: {info.get('name', '?')}{size}",
+                 f"Functions: {len(fs)} ({c['done']} named by the first reading, {c['known']} with names of their "
+                 "own: imports, symbols" + (f"; {c['failed'] + c['skipped']} not understood" if c['failed'] + c['skipped']
+                                           else "") + ")"]
+        libraries: dict[str, list[str]] = {}
+        for f in fs.values():
+            if f["status"] == "known" and f["flags"].get("external") and f.get("orig"):
+                lib, _, name = f["orig"].rpartition("::")
+                libraries.setdefault(lib or "(library not given)", []).append(name)
+        listed = {n for names in libraries.values() for n in names}
+        for f in fs.values():                       # imports a server does not list (pyghidra-mcp): callees by name
+            for name in f.get("outside") or []:
+                if name not in listed:
+                    listed.add(name)
+                    libraries.setdefault("(library not given)", []).append(name)
+        if libraries:
+            lines = []
+            for lib, names in sorted(libraries.items(), key=lambda kv: (-len(kv[1]), kv[0]))[:IMPORT_LIBRARIES]:
+                names = sorted(set(names))
+                more = f", … and {len(names) - IMPORTS_PER_LIBRARY} more" if len(names) > IMPORTS_PER_LIBRARY else ""
+                lines.append(f"- {lib} ({len(names)}): " + ", ".join(names[:IMPORTS_PER_LIBRARY]) + more)
+            if len(libraries) > IMPORT_LIBRARIES:
+                lines.append(f"- … and {len(libraries) - IMPORT_LIBRARIES} more libraries")
+            parts.append("Imports, by library:\n" + "\n".join(lines))
+        # The top of the tree, chosen level by level (entry and the C runtime's startup take two levels above
+        # main in a PE), then drawn as a tree; imports and other named functions with nothing below left out.
+        reach: dict[str, int] = {}
+
+        def kids(a):
+            found = [k for k in fs[a].get("callees") or [] if k in fs and k != a
+                     and (fs[k]["status"] != "known" or fs[k].get("callees"))]
+            for k in found:
+                if k not in reach:
+                    reach[k] = book.reach(k)
+            return sorted(found, key=lambda k: (-reach[k], sort_key(k)))
+        chosen, level = [], book.roots()
+        for depth in range(PROGRAM_DEPTH):
+            level = [a for a in dict.fromkeys(level) if a not in chosen]
+            chosen += level[:PROGRAM_FUNCTIONS - len(chosen)]
+            if len(chosen) >= PROGRAM_FUNCTIONS:
+                break
+            level = [k for a in level for k in kids(a)]
+        keep, tree, drawn = set(chosen), [], set()
+        stack = [(r, 0) for r in reversed([a for a in book.roots() if a in keep])]
+        while stack:
+            a, depth = stack.pop()
+            if a in drawn:
+                continue
+            drawn.add(a)
+            line = self.function_line(fs[a])
+            tree.append("  " * depth + (line if len(line) <= 200 else line[:199] + "…"))
+            stack += [(k, depth + 1) for k in reversed(kids(a)) if k in keep and k not in drawn]
+        if tree:
+            parts.append("The call tree from the top, as the first reading named it (the most below first; "
+                         "imports left out):\n" + "\n".join(tree))
+        texts = []
+        if self.adapter is not None and self.adapter.has("strings"):
+            try:
+                found = self.adapter.strings()
+            except Exception as e:                  # optional: the summary goes on without
+                book.data.setdefault("program", {})["strings_error"] = str(e)[:200]
+                found = []
+            seen_text = set()
+            for s in found:
+                s = " ".join(s.split())
+                if len(s) >= 4 and s not in seen_text and sum(ch.isalpha() for ch in s) >= 3:
+                    seen_text.add(s)
+                    texts.append(s if len(s) <= STRING_CHARS else s[:STRING_CHARS - 1] + "…")
+            texts = sorted(texts, key=lambda s: " " not in s)[:STRINGS_SHOWN]   # stable: messages first
+        if texts:
+            parts.append("Some of its strings:\n" + "\n".join(json.dumps(s, ensure_ascii=False) for s in texts))
+        self._facts_counts = {"imports": len(listed), "functions": len(tree), "strings": len(texts)}
+        return "\n\n".join(parts)
+
+    def _program(self, run: dict):
+        """The program's summary: one conversation, one tool (record_program), into the book's `program`."""
+        t = time.perf_counter()
+        r = {"prompt_tokens": 0, "completion_tokens": 0}
+        facts = clip(self.program_facts(), int((self.ctx - self.reserve - FIXED_TOKENS) * 3.0))
+        messages = [{"role": "system", "content": PROGRAM_SYSTEM},
+                    {"role": "user", "content": f"{facts}\n\nCall record_program for this program."}]
+        record, error, steps, status = self._ask(messages, [RECORD_PROGRAM], check_program, NO_CALL_PROGRAM, r)
+        program = self.book.data.setdefault("program", {})
+        program.update(status="done" if record else "failed", reason=error, summary=(record or {}).get("summary", ""),
+                       seconds=round(time.perf_counter() - t, 2), steps=steps, prompt_tokens=r["prompt_tokens"],
+                       completion_tokens=r["completion_tokens"], inputs=self._facts_counts, facts=facts,
+                       model=self.model_label, updated=book_now())
+        run["program"] = program["status"]
+        for k in ("prompt_tokens", "completion_tokens"):
+            run[k] += r[k]
+        self.say(f"  program  {program['summary']}" if record else f"  program  not summarized: {error}"
+                 + " (the second pass goes on without it)")
+
+    def caller_text(self, f: dict) -> str:
+        fs = self.book.functions
+        callers = (self._callers or {}).get(f["address"]) or []
+        if not callers:
+            return "Nothing in the program calls it directly (an entry point, or called through a pointer or a table)."
+        lines = [self.function_line(fs[c]) for c in callers[:CALLERS_SHOWN]]
+        if len(callers) > CALLERS_SHOWN:
+            lines.append(f"- … and {len(callers) - CALLERS_SHOWN} more")
+        return "It is called by:\n" + "\n".join(lines)
+
+    def revise_code(self, f: dict, code: str) -> str:
+        """The code with the current names: the decompiler's default names as in the first pass, and the
+        first-pass names of callees renamed since, where the decompiler still says them (a rename it was
+        not given or that failed), unless that old name is someone else's now."""
+        code = self.rename_in(code)
+        fs, taken = self.book.functions, None
+        for c in f.get("callees") or []:
+            old = self.book.renamed(fs[c]) if c in fs else ""
+            if not old or old == fs[c]["name"]:
+                continue
+            taken = self.book.taken() if taken is None else taken
+            if old not in taken:
+                code = re.sub(rf"(?<![\w.]){re.escape(old)}(?![\w.])", fs[c]["name"], code)
+        return code
+
+    @staticmethod
+    def draft_text(f: dict) -> str:
+        return ("The first reading's draft, made seeing only the functions it calls:\n"
+                f"- name: {f['name']}\n- summary: {f['summary']}\n- confidence: {f.get('confidence') or 'low'}")
+
+    def revise_prompt(self, f: dict, code: str) -> str:
+        program = (self.book.data.get("program") or {}).get("summary", "") if self.revise_with["program"] else ""
+        head = [f"What the program is (from a first look at all of it): {program}"] if program else []
+        head.append(f"{self.heading(f)}.")
+        if self.revise_with["callers"]:
+            head.append(self.caller_text(f))
+        callee_text, draft = self.callee_text(f), self.draft_text(f)
+        budget = self.code_budget("\n\n".join(head) + callee_text + draft) - 600     # its system prompt is longer
+        body = clip(self.revise_code(f, code).strip("\n"), max(1500, budget))
+        return ("\n\n".join(head) + f"\n\nIts pseudo-code:\n\n```c\n{body}\n```\n\n{callee_text}\n\n{draft}\n\n"
+                "Call record_function for this function: keep the draft's name if it is right, change it only if "
+                "it is wrong or misleading.")
+
+    def _revise_one(self, f: dict) -> dict:
+        """Review one function; its entry is changed only when it ends (a stop leaves it unreviewed)."""
+        t0 = time.perf_counter()
+        r = {"prompt_tokens": 0, "completion_tokens": 0, "seconds": 0.0}
+
+        def cost(steps: int) -> dict:
+            r["seconds"] = time.perf_counter() - t0
+            return {"seconds": round(r["seconds"], 2), "steps": steps, "prompt_tokens": r["prompt_tokens"],
+                    "completion_tokens": r["completion_tokens"], "with": dict(self.revise_with)}
+
+        def end(status: str, reason: str, steps: int = 0):
+            if status == "pending":                     # the engine gone: not reviewed, the next run takes it
+                r["status"] = "revise_pending"
+                return r
+            f["revision"] = {"status": status, "reason": reason, **cost(steps), "updated": book_now()}
+            r["status"] = f"revise_{status}"
+            return r
+
+        code, why = self._code(f, r)
+        if code is None:
+            return end("failed" if r.get("backend_error") else "skipped", why)
+        messages = [{"role": "system", "content": REVISE_SYSTEM}, {"role": "user", "content": self.revise_prompt(f, code)}]
+        before = (f["name"], f["summary"], f.get("comment") or "")
+        record, error, steps, status = self._ask(messages, [RECORD], check, NO_CALL, r)
+        if not record:
+            return end(status, error, steps)
+        renamed = self.book.revise(f["address"], **record, **cost(steps))
+        r["status"], r["renamed"], r["was"] = "revised", renamed, before[0]
+        ops = (["rename"] if renamed else []) + (["comment"] if (f["summary"], f["comment"]) != before[1:] else [])
+        r["mirror"] = self._write_back(f, ops)
+        f["revision"]["mirror"] = {op: f["mirror"][op] for op in ops if not self.mirror.get(op, "x")}
+        f["revision"]["summary_changed"] = "comment" in ops
+        return r
+
+    def _revise_progress(self, i: int, n: int, f: dict, r: dict) -> str:
+        head = f"[{i}/{n}] {f['address']} "
+        tail = f"  {r.get('seconds', 0.0):.1f} s  {r.get('prompt_tokens', 0)}+{r.get('completion_tokens', 0)} tok"
+        if r.get("status") == "revised":
+            what = f"{r['was']} -> {f['name']}" if r["renamed"] else f"{f['name']} kept"
+            return f"{head}{what}  [{f['confidence']}]{tail}{r.get('mirror', '')}"
+        reason = (f.get("revision") or {}).get("reason", "") if r.get("status") != "revise_pending" else "engine gone"
+        return f"{head}{f['name']} {r.get('status', '').replace('revise_', 'review ')}: {reason}{tail}"
+
     def _summary(self, run: dict):
         c = self.book.counts()
-        analysed = run.get("done", 0) + run.get("failed", 0)
+        analysed = sum(run.get(k, 0) for k in ("done", "failed", "revised", "revise_failed"))   # both passes
         mean = sum(f["seconds"] for f in self.book.functions.values()
                    if f["status"] in ("done", "failed")) / max(1, c["done"] + c["failed"])
         self.say(f"\nthis run: {run.get('done', 0)} named, {run.get('failed', 0)} failed, {run.get('skipped', 0)} "
                  f"skipped in {run['seconds']:.0f} s, {run['prompt_tokens']}+{run['completion_tokens']} tokens"
                  + (f", {run['seconds'] / analysed:.1f} s per function" if analysed else "")
                  + (f"; stopped: {run['stopped']}" if run.get("stopped") else ""))
+        if "revise" in run:
+            self.say(f"second pass in this run: {run.get('revised', 0)} reviewed ({run.get('renamed', 0)} renamed), "
+                     f"{run.get('revise_failed', 0)} failed, {run.get('revise_skipped', 0)} skipped"
+                     + (f"; program summary {run['program']}" if run.get("program") else ""))
+        revised = [f for f in self.book.functions.values() if (f.get("revision") or {}).get("status") == "done"]
         self.say(f"the book: {len(self.book.functions)} functions, {c['done']} done, {c['known']} known, "
                  f"{c['skipped']} skipped, {c['failed']} failed, {c['pending']} pending; mean {mean:.1f} s per "
-                 f"function\n  {self.book.dir / 'book.md'}")
+                 f"function"
+                 + (f"; second pass: {len(revised)} reviewed, {sum(1 for f in revised if self.book.renamed(f))} "
+                    "renamed" if revised else "")
+                 + f"\n  {self.book.dir / 'book.md'}")
 
 
 # ---------------------------------------------------------------- the command
@@ -536,7 +902,15 @@ def run(args) -> int:
                     allow=[str(p) for p in conf.get("allow") or []], ctx=args.ctx, max_tokens=args.max_tokens,
                     temperature=args.temperature, think=args.think, stop=stop,
                     max_functions=args.max_functions or 0, time_limit=(args.time_limit or 0) * 60,
-                    retry_failed=args.retry_failed, model_label=label_)
+                    retry_failed=args.retry_failed, model_label=label_,
+                    # any --revise-* option implies --revise
+                    revise=bool(getattr(args, "revise", False) or getattr(args, "revise_depth", None) is not None
+                                or any(getattr(args, k, False) for k in ("revise_skip_high", "revise_no_program",
+                                                                         "revise_no_callers"))),
+                    revise_depth=getattr(args, "revise_depth", None),
+                    revise_skip_high=bool(getattr(args, "revise_skip_high", False)),
+                    revise_program=not getattr(args, "revise_no_program", False),
+                    revise_callers=not getattr(args, "revise_no_callers", False))
         result = walk.run(binary)
         return 0 if not result.get("stopped") or result["stopped"] in ("time limit", "interrupted", "stopped") else 1
     finally:
