@@ -165,7 +165,62 @@ costs 2.4 decoding steps. To speed up the 14B, take work away from the CPU.
      in `LlamaServer`; why the fit ignores the room freed by a q8_0 KV cache; the 30B-A3B's IQ4_XS (unsloth).
    - The README: a "RTX 3060 12 GB" row (4B, 14B, 30B-A3B) when the user wants these numbers there.
 
+8. **The agent (`mafdet agent`, since 2026-11-12): a harness for local models, first for reverse engineering
+   and security study** (the user studies them and wants a model of their own choice, abliterated ones
+   included, on their own machine). Phase 1 is in ("Done and measured", 2026-11-12). The plan agreed with the user:
+   - **Phase 2, the binary's database as the memory.** Bottom-up over the call graph: leaves first, each
+     function read, named and commented through the decompiler's MCP tools (`set_address_name`,
+     `set_comment`), then forgotten; callers then read names instead of `sub_401a30`. A session's notes
+     injected again after old outputs are left out. Unattended runs of hours, resumed with `--resume`.
+   - **Phase 3, MAFDET's own part.** Thinking ahead while a tool runs (a 10 s command leaves the GPU idle, as
+     typing does) and on the function under the analyst's cursor (`current_address`, `current_procedure`
+     in rea); leaves analysed in parallel on slots, only for a model all on the GPU (two sequences write 1.7
+     times one's tokens on the 2060's 4B; a split model pays for each, see the key fact above). This needs the
+     raw `/completion` route as `proxy/think.py`; phase 1 uses `/v1/chat/completions`, so any GGUF with a
+     tool-calling template works.
+   - **Phase 4, a benchmark** in `research/`: crackmes and CTF binaries with a known key or flag, base model
+     against its abliterated version, counting refusals and malformed tool calls beside solved tasks. It also
+     says whether the abliterated model is worth it: it removes refusals and may lose precision and
+     tool-call format.
+   - **Phase 5**: abliterated models in the catalog (a family or a tag, checked for tool calling), the
+     agent in the window and the terminal app.
+   To do first, seen in phase 1:
+   - the profile's 16 tools of rea cost ~3.8k tokens (a quarter of 16k) before the last trim of the schemas
+     (validation keywords dropped, descriptions 200/100 characters), not measured again after it. Look at
+     where the characters of one slimmed schema go (nested objects? enums?) and get under ~2k.
+   - only 5 of rea's 207 tools carry `readOnlyHint`: without `allow` in mcp.json every call asks. Write the
+     user's `~/.mafdet/mcp.json` for rea with them (`allow` for the static tools) and try a real binary.
+   - the reference machine for the agent is to be decided: on the 2060 only the 4B is usable in a loop
+     (59-68 tok/s here with thinking on), the 14B at 5 tok/s is not; the plan assumes 12-16 GB.
+   - `--approve all` and a second listing of rea's tools were refused by Claude Code's own checks in that
+     session: the shell tool was run only by the tests (`echo`), never by the model. To try by hand.
+   - Tests on this machine: `test_local_models.py::test_delete_a_catalog_download` and
+     `::test_the_command_deletes_by_bare_id` fail with or without the agent (they find the Qwen3-4B of
+     this machine's Hugging Face cache): not looked into.
+
 ## Done and measured
+
+- **2026-11-12 · `mafdet agent`, phase 1: the loop, five tools, approvals, the context budget, an MCP client;
+  tried once for real, nothing measured.** `mafdet/agent/` (no new dependency: the MCP client is JSON-RPC on
+  stdio, written here). `model.py`: one streamed `/v1/chat/completions` with `tools`, `cache_prompt` and
+  `id_slot 0` on llama-server, whose own parser and grammar make the tool calls (jinja is on by default in
+  b11747); past reasoning stays out of the history. `tools.py`: read_file (a binary as a hex dump),
+  write_file, edit_file, search, shell, ~670 tokens of schemas. `permissions.py`: ask / edits / all, a call
+  outside the working folder always asks. `context.py`: outputs cut to head and tail at 4,000 characters and
+  kept whole in `~/.mafdet/sessions/<id>/outputs`; when the prompt passes ctx − max_tokens the oldest outputs
+  become one line, down to 60% of the budget in one go (each time the prompt is read again from there);
+  tokens estimated from characters with the ratio of the engine's last `prompt_tokens`. `mcp.py`: servers
+  from `~/.mafdet/mcp.json`, tools active by name pattern (`--tools`, `--profile native-static`, `tools` in
+  the file), the rest behind `find_tools`; schemas slimmed. `loop.py`: bad JSON, unknown tool, missing
+  argument, declined call and tool errors go back to the model as results; Ctrl+C leaves no tool call without
+  a result. 17 tests (`tests/test_agent.py`, a fake MCP server and a fake engine).
+  - For real, RTX 2060, Qwen3-4B Q4_K_M, 16k context, thinking on, default approval with no terminal (so
+    reads only): "read check.py and explain it" → `read_file`, then a right answer, 2 steps, 3.4 + 3.7 s,
+    59 and 68 tok/s, 1,345 of 12,288 tokens used.
+  - The client against rea 6.7.0 (`npx rea-agents mcp`): handshake 3.4 s, **207 tools, 3.4 MB of schemas**,
+    5 marked read-only; every name of the `native-static` profile exists; 16 active + `find_tools`, 191
+    hidden, ~3.8k tokens of schemas (before the last trim); `find_tools("frida instrument process")` finds
+    the eight Frida tools. No tool of rea was called, no binary opened.
 
 - **2026-11-09 · The catalog's prefill per generation: Ampere and Blackwell get their own coefficient,
   0.085e12 FLOPS per GB/s** (Turing 0.051e12, Ada 0.125e12, Apple 0.025e12 unchanged). The five points measured
@@ -710,4 +765,6 @@ costs 2.4 decoding steps. To speed up the 14B, take work away from the CPU.
   ~25 s per problem; a 14B run ~2 min per problem.
 - Single runs vary a lot (the same 24 problems: 3.2 s or 4.2 s mean wait). Compare configs measured the
   same day; prefer decode tok/s (rows' `tps`) and repeated runs over one mean.
+- Agent: `python -m mafdet agent --model <gguf or id> --workdir <folder> -p "<task>"`; MCP servers in
+  `~/.mafdet/mcp.json` (`--mcp <name>`); sessions and whole tool outputs in `~/.mafdet/sessions`.
 - After every change: commit and push (the user asked for it). The user writes in Italian.

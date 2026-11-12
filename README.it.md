@@ -112,7 +112,7 @@ La stessa app esiste in due forme, sullo stesso motore:
 | <img src="assets/icons/race.svg" width="22" alt=""> | `mafdet models` | il catalogo dei modelli per questo computer (`--family`, `--download`, anche `--download repository:file.gguf` da Hugging Face; `--delete` toglie dal disco un modello scaricato) |
 | <img src="assets/icons/awaken.svg" width="22" alt=""> | `mafdet doctor` | controlla GPU, memoria, llama.cpp e modelli; `--install` installa llama.cpp (`--build 12`, `13`, `vulkan` o `cpu` per scegliere la build) |
 
-`mafdet` da solo apre il launcher, che può ricordare la scelta (`mafdet --ask` lo mostra di nuovo).
+`mafdet proxy` porta la lettura in anticipo in Open WebUI, e `mafdet agent` dà a un modello locale degli strumenti con cui lavorare (tutti e due più sotto). `mafdet` da solo apre il launcher, che può ricordare la scelta (`mafdet --ask` lo mostra di nuovo).
 
 **Chat.** Mentre scrivi, una riga di stato sotto il messaggio mostra cosa sta facendo il modello: quanto ha già letto e quanti token di ragionamento ha scritto in anticipo (il campo si illumina di ambra mentre ragiona). All'invio resta da calcolare solo la coda. Il ragionamento è mostrato chiuso sopra la risposta, e ogni risposta finisce con i suoi numeri: prima parola dopo l'invio, token letti mentre scrivevi, ragionamento fatto prima dell'invio, velocità. Quando il modello scrive la risposta in anticipo durante una pausa, compare sotto il messaggio man mano che viene scritta, in trasparenza, prima che tu invii (Impostazioni, *Mostra la risposta mentre viene scritta in anticipo*): all'invio passa subito nella conversazione, e ogni modifica al messaggio la fa cadere, perché una risposta vale solo per il testo esatto per cui è stata scritta. Nel ragionamento un segno mostra dove è caduto l'invio: tutto quello che sta sopra è stato pensato mentre scrivevi. *Budget di ragionamento dopo l'Invio* (Impostazioni, `--think-budget`) limita il ragionamento dopo l'invio: oltre, il ragionamento viene chiuso e il modello risponde con quello che ha, invece di pensare finché il limite di token lo taglia senza risposta.
 
@@ -151,6 +151,27 @@ Open WebUI 0.13 su una RTX 2060, Qwen3-4B, 8 conversazioni di 2-3 messaggi per l
 | prima parola della risposta, ragionamento acceso: `mafdet proxy --think-ahead` | **4,3 s** | **4,1 s** | 10,4 s |
 
 Senza, il tuo messaggio aspetta in coda dietro il titolo, i tag e i suggerimenti che Open WebUI chiede al modello, e i suoi 30 strumenti integrati (~5,8k token) vengono riletti; il proxy dà a quelle richieste uno slot tutto loro e legge il messaggio mentre scrivi. Come configurarlo, passo per passo: [Open WebUI + MAFDET in 5 minuti](mafdet/proxy/clients/README.md), oppure tutto in Docker: [`docker/`](docker/README.md) (in inglese). `http://127.0.0.1:8077/proxy` dice se funziona. Anche altre interfacce possono mandare le bozze (`mafdet/proxy/README.md`); cosa viene dopo, e come aiutare: [PROXY.md](PROXY.md) (in inglese).
+
+## Un agente con gli strumenti: `mafdet agent` (sperimentale)
+
+Un modello locale che lavora sul tuo computer attraverso degli strumenti, in un ciclo, finché il compito è finito: legge e scrive file, lancia comandi e usa gli strumenti dei server [MCP](https://modelcontextprotocol.io). Nasce prima di tutto per il **reverse engineering e lo studio della sicurezza**, dove il binario non deve uscire dal computer e il modello lo scegli tu: un decompilatore o un debugger che parla MCP dà al modello i suoi strumenti, e qualsiasi GGUF con un chat template che prevede le chiamate a strumenti li può usare (cerca su Hugging Face nell'app, oppure `--model repository:file`).
+
+```bash
+mafdet agent                                         # una conversazione, in questa cartella, con il modello dell'app
+mafdet agent --model qwen3-14b --workdir C:\samples\crackme
+mafdet agent --mcp rea --profile native-static       # con gli strumenti di un server MCP
+mafdet agent -p "cosa accetta check.py?"             # un compito, poi esce
+mafdet agent --resume last
+```
+
+Cosa fa per un modello con 16k token di contesto e nessuno che lo controlli:
+
+- **Pochi strumenti, schemi corti.** Cinque suoi (`read_file`, che mostra un binario come dump esadecimale, `write_file`, `edit_file`, `search`, `shell`), circa 670 token. I server MCP si scrivono in `~/.mafdet/mcp.json`, nella forma che usano gli altri client. Un server di reverse engineering può elencare centinaia di strumenti (uno provato qui: 207, 3,4 MB di schemi): il modello parte con pochi (`--profile native-static`: 16 per l'analisi statica di un binario nativo, circa 3,8k token dopo aver accorciato gli schemi; `--tools`, o `tools` nel file) e gli altri li trova e li accende con `find_tools`.
+- **Output tagliati su misura.** L'output di uno strumento è ridotto a testa e coda (`--tool-chars`, 4.000) e conservato intero in `~/.mafdet/sessions/<id>/outputs`, dove il modello può leggere la parte che gli serve. Quando il contesto si riempie, gli output più vecchi vengono tolti in una volta sola.
+- **Prima chiede.** Leggere dentro la cartella di lavoro parte da solo; scrivere, lanciare comandi e gli strumenti MCP non marcati di sola lettura chiedono (`--approve edits` lo lascia scrivere nella cartella, `--approve all` anche lanciare comandi: per una VM o una cartella da buttare). Una chiamata che esce dalla cartella chiede sempre. In `mcp.json`, `"allow": ["list_*", "procedure_*"]` elenca gli strumenti di un server di cui ti fidi, che partono senza chiedere. Analizzare un binario è leggere; eseguirlo no: quello va fatto in una VM.
+- **I suoi errori gli vengono detti**: argomenti che non sono JSON, uno strumento che non esiste, una chiamata che hai rifiutato, uno strumento fallito.
+
+A che punto è: il ciclo e il client MCP funzionano (Qwen3-4B sulla RTX 2060 ha letto un file e l'ha spiegato in due passi; il client elenca i 207 strumenti di un server vero), e niente è ancora misurato. Poi: l'analisi di un binario dalle foglie del grafo delle chiamate in su, con nomi e commenti scritti nel database del decompilatore come memoria del modello; lettura e ragionamento in anticipo sulla funzione sotto il cursore dell'analista; un benchmark su crackme con risposta nota. Il piano è in `research/LOG.md`.
 
 ## Requisiti
 
@@ -338,6 +359,7 @@ Se qualcosa non funziona (la scheda non trovata, llama.cpp che non parte, il mod
 - [x] Un modello piccolo raccoglie mentre scrivi, uno grande risponde: provato e misurato (nessun guadagno sulla RTX 2060, vedi Risultati)
 - [ ] Ragionamento in anticipo per i modelli più grandi della VRAM che batta il modello grande che ragiona da solo
 - [ ] Il proxy: lettura e ragionamento in anticipo nell'interfaccia e nel motore che usi già (Open WebUI, Ollama, vLLM, SGLang, ...). La lettura in anticipo su llama.cpp funziona con Open WebUI: `mafdet proxy`, vedi [Open WebUI + MAFDET in 5 minuti](mafdet/proxy/clients/README.md) (in inglese); Ollama, vLLM, SGLang e LM Studio: `mafdet proxy --url`, scritto sulle loro API documentate e non ancora provato davvero (serve aiuto); a che punto siamo, cosa manca e come aiutare: [PROXY.md](PROXY.md) (in inglese)
+- [ ] L'agente: un modello locale che lavora con degli strumenti (file, shell, server MCP), prima di tutto per il reverse engineering. Il ciclo, il bilancio del contesto, le conferme e il client MCP ci sono (`mafdet agent`, sperimentale); poi l'analisi di un binario dal basso, il ragionamento in anticipo mentre uno strumento gira o l'analista naviga, e un benchmark
 - [ ] Ragionamento in anticipo oltre Qwen3, anche per i modelli di ragionamento con formati propri (DeepSeek-R1, gpt-oss): ognuno richiede di misurare la sua cornice
 - [ ] Voce: il parlato trascritto in streaming (whisper.cpp) alimenta la stessa lettura e lo stesso ragionamento in anticipo mentre l'utente parla, la fine del turno fa da Invio (una pausa avvia la risposta, se l'utente riprende a parlare viene scartata) e la risposta viene pronunciata mentre il resto è ancora in scrittura: la voce va a 3-4 token al secondo, quindi si aspettano solo il ragionamento rimasto e la prima frase. Si parla circa il doppio più in fretta di quanto si scriva, quindi si ragiona meno in anticipo: da misurare come per la scrittura, come tempo fino alla prima parola pronunciata
 - [x] macOS su Apple Silicon (Metal)

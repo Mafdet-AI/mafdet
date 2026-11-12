@@ -112,7 +112,7 @@ The same app comes in two forms, on the same engine:
 | <img src="https://raw.githubusercontent.com/Mafdet-AI/mafdet/main/assets/icons/race.svg" width="22" alt=""> | `mafdet models` | the model catalog for this machine (`--family`, `--download`, also `--download repository:file.gguf` from Hugging Face; `--delete` removes a downloaded model from the disk) |
 | <img src="https://raw.githubusercontent.com/Mafdet-AI/mafdet/main/assets/icons/awaken.svg" width="22" alt=""> | `mafdet doctor` | checks the GPU, memory, llama.cpp and the models; `--install` installs llama.cpp (`--build 12`, `13`, `vulkan` or `cpu` to pick the build) |
 
-`mafdet` alone opens the launcher, which can remember your choice (`mafdet --ask` shows it again).
+`mafdet proxy` brings reading ahead to Open WebUI, and `mafdet agent` gives a local model tools to work with (both below). `mafdet` alone opens the launcher, which can remember your choice (`mafdet --ask` shows it again).
 
 **Chat.** While you type, a status line under the message shows what the model is doing with it: how much it has read, and how many reasoning tokens it has written ahead (the field glows amber while it thinks). On Enter only the tail is left to compute. The reasoning is shown folded above the answer, and every answer ends with its numbers: first word after Enter, tokens read while you typed, reasoning done before Enter, speed. When the model writes the answer ahead during a pause, it appears under the message as it is written, faint, before you send (Settings, *Show the answer as it is written ahead*): on Enter it moves into the conversation at once, and any change to the message drops it, because an answer only holds for the exact text it was written for. In the reasoning, a mark shows where Enter fell: everything above it was thought while you typed. *Thinking budget after Enter* (Settings, `--think-budget`) caps the reasoning after you send: past it the reasoning is closed and the model answers with what it has, instead of thinking on until the token limit cuts it off with no answer.
 
@@ -151,6 +151,27 @@ Open WebUI 0.13 on an RTX 2060, Qwen3-4B, 8 conversations of 2-3 messages each w
 | first word of the answer, thinking on: `mafdet proxy --think-ahead` | **4.3 s** | **4.1 s** | 10.4 s |
 
 Without it, your message queues behind the title, tags and follow-ups Open WebUI asks the model for, and its 30 built-in tools (~5.8k tokens) get read again; the proxy gives those requests a slot of their own and reads your message while you type. Setup, step by step: [Open WebUI + MAFDET in 5 minutes](mafdet/proxy/clients/README.md), or all in Docker: [`docker/`](docker/README.md). `http://127.0.0.1:8077/proxy` shows whether it works. Any other front end can send drafts too (`mafdet/proxy/README.md`); what is next, and how to help: [PROXY.md](PROXY.md).
+
+## An agent with tools: `mafdet agent` (experimental)
+
+A local model that works on your machine through tools, in a loop, until the task is done: it reads and writes files, runs commands, and uses the tools of [MCP](https://modelcontextprotocol.io) servers. It is built first for **reverse engineering and security study**, where the binary should not leave the machine and the model is one you chose yourself: a decompiler or a debugger that speaks MCP gives the model its tools, and any GGUF with a tool-calling chat template can drive them (search Hugging Face in the app, or `--model repository:file`).
+
+```bash
+mafdet agent                                         # a conversation, in this folder, with the app's model
+mafdet agent --model qwen3-14b --workdir C:\samples\crackme
+mafdet agent --mcp rea --profile native-static       # with the tools of an MCP server
+mafdet agent -p "what does check.py accept?"         # one task, then exit
+mafdet agent --resume last
+```
+
+What it does for a model with 16k tokens of context and no supervision of its own:
+
+- **Few tools, short schemas.** Five of its own (`read_file`, which shows a binary as a hex dump, `write_file`, `edit_file`, `search`, `shell`), about 670 tokens. MCP servers are named in `~/.mafdet/mcp.json`, in the shape other clients use. A reverse-engineering server can list hundreds of tools (one tried here: 207, 3.4 MB of schemas): the model starts with a few (`--profile native-static`: 16 for static analysis of a native binary, about 3.8k tokens after cutting their schemas; `--tools`, or `tools` in the file) and finds and turns on the others with `find_tools`.
+- **Outputs cut to size.** A tool's output is cut to its head and tail (`--tool-chars`, 4,000) and kept whole in `~/.mafdet/sessions/<id>/outputs`, where the model can read the part it needs. When the context fills, the oldest outputs are left out in one go.
+- **It asks first.** Reading inside the working folder runs by itself; writing, commands and MCP tools not marked read-only ask (`--approve edits` lets it write in the folder, `--approve all` run commands too: for a VM or a throwaway folder). A call that reaches outside the folder always asks. In `mcp.json`, `"allow": ["list_*", "procedure_*"]` names the tools of a server you trust to run without asking. Analysing a binary is reading; running it is not: do that in a VM.
+- **Its mistakes are told back to it**: arguments that are not JSON, a tool that does not exist, a call you declined, a tool that failed.
+
+Where it stands: the loop and the MCP client work (Qwen3-4B on the RTX 2060 read a file and explained it in two steps; the client lists a real server's 207 tools), and nothing is measured yet. Next: the analysis of a binary from the leaves of its call graph up, with names and comments written back to the decompiler's database as the model's memory; reading and thinking ahead on the function under the analyst's cursor; a benchmark on crackmes with a known answer. The plan is in `research/LOG.md`.
 
 ## Requirements
 
@@ -338,6 +359,7 @@ If something does not work (the card not found, llama.cpp not starting, the mode
 - [x] A small model gathers while you type, a large one answers: tried and measured (no gain on the RTX 2060, see Results)
 - [ ] Reasoning ahead for models larger than the VRAM that beats the large model thinking by itself
 - [ ] The proxy: reading and reasoning ahead in the front end and engine you already use (Open WebUI, Ollama, vLLM, SGLang, ...). Reading ahead on llama.cpp works with Open WebUI: `mafdet proxy`, see [Open WebUI + MAFDET in 5 minutes](mafdet/proxy/clients/README.md); Ollama, vLLM, SGLang and LM Studio: `mafdet proxy --url`, written on their documented APIs and not yet tried for real (help wanted); where it stands, what is left and how to help: [PROXY.md](PROXY.md)
+- [ ] The agent: a local model working with tools (files, shell, MCP servers), first for reverse engineering. The loop, the context budget, the approvals and the MCP client are in (`mafdet agent`, experimental); next the bottom-up analysis of a binary, thinking ahead while a tool runs or the analyst navigates, and a benchmark
 - [ ] Reasoning ahead beyond Qwen3, including the thinking models with their own formats (DeepSeek-R1, gpt-oss): each needs its frame measured
 - [ ] Voice: speech transcribed in streaming (whisper.cpp) feeds the same reading and reasoning ahead while the user speaks, the end of the turn plays Enter's part (a pause starts the answer, more speech cancels it), and the answer is spoken while the rest is still being written: speech goes at 3-4 tokens/s, so only the reasoning left and the first sentence are waited for. Speech is about twice as fast as typing, so less reasoning gets done ahead: to measure, as for typing, as the time to the first spoken word
 - [x] macOS on Apple Silicon (Metal)

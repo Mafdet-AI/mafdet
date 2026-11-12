@@ -82,6 +82,16 @@ COMMANDS = [
             ("mafdet proxy", "mafdet proxy --model qwen3-8b", "mafdet proxy --host 0.0.0.0",
              "mafdet proxy --url http://127.0.0.1:8081", "mafdet proxy --url http://127.0.0.1:11434 --model qwen3:4b"),
             "use", common=False),
+    Command("agent", "the hunter", "a local model that works with tools on this machine",
+            "Starts llama-server with the model chosen in the app (or --model) and an agent on it: the model "
+            "reads and writes files, runs commands and uses the tools of MCP servers (a decompiler, a debugger; "
+            "named in ~/.mafdet/mcp.json) in a loop, until the task is done. Built first for reverse engineering "
+            "and security study on your own machine. Reading inside the working folder runs by itself; writing "
+            "and commands ask first (--approve). Tool outputs are cut to fit a local model's context, and kept "
+            "whole in ~/.mafdet/sessions. With --url it uses an engine already running.",
+            ("mafdet agent", "mafdet agent --model qwen3-14b --workdir C:\\samples\\crackme",
+             "mafdet agent --mcp rea --profile native-static", 'mafdet agent -p "what does main.c do?"',
+             "mafdet agent --resume last"), "use", common=False),
     Command("hunt", "the hunt", "simulate people typing and measure the wait after sending",
             "Simulates a person typing a message (clean: start to finish; messy: typos, backspaces and an "
             "edit in the middle; paste: a long document followed by a question) and measures the wait from "
@@ -375,6 +385,49 @@ def _proxy_args(p):
                    help='extra llama-server options, with an equals sign: --llama-args="-ub 256"')
 
 
+def _agent_args(p):
+    p.add_argument("--model", default="",
+                   help="the model: an id from `mafdet models` (qwen3-14b), a GGUF file, or repository:file "
+                        "(default: the one chosen in the app). It needs a chat template with tool calls")
+    p.add_argument("--workdir", default=".", help="the folder the agent works in (default: this one)")
+    p.add_argument("-p", "--prompt", default="", help="one task, then exit (without it: a conversation)")
+    p.add_argument("--approve", default="ask", choices=["ask", "edits", "all"],
+                   help="ask: writes, commands and tools not marked read-only ask first; edits: writes inside "
+                        "the working folder run by themselves; all: commands too, for a VM or a throwaway "
+                        "folder (default: %(default)s)")
+    p.add_argument("--mcp", action="append", metavar="NAME",
+                   help="an MCP server from ~/.mafdet/mcp.json whose tools the model gets; repeat for more")
+    p.add_argument("--profile", default="",
+                   help="the MCP tools to start with, by task: native-static (static analysis of a native "
+                        "binary); the others stay reachable through find_tools")
+    p.add_argument("--tools", default="",
+                   help="MCP tools to start with, as comma-separated name patterns: \"procedure_*,xrefs\"")
+    p.add_argument("--ctx", type=int, default=16384, help="context in tokens (default: %(default)s)")
+    p.add_argument("--max-tokens", type=int, default=4096,
+                   help="longest reasoning and answer of one step, in tokens (default: %(default)s)")
+    p.add_argument("--max-steps", type=int, default=40,
+                   help="model turns allowed for one message of yours (default: %(default)s)")
+    p.add_argument("--tool-chars", type=int, default=4000,
+                   help="longest tool output the model reads, in characters; the rest stays on disk "
+                        "(default: %(default)s)")
+    p.add_argument("--temperature", type=float, default=0.6, help="default: %(default)s")
+    p.add_argument("--no-think", dest="think", action="store_false", help="no reasoning before each step")
+    p.add_argument("--system", default="", metavar="FILE", help="a text file added to the system prompt")
+    p.add_argument("--resume", default="", metavar="ID",
+                   help="go on with a session of ~/.mafdet/sessions (its id, or `last`)")
+    p.add_argument("--device", default="auto", choices=["auto", "cuda", "cpu"],
+                   help="where llama-server runs the model (default: %(default)s)")
+    p.add_argument("--engine-port", type=int, default=8079, help="where llama-server listens (default: %(default)s)")
+    p.add_argument("--url", default="",
+                   help="use an engine already running at this address instead of starting llama-server "
+                        "(any OpenAI-compatible server); with it, --model is the model the engine serves")
+    p.add_argument("--engine", default="llama", choices=["llama", "openai"],
+                   help="what is at --url: llama-server, or another OpenAI-compatible engine (default: %(default)s)")
+    p.add_argument("--api-key", default="", help="sent as a Bearer token to an engine at --url that wants one")
+    p.add_argument("--llama-args", default="",
+                   help='extra llama-server options, with an equals sign: --llama-args="-ub 256"')
+
+
 def _race_args(p):
     p.add_argument("--lengths", type=int, nargs="+", default=None,
                    help="prompt lengths to measure, in tokens (default: 50 to 8000 on GPU, 50 to 2000 on CPU)")
@@ -419,7 +472,7 @@ def _judge_args(p):
                         "or shifted probability (llama, default 0.25)")
 
 
-_ARGS = {"gui": _gui_args, "tui": _tui_args, "models": _models_args, "doctor": _doctor_args, "awaken": _awaken_args, "watch": _watch_args, "strike": _strike_args, "race": _race_args, "proxy": _proxy_args,
+_ARGS = {"gui": _gui_args, "tui": _tui_args, "models": _models_args, "doctor": _doctor_args, "awaken": _awaken_args, "watch": _watch_args, "strike": _strike_args, "race": _race_args, "proxy": _proxy_args, "agent": _agent_args,
          "hunt": _hunt_args, "judge": _judge_args}
 
 
