@@ -494,13 +494,15 @@ class Walk:
             text += "\nIt also calls (imports, or not resolved): " + ", ".join(f["outside"][:30])
         return text
 
-    def rename_in(self, code: str) -> str:
-        """Default names in the code of functions already named -> their given names."""
+    def rename_in(self, code: str, but: str = "") -> str:
+        """Default names in the code of functions already named -> their given names (not `but`'s: in the
+        second pass a function's own code keeps its decompiler's name, as the heading says it, so the draft's
+        name is read once, in the draft, not again in the code's first line)."""
         book = self.book
 
         def sub(m):
             a = book.resolve(m.group(0))
-            g = book.functions.get(a) if a else None
+            g = book.functions.get(a) if a and a != but else None
             return g["name"] if g and g["status"] == "done" and g["name"] else m.group(0)
         return DEFAULT_IN_TEXT.sub(sub, code)
 
@@ -691,23 +693,33 @@ class Walk:
                 if k not in reach:
                     reach[k] = book.reach(k)
             return sorted(found, key=lambda k: (-reach[k], sort_key(k)))
-        chosen, level = [], book.roots()
+        # Each function is drawn once, under the function the choice reached it through, so the drawing is as
+        # deep as the choice (PROGRAM_DEPTH levels) and a function's callees chosen at the next level sit side by
+        # side under it. Drawn depth first instead, where.exe's tree went 12 levels down one mislabelled chain,
+        # its siblings nested under whichever deep path reached them first (2026-11-13).
+        chosen, under, level = [], {}, [(a, None) for a in book.roots()]
         for depth in range(PROGRAM_DEPTH):
-            level = [a for a in dict.fromkeys(level) if a not in chosen]
-            chosen += level[:PROGRAM_FUNCTIONS - len(chosen)]
+            fresh: dict[str, str | None] = {}
+            for a, parent in level:
+                if a not in under and a not in fresh:
+                    fresh[a] = parent
+            taken = list(fresh.items())[:PROGRAM_FUNCTIONS - len(chosen)]
+            for a, parent in taken:
+                chosen.append(a)
+                under[a] = parent
             if len(chosen) >= PROGRAM_FUNCTIONS:
                 break
-            level = [k for a in level for k in kids(a)]
-        keep, tree, drawn = set(chosen), [], set()
-        stack = [(r, 0) for r in reversed([a for a in book.roots() if a in keep])]
+            level = [(k, a) for a, _ in taken for k in kids(a)]
+        below: dict[str | None, list[str]] = {}
+        for a in chosen:
+            below.setdefault(under[a], []).append(a)
+        tree = []
+        stack = [(r, 0) for r in reversed(below.get(None, []))]
         while stack:
             a, depth = stack.pop()
-            if a in drawn:
-                continue
-            drawn.add(a)
             line = self.function_line(fs[a])
             tree.append("  " * depth + (line if len(line) <= 200 else line[:199] + "…"))
-            stack += [(k, depth + 1) for k in reversed(kids(a)) if k in keep and k not in drawn]
+            stack += [(k, depth + 1) for k in reversed(below.get(a, []))]
         if tree:
             parts.append("The call tree from the top, as the first reading named it (the most below first; "
                          "imports left out):\n" + "\n".join(tree))
@@ -718,11 +730,15 @@ class Walk:
             except Exception as e:                  # optional: the summary goes on without
                 book.data.setdefault("program", {})["strings_error"] = str(e)[:200]
                 found = []
-            seen_text = set()
+            seen_text = {n.lower() for n in listed} | {lib.lower() for lib in libraries}
             for s in found:
                 s = " ".join(s.split())
-                if len(s) >= 4 and s not in seen_text and sum(ch.isalpha() for ch in s) >= 3:
-                    seen_text.add(s)
+                low = s.lower()
+                if (low.endswith((".dll", ".drv", ".sys")) and " " not in s or s.startswith(".") and " " not in s
+                        or re.fullmatch(r"\?\w+@@\w*", s)):     # libraries, sections, decorated imports
+                    continue
+                if len(s) >= 4 and low not in seen_text and sum(ch.isalpha() for ch in s) >= 3:
+                    seen_text.add(low)
                     texts.append(s if len(s) <= STRING_CHARS else s[:STRING_CHARS - 1] + "…")
             texts = sorted(texts, key=lambda s: " " not in s)[:STRINGS_SHOWN]   # stable: messages first
         if texts:
@@ -763,7 +779,7 @@ class Walk:
         """The code with the current names: the decompiler's default names as in the first pass, and the
         first-pass names of callees renamed since, where the decompiler still says them (a rename it was
         not given or that failed), unless that old name is someone else's now."""
-        code = self.rename_in(code)
+        code = self.rename_in(code, but=f["address"])
         fs, taken = self.book.functions, None
         for c in f.get("callees") or []:
             old = self.book.renamed(fs[c]) if c in fs else ""

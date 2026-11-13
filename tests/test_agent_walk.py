@@ -450,6 +450,12 @@ def test_the_second_pass_goes_from_the_roots_down_with_the_program_and_the_calle
     assert "Imports, by library:\n- MSVCRT.DLL (1): printf" in facts
     assert "- fn_1000 — does 0x1000\n  - fn_3000 — does 0x3000\n    - fn_3100" in facts       # the tree, most below first
     assert "- fn_4000 — does 0x4000" in facts
+    # Each function once, under the one the level-by-level choice reached it through: the root's callees side by
+    # side, 0x2200 under 0x9000 (one call below the root's callee, not two under 0x2000's chain), 0x3300 once.
+    tree = facts.split("imports left out):\n", 1)[1].split("\n\n", 1)[0]
+    assert [(len(l) - len(l.lstrip())) // 2 * "." + l.split()[1] for l in tree.splitlines()] == [
+        "fn_1000", ".fn_3000", "..fn_3100", "...fn_3300", "..fn_3200", ".fn_2000", "..fn_2100", ".fn_6000",
+        "..fn_6100", ".fn_9000", "..fn_2200", ".fn_8000", "fn_4000"]
     strings = facts.split("Some of its strings:\n", 1)[1]
     assert strings.splitlines()[:2] == ['"Usage: target [/s] pattern..."', '"Adds the numbers it is given."']
     assert '"ok"' not in strings and '"%d' not in strings                   # too short to say anything
@@ -463,7 +469,8 @@ def test_the_second_pass_goes_from_the_roots_down_with_the_program_and_the_calle
                for m in revise)
     p = model.revise_prompt("0x2000")
     assert "Function FUN_00002000 at 0x2000.\n\nIt is called by:\n- fn_1000 — does 0x1000\n\nIts pseudo-code:" in p
-    assert "int fn_2000(int param_1)" in p and "fn_2100(param_1)" in p     # the current names in the code
+    assert "int FUN_00002000(int param_1)" in p and "fn_2000(" not in p.split("```c")[1].split("```")[0]
+    assert "fn_2100(param_1)" in p     # the callees under their current names, the function itself under its own
     assert "It calls:\n- fn_2100 — does 0x2100" in p
     assert p.endswith("The first reading's draft, made seeing only the functions it calls:\n- name: fn_2000\n"
                       "- summary: does 0x2000\n- confidence: high\n\nCall record_function for this function: keep "

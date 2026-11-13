@@ -91,9 +91,12 @@ REA = {
     "rename": {"tool": "set_address_name", "args": {"address": "{address}", "name": "{name}"}},
     "comment": {"tool": "set_comment", "args": {"address": "{address}", "comment": "{comment}"}},
     # Optional, for the program's summary (--revise): candidates, the first the server has and can be called
-    # with these arguments (those its schema does not name are dropped). NOT checked on a real server.
-    "strings": [{"tool": "list_strings", "args": {"limit": 400, "offset": 0}, "timeout": 300},
-                {"tool": "search_strings", "args": {"query": "", "pattern": "", "limit": 400}, "timeout": 300}],
+    # with these arguments (those its schema does not name are dropped). Checked on rea 6.9.0 (where.exe,
+    # 2026-11-13): list_strings takes no limit or offset (dropped) and gives all 153 at once, ~38 s when it is
+    # the first query (it waits for the analysis), 0.02 s after; search_strings needs a non-empty pattern
+    # (minLength 1): "." as a regex gives the same 150.
+    "strings": [{"tool": "list_strings", "args": {"limit": 400, "offset": 0}, "timeout": 900},
+                {"tool": "search_strings", "args": {"pattern": ".", "mode": "regex"}, "timeout": 900}],
 }
 
 PYGHIDRA = {
