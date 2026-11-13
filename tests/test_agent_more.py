@@ -453,7 +453,7 @@ def test_saved_options(mafdet_home):
                   "--approve", "edits", "--save"])
     agent.settings(args)
     saved = json.loads((mafdet_home / "agent.json").read_text(encoding="utf-8"))
-    assert saved == {"model": "qwen3-14b", "approve": "edits", "mcp": ["rea"], "profile": "native-static",
+    assert saved == {"provider": "", "model": "qwen3-14b", "approve": "edits", "mcp": ["rea"], "profile": "native-static",
                      "tools": "", "web": True}
 
     args = parse(["agent"])                                              # the next start, with nothing said

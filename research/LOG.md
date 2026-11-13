@@ -280,6 +280,13 @@ costs 2.4 decoding steps. To speed up the 14B, take work away from the CPU.
    - rea on Windows cannot write names or comments, and its project is temporary; `open_binary` works under
      the portable Node 22.23.5 (with Node 22.12 it fails with ESTALE). Names reach Ghidra through
      pyghidra-mcp ("Done and measured", 2026-11-12).
+   - **Models in the cloud (2026-11-13)**: `--provider qwen|qwen-cn|gemini|openrouter` (`agent/cloud.py`) drives a
+     provider's model through the same OpenAI-compatible client, with the key from the provider's environment
+     variable. Unit-tested against a fake provider (versioned base URL, `enable_thinking` vs `reasoning_effort`,
+     a refused parameter dropped and retried, Gemini's index-less tool calls and thought signatures sent back) and
+     the three endpoints answered as expected to a fake key (Google 400 "pass a valid API key", Alibaba 401,
+     OpenRouter lists its models with no key). Not yet run with a real key on a task: to try, and to see whether
+     MCP tool schemas pass Gemini's stricter schema checks.
 
 ## Done and measured
 

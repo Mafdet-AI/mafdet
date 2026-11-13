@@ -728,13 +728,15 @@ class Walk:
 
 def run(args) -> int:
     """`mafdet agent --walk <binary> --mcp <server>`."""
-    from . import engine_ctx, settings, start_engine
+    from . import remote_model, settings, start_engine
     from . import mcp
     from .model import ChatModel
     from .permissions import Permissions
     from .store import sessions_dir
 
     settings(args)
+    from .cloud import resolve
+    resolve(args)                               # a provider in the cloud: --list-models exits here
     binary = Path(args.walk).expanduser().resolve()
     if not binary.is_file():
         raise SystemExit(f"{binary} is not a file.")
@@ -755,13 +757,10 @@ def run(args) -> int:
                            log=mcp.log_path(sessions_dir(), name))
     engine = walk = None
     try:
-        if not args.ctx and not args.url:
+        if not args.ctx and not args.url and not args.provider:
             args.ctx = WALK_CTX
-        if args.url:
-            args.ctx = args.ctx or engine_ctx(args.url)
-            model = ChatModel(args.url, args.model or "default", llama=args.engine == "llama", api_key=args.api_key)
-            label_ = f"{model.model} at {args.url}"
-        else:
+        model, label_ = remote_model(args)
+        if model is None:
             engine, alias = start_engine(args)
             model = ChatModel(engine.url, alias)
             label_ = alias

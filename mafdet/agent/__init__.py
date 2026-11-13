@@ -122,7 +122,7 @@ def ask_in_terminal(tool, args: dict, why: str) -> str:
         return "n"
 
 
-SAVED = {"model": "", "approve": "ask", "mcp": [], "profile": "", "tools": "", "web": False}
+SAVED = {"provider": "", "model": "", "approve": "ask", "mcp": [], "profile": "", "tools": "", "web": False}
 
 
 def settings(args) -> dict:
@@ -133,7 +133,13 @@ def settings(args) -> dict:
     for key, default in SAVED.items():
         if getattr(args, key, None) is None:
             value = saved.get(key, default)
+            if key == "provider" and getattr(args, "url", ""):
+                value = default             # an engine named with --url is the one to use, not a saved provider
+            if key == "model" and (args.provider or "local") != (saved.get("provider") or "local"):
+                value = default             # a model saved for another provider (or the local one) is not this one's
             setattr(args, key, value if type(value) is type(default) else default)
+    if args.provider == "local":
+        args.provider = ""
     args.search_url = str(saved.get("search_url") or "")
     auto = saved.get("auto_install")
     args.auto_install = [str(a) for a in auto] if isinstance(auto, list) else []
@@ -260,6 +266,20 @@ def engine_ctx(url: str) -> int:
         return CONTEXTS[-1]
 
 
+def remote_model(args):
+    """(ChatModel, label) for a provider in the cloud (--provider, cloud.py) or an engine already running
+    (--url); (None, "") when the agent starts its own llama-server."""
+    from .cloud import resolve
+    from .model import ChatModel
+    provider = resolve(args)                # already done by run(): it only gives back the provider
+    if not args.url:
+        return None, ""
+    args.ctx = args.ctx or engine_ctx(args.url)
+    model = ChatModel(args.url, args.model or "default", llama=args.engine == "llama", api_key=args.api_key,
+                      thinking=getattr(args, "thinking", "reasoning_effort"))
+    return model, (f"{model.model} · {provider.title}" if provider else f"{model.model} at {args.url}")
+
+
 def start_engine(args):
     """llama-server for the agent, through the app's LlamaServer: one slot with the whole context."""
     from ..llama_backend import LlamaServer, pick_device
@@ -311,6 +331,8 @@ def run(args) -> int:
     from .store import sessions_dir
 
     settings(args)
+    from .cloud import resolve
+    resolve(args)                               # a provider in the cloud: --list-models exits here
     workdir = Path(args.workdir).resolve()
     if not workdir.is_dir():
         raise SystemExit(f"{workdir} is not a folder.")
@@ -327,11 +349,8 @@ def run(args) -> int:
     system = system_prompt(workdir, "\n\n".join(n for n in notes if n))
     engine = None
     try:
-        if args.url:
-            args.ctx = args.ctx or engine_ctx(args.url)
-            model = ChatModel(args.url, args.model or "default", llama=args.engine == "llama", api_key=args.api_key)
-            label = f"{model.model} at {args.url}"
-        else:
+        model, label = remote_model(args)
+        if model is None:
             engine, alias = start_engine(args)
             model = ChatModel(engine.url, alias)
             label = alias

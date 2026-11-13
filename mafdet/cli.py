@@ -476,7 +476,16 @@ def _agent_args(p):
                         "(any OpenAI-compatible server); with it, --model is the model the engine serves")
     p.add_argument("--engine", default="llama", choices=["llama", "openai"],
                    help="what is at --url: llama-server, or another OpenAI-compatible engine (default: %(default)s)")
-    p.add_argument("--api-key", default="", help="sent as a Bearer token to an engine at --url that wants one")
+    p.add_argument("--api-key", default="",
+                   help="sent as a Bearer token to an engine at --url that wants one, or to --provider (better: "
+                        "the provider's environment variable, so the key stays out of the shell's history)")
+    p.add_argument("--provider", default=None, choices=["local", "qwen", "qwen-cn", "gemini", "openrouter"],
+                   help="a model in the cloud instead of a local one: qwen (Alibaba Cloud, key in DASHSCOPE_API_KEY), "
+                        "qwen-cn (its China region), gemini (Google, GEMINI_API_KEY), openrouter (OPENROUTER_API_KEY); "
+                        "--model is then the provider's model id (--list-models shows them). The conversation, the "
+                        "files the model reads and the tools' outputs go to the provider. local: back to the local "
+                        "model when a provider was saved with --save")
+    p.add_argument("--list-models", action="store_true", help="with --provider: the models it serves, then exit")
     p.add_argument("--llama-args", default="",
                    help='extra llama-server options, with an equals sign: --llama-args="-ub 256"')
 
