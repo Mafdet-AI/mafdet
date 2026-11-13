@@ -213,6 +213,266 @@ costs 2.4 decoding steps. To speed up the 14B, take work away from the CPU.
      Left: runs of hours (`--time-limit`; rerunning the command goes on, checked after a hard kill); inside a
      cycle the peers not named yet are seen under their default names; a function with hundreds of callees
      shows 60.
+   - **IN PROGRESS, stopped 2026-11-12 18:35 with the work half done: the walk benchmark, then the second
+     pass. Resume here.** Nothing of it is committed; nothing below is in "Done and measured" yet.
+     - ***State 2026-11-14 00:15, read this first: stopped at the user's request; main merged and pushed.***
+       The user asked to stop measuring (five hours in, the PC busy) and only to merge and push. Done: the
+       stuck GitHub Desktop merge aborted, `main` fast-forwarded to `a8d68c9` (origin/main `6cbc87e` with
+       `--refine` and `--revise` and its hidden switches side by side, one of the two per run; resolution and
+       checks under `merge-try` below) and pushed. The GPU queue was killed during
+       `revise-nodraft-nocallers-nothink`. **Not run:** `nocallers`, `revise-nodraft-fromnothink` (the whole
+       pipeline without thinking), the chooser (`research/walk_choose.py`: built, tested on fakes, never run on
+       a model), thinking in the no-draft pass over the set. `walk_bench_revise-nodraft-noprog-nothink.json`
+       finished and was not read (run `walk_bench.py score` on it). **The benchmark's files are back in the
+       main tree, untracked and not pushed** (`research/walk_bench.py`, `walk_bench_keys.py`, `walk_choose.py`,
+       their tests, `research/data/walk_bench_*`: ~22 MB of results with whole books; the user decides whether
+       they go in the repo); the copies in `.claude/worktrees/bench` are the same. The GitHub Desktop stash and
+       `refs/backup/desktop-stash-20261113` hold the older versions and can be dropped. **For the user to
+       decide:** which second pass stays and under which name (measured: with the first name shown both are a
+       no-op; `--revise --revise-no-draft` gains on the judges at the leaves; `record_program` before the pass
+       is right where `--refine`'s paragraph invents suspicion), `--no-think` as the walk's default (same
+       quality, a sixth of the time), the READMEs' lines on `--refine` ("built, not yet measured": it is
+       measured now), the benchmark's commit, Defender and the tests' fake `b.exe`, `anthropic` and `keyring`
+       missing from this machine's venv. What follows is the day's record, as written while it went.
+     - ***Resumed 2026-11-13, read this first: the work moved out of the main tree.*** `origin/main` had gained
+       14 commits from the RTX 2060 desktop since 2026-11-12 19:24, among them `--walk --refine` (`8c3eb4f`), a
+       second pass built independently of `--revise` (`bcd6429`, local, never pushed). Local main was
+       fast-forwarded to `bcd6429` at 18:55 before origin was looked at; at 19:02 a pull from GitHub Desktop
+       stashed the benchmark's files (stash `!!GitHub_Desktop<main>`, pinned by
+       `refs/backup/desktop-stash-20261113`, copied to `E:\mafdet-tools\bench-backup-20261113`) and stopped on
+       conflicts in `walk.py`, `book.py`, `cli.py`. The main tree is the user's to settle. Where things are now:
+       - `.claude/worktrees/bench` (detached at `bcd6429`): **the benchmark's home**, with `research/walk_bench.py`,
+         its data and this LOG (the only copy with this block). All GPU runs go from here; results in its
+         `research/data/`. `walk_bench.py second <label> --tree <code tree> --pass-args="--revise|--refine"` runs a
+         second pass on copies of the baseline's homes.
+       - `.claude/worktrees/upstream` (detached at `origin/main` `84b6a51`): the code of `--refine`.
+       - `.claude/worktrees/merge-try`, branch `scratch-merge-revise`, head `a8d68c9` (2026-11-13 night):
+         **origin/main (`6cbc87e`) with `--refine` and every `--revise` switch measured here, side by side, one
+         of the two passes per run; the branch to take into main once the user has chosen.** Besides the textual
+         conflicts git had merged silently same-named constants and methods of the two designs
+         (`PROGRAM_SYSTEM`, `PROGRAM_DEPTH`, `CALLERS_SHOWN`, `_second_pass`, `_program`, `caller_text`, `_ask`,
+         later `call_lines`): a merge resolved on the markers alone sends `--refine`'s paragraph with
+         `--revise`'s prompt (`--refine`'s parts are renamed: `PARAGRAPH_SYSTEM`, `refine_call_lines`). Checked
+         there: the first pass's 15 request hashes; requests, `book.json` and `book.md` byte-identical to
+         origin/main's for `--refine` and to `1463527`'s for `--revise` and its switches, through both fake
+         decompilers. Suite: 358 passed, 12 failed in this venv: 6 are `test_agent_claude.py` (`anthropic`
+         and `keyring`, required by origin's `pyproject.toml`, are not installed here; with them in a scratch
+         venv 364 passed) and 6 are Windows Defender (below). The benchmark's files and this LOG block are not
+         on the branch yet; this block merges into origin's LOG with one mechanical conflict (it goes before
+         the "Phase 3" bullet).
+       - **Windows Defender, since 2026-11-13 23:53 on this machine:** the walk tests' fake `b.exe` (the bytes
+         `MZ  a fake program for the walk, b.exe`, written to the pytest temp folder) is flagged
+         `Trojan:Win32/Bearfoos.A!ml` and cannot be read back: `OSError: [Errno 22]` in `book.sha256`, 3 to 6
+         failures in `tests/test_agent_walk.py`, `test_the_first_pass_sends_byte_identical_requests` among
+         them. A false positive on a test file; the benchmark's runs (real binaries under `E:\mafdet-tools`)
+         are not touched. Nothing was changed in Defender or in the tests: the user's decision (an exclusion
+         for the pytest temp folder, or another fake binary in the tests).
+       - Checked without a GPU (2026-11-13): the first pass of `1224fc7`, `bcd6429` and `origin/main` sends
+         byte-identical HTTP bodies, so **the baseline is valid for all three trees**; both second passes run on
+         a copy of a baseline home with no first-pass request. `--refine` reads again 205 of the 354 functions
+         (where 61 of 86: those that call a function with code), `--revise` all 354; prompts for where's
+         `wmain` ~16k characters in both, all within 16k tokens.
+       - `.claude/worktrees/agent-a81c60131c7482ae5`, branch `worktree-agent-a81c60131c7482ae5`, commit `f56f9e1`
+         (on `bcd6429`, 305 passed, first-pass hashes unchanged): **the `--revise` that is measured**, fixed
+         before its first real run after reading its prompts for where.exe: the program's call tree drawn as it
+         is chosen (breadth-first, 6 levels at most; it went 12 levels down the mislabelled "UI configuration"
+         chain), the strings without import, library and section names (where: 31 real ones of 150, "Where -
+         Lists location of files" among them), a function's own code under its decompiler name (the draft's
+         name read once, in the draft). rea 6.9.0's `list_strings` checked for real: all 150 strings at once,
+         ~38 s as the first query, no `limit`/`offset`; `search_strings` needs a non-empty pattern.
+       - `walk_bench.py` (bench tree, 77 tests): a revised book scores as pass 1 and pass 2 with their paired
+         comparison (all / layers / read again / renamed), renames per depth, the second pass's cost; `second`
+         checks on every run that no first-pass request was sent; the judge's stored answers are reused for
+         unchanged names (`--judge-from`), so an unchanged name adds exactly 0 to a paired difference.
+       - Running since 19:05 from the bench tree: the noise runs (where twice), then `--no-think` over the set.
+         Then, on the GPU: `second` with `--refine` (upstream tree) and with `--revise` over the six homes, the
+         second pass's own noise (two copies of where), the ablations of whichever is ahead.
+     - *What exists (2026-11-12: in the main tree, untracked; since 2026-11-13 in the bench tree):* `research/walk_bench.py` (subcommands `run`, `score`, `book`,
+       `calibrate`, and a paired comparison of two results with a bootstrap 95% interval),
+       `research/walk_bench_keys.py`, `tests/test_walk_bench.py`, `research/data/walk_bench_set.json`,
+       `walk_bench_keys/`, `walk_bench_labels.json` (138 hand labels: where, sort, findstr),
+       `walk_bench_first_walk.json` (the first walk's book, scored), `walk_bench_baseline.json`. The set: six
+       Microsoft command-line tools copied from `C:\Windows\System32` into `E:\mafdet-tools\samples\bench`
+       (where, findstr, sort, icacls, xcopy, more.com), walked through rea without symbols; the keys are the
+       real names from their public PDBs (kept in `E:\mafdet-tools\samples\bench-pdb`). 354 functions to
+       name, 314 with a real name in the keys. The suite on the main tree: 360 passed.
+     - *Baseline, finished (Qwen3-14B IQ4_XS, thinking on, 16k, 4070 SUPER):* 354 of 354 named, 0 failed,
+       ~1 h 49 min of walks. Token F1 against the real names, as `walk_bench.py score` gives it now:
+       all 0.148 (n 314; P 0.139, R 0.173; 65% of the names share no token with the real one), leaves 0.161,
+       middle 0.159, top 0.104; program functions 0.157, runtime 0.120. The judge (the same local model:
+       same 1, related 0.5, different 0): 0.459 all, 0.406 top. Per binary F1: where 0.190, findstr 0.065,
+       sort 0.122, icacls 0.228, xcopy 0.140, more 0.127; 13.4-20.6 s a function. Against the hand labels
+       (pooled, n 138): mean F1 right / vague / wrong 0.304 / 0.092 / 0.048; the judge agrees exactly on 57%
+       (kappa 0.33); concordance F1 0.68, judge 0.78. where.exe walked twice (first walk and baseline, 81
+       functions): F1 0.212 → 0.190, judge 0.512 → 0.463, the same name given to 17 functions only, so one
+       run's noise is large: **no comparison is to be believed before the noise runs below**. These numbers
+       were read from the tool's output by the conductor, the worker that built it was stopped before its
+       report: its reading of the calibration (is F1 or the judge the score to trust?) is missing.
+     - *Noise, measured 2026-11-13 (`walk_bench_noise.json`: where.exe twice more, same configuration, 86 of 86
+       each, 0 failed):* four walks of where.exe now (first walk, baseline, r1, r2; n 81): token F1 0.212 /
+       0.190 / 0.172 / 0.181 (sd 0.017), judge 0.512 / 0.463 / 0.506 / 0.506 (sd 0.023), top layer (n 27) F1
+       0.098 / 0.141 / 0.088 / 0.127, judge 0.481 / 0.407 / 0.407 / 0.463. Between two walks 11-18 of the 81
+       functions get the same name; over the four, 5 functions have one name and 41 have four. Paired r1→r2:
+       F1 +0.009 (95% -0.028..+0.046), judge 0.000 (-0.056..+0.049). **What is noise on where.exe, one walk
+       against another: under ~0.045 F1 and ~0.06 judge overall, ~0.06 and ~0.09 in a layer; on the whole set
+       (n 314), scaled: ~0.025 F1 and ~0.035 judge, top layer (n 64) ~0.04 and ~0.08.** The bootstrap interval
+       of the F1 difference is too narrow: between walks that differ in nothing it excluded 0 in 8 of 30
+       cases (2 of 15 without the first walk, both in the top layer; the judge's 1 of 30): the names of one
+       walk are not independent (a caller's name follows its callees'). The first walk's file records no
+       configuration and its leaves score 0.333 against 0.217-0.238 in the three walks made by the tool: not
+       to be compared closely.
+     - *No thinking, measured 2026-11-13 (`walk_bench_nothink.json`, the whole set, `--no-think`):* 354 of 354
+       named, 0 failed, no retry; 2.8 s a function against 17.6 (19.5 minutes of walks against 108.5), ~105
+       completion tokens a function against ~650. **F1 0.152 against 0.148, judge 0.463 against 0.459: paired
+       +0.004 (-0.015..+0.023) and +0.005 (-0.029..+0.040), the same within the noise at a sixth of the time.**
+       By layer (F1, no thinking against thinking): leaves 0.189 / 0.161, middle 0.163 / 0.159, top 0.056 /
+       0.104 (paired -0.049, -0.089..-0.011; the judge at the top 0.398 / 0.406, no difference): possibly worse
+       at the top, about the size of the top layer's noise, not shown by the judge. Runtime functions better
+       without thinking (F1 +0.066, +0.018..+0.117). Only 49 functions got the same name with and without.
+     - *Which score to trust, from the 138 hand labels (2026-11-13):* the judge orders right / vague / wrong
+       better than token F1 (concordance 0.78 against 0.68, at every layer; the mean of the two 0.82). F1 is
+       blind to paraphrase (40% of the names labelled right score 0: `read_args` → `parse_command_line_options`)
+       and pays for generic words (`main` → `main_initialization` 0.67), and barely tells vague from wrong
+       (0.57). The judge says "related" 59% of the time, so its differences are small; it never called a right
+       name different; it reads the given name **and the namer's own summary** and is the same model: a wrong
+       name with a fluent "config" summary passes (`DoParseParam2` → `process_config_entries`: "same"), and 2
+       of 14 identical names were judged differently in two walks. **Rule used from here on: the judge first,
+       F1 as the second witness; a second pass's gain is believed when its interval excludes 0, it is larger
+       than the difference between two second passes of the same book, and at the top it shows in both.** A
+       judge that does not read the summary is being added (`rejudge --names-only`).
+     - *`--refine` (upstream, `84b6a51`), measured 2026-11-13 on copies of the baseline's six homes, thinking
+       on (`walk_bench_refine.json`):* no first-pass request sent; 205 of the 354 functions read again, 205
+       answered, 0 failed, **22 renamed (11%)**; 17.3 s a function, 59 minutes. **Pass 2 minus pass 1, paired
+       (n 314): F1 +0.003 (0.148 → 0.151), judge +0.005 (0.459 → 0.463), names-only judge +0.002; top layer
+       (n 64) F1 +0.004, judge +0.008, names-only -0.008: no gain, overall or at the top**, and an interval
+       that hugs 0 only because 93% of the differences are exactly 0. The 19 renames with a real name lean
+       better (F1 3 up, 0 down, 16 same; judge 4 up, 1 down) and are too few to say. In where.exe nothing in
+       the chain from the entry was renamed (`wmain` stays `initialize_ui_configuration`), and the paragraph
+       written after the pass repeats the first reading's mistake: "a Windows utility for file and
+       configuration management, initializing UI settings ... The program's exact purpose remains uncertain,
+       with potential for hidden functionality or malicious behavior". Two first-pass walks give the same
+       name to 11-18 of where's 81 functions, a second pass shown its first name keeps 89%: the first name
+       anchors the second reading, so this says little yet about what the callers are worth. A switch that
+       hides the draft (`--revise-no-draft`, tree `.claude/worktrees/revise-exp`) is being built to see it.
+     - *The judge without the summary (`rejudge --names-only`, 2026-11-13; 750 names in 72 s):* levels
+       lower (baseline 0.363 against 0.459 with the summary; top 0.328). Against the 138 hand labels: exact
+       0.486 (with summary 0.558), kappa 0.210 (0.306), concordance 0.759 (0.779; F1 0.683); by layer leaves
+       0.820 (0.826), middle 0.719 (0.779), top 0.752 (0.717). It never calls a vague or wrong name "same"
+       and says "different" to 10 of the 13 wrong names of the "config" family, but calls "same" only 9 of
+       the 55 right names (21 with the summary). Slightly worse overall, slightly better at the top, where
+       the summary misled: kept beside the other for the second passes. Baseline → no thinking under it:
+       all -0.016 (-0.045..+0.013), middle -0.051 (-0.098..0.000), top -0.023 (-0.086..+0.039): nothing
+       excludes 0, three weak signs (with F1 at the top) that thinking helps the callers a little.
+     - *The second pass without thinking, with and without the draft, measured 2026-11-13 (whole set, copies
+       of the baseline's homes, paired pass 2 minus pass 1, n 314):*
+       - `--refine --no-think` (`walk_bench_refine-nothink.json`): 205 read again, **5 renamed**, 3.3 s a
+         function, 11 minutes; every score +0.000.
+       - `--revise --no-think` (`f56f9e1`, `walk_bench_revise-nothink.json`): 354 read again, **0 renamed**, 2.5 s
+         a function, 14.5 minutes. **A second pass that is shown its first name gives it back: 100% without
+         thinking, 89% with (`--refine`). As built, both second passes are a no-op.**
+       - `--revise --revise-no-draft --no-think` (`e4fa67c`, branch `revise-exp`,
+         `walk_bench_revise-nodraft-nothink.json`): the first reading hidden, the function named again from its
+         code, its callers and the program's summary. 354 read again, 306 renamed, 0 failed, 2.9 s a function,
+         17 minutes. **F1 +0.009 (-0.011..+0.032; 0.148 → 0.158), judge +0.067 (+0.033..+0.102; 0.459 → 0.525),
+         names-only judge +0.040 (+0.011..+0.072; 0.363 → 0.403).** By layer, names-only judge: leaves +0.068
+         (+0.019..+0.113), middle +0.017, top +0.023 (-0.039..+0.086); runtime functions +0.074, the program's
+         own +0.029. At the top F1 -0.015 and the judge with the summary +0.086, at the size of that layer's
+         noise. Against the walk-to-walk yardstick (~0.025 F1, ~0.035 judge): a probable gain overall on both
+         judges with F1 flat, carried by the leaves and the runtime (where the callers are new evidence), not
+         shown at the top. One run: a repeat over the set is running. Part of the judge-with-summary's gain is
+         prose (it gains 0.027 more than names-only; the new summaries are written with the program in view).
+         Per binary, F1 / judge: where 0.190 → 0.180 / 0.463 → 0.444, findstr 0.065 → 0.104 / 0.472 → 0.583, sort
+         0.122 → 0.160 / 0.372 → 0.457, icacls 0.228 → 0.224 / 0.554 → 0.652, xcopy 0.140 → 0.149 / 0.468 →
+         0.575, more 0.127 → 0.115 / 0.410 → 0.487.
+       - where.exe's top in the no-draft pass: `wmain` `initialize_ui_configuration` → `process_file_search`
+         (closer, still judged different), `Where` `search_file_in_paths` → `process_file_search_2` (worse), and
+         the first pass's words survive through the callees the pass is shown (`DynArrayAppendString`
+         `add_wide_string_entry` → `add_ui_config_entry_2`). Top-down reads a caller before its callees are
+         corrected: an order made for a pass that keeps its draft. Being built on branch `revise-exp2`:
+         `--revise-bottom-up` (callees first, as the mistakes travelled) and `--revise-call-lines` (the callers
+         with the lines that call the function, as `--refine` shows them).
+       - `record_program` (before the pass, a tool call, from imports, strings and the tree; 4-5 s without
+         thinking) says what the program is for 5 of the 6 (more.exe vague: never "pager"), where.exe exactly:
+         "a command-line utility designed to locate files in the filesystem ... searches for files using
+         patterns and environment variables like PATH and PATHEXT, and displays file information such as size
+         and modification time". `--refine`'s paragraph after the pass had where.exe as "file and configuration
+         management ... potential for hidden functionality or malicious behavior".
+       - **The no-draft gain replicates** (`walk_bench_revise-nodraft-nothink-2.json`, the same run again: 305
+         renamed, 18 minutes): F1 +0.001 (-0.019..+0.024), judge +0.076 (+0.043..+0.112), names-only +0.045
+         (+0.014..+0.075); leaves +0.117 / +0.079 on the two judges, runtime +0.108 / +0.061; the judge up on
+         all six binaries. Top (n 64): F1 -0.017, judge +0.086 (+0.016..+0.164), names-only +0.047
+         (-0.008..+0.109): **not established at the top in either run** (F1 slightly down both times). The two
+         second passes against each other (the yardstick for the variants): F1 -0.008 (-0.023..+0.006), judge
+         +0.010 (-0.019..+0.037), names-only +0.005 (-0.022..+0.032); the same name given to 133 of 354
+         functions (38%). A variant must beat the full no-draft pass by ~0.02 F1 or ~0.04 on a judge overall,
+         ~0.04 and ~0.07 at the top. **So: a second reading without the draft, with the callers and the
+         program's summary, names the leaves and the runtime functions better by the judges (believed: twice,
+         both judges, F1 not against), in 17 minutes without thinking.**
+       - The program's summary, six programs: `record_program` 5 right and 1 vague, then 6 right in the
+         repeat (more.com "likely a text viewer or pager"), with no suspicion added. `--refine`'s paragraphs
+         (thinking): 4 right, 1 vague, 1 wrong on what the program is, and in 5 of 6 an invented suspicion
+         ("obfuscation", "anti-tampering", "potential for hidden functionality or malicious behavior", xcopy
+         "a modified or obfuscated version of a standard copy tool"): on Microsoft's own tools. For a tool
+         meant for security study that is the worse failure of the two.
+       - Order and call lines (branch `revise-exp2`, `1463527`; no-draft, no thinking, whole set):
+         `--revise-bottom-up` (`walk_bench_revise-nodraft-bu-nothink.json`, 293 renamed, 18.7 minutes) pass 2
+         minus pass 1: F1 +0.017 (-0.003..+0.037), judge +0.062 (+0.029..+0.096), names-only +0.025
+         (-0.005..+0.056); top F1 +0.007, judge +0.109, names-only +0.047. Against the two top-down runs: all
+         F1 +0.007 / +0.015, judge -0.005 / -0.014, names-only -0.014 / -0.019; the program's own functions F1
+         +0.022 both times (intervals just above 0, at the size of the yardstick); top F1 +0.022 / +0.025
+         (-0.013..+0.058). With `--revise-call-lines` too (`walk_bench_revise-nodraft-bu-cl-nothink.json`, 300
+         renamed): F1 +0.010, judge +0.048, names-only +0.022; against bottom-up alone judge -0.014, top judge
+         -0.039. **Neither the order nor the call lines beats the difference between two runs**; bottom-up has
+         a small F1 plus on the program's functions, the call lines nothing (where.exe's `SaveLastError` is
+         called as `FUN_1400058b4();`: the evidence is in the line before).
+       - where.exe's "ui/config" family through every variant: names holding "config" or "ui": first pass 24
+         of 81, no-draft top-down 38 and 37, bottom-up 32, with call lines 31. **The second reading spreads the
+         first pass's words; it does not remove them.** `wmain`: `initialize_ui_configuration` →
+         `process_file_search` (top-down, twice) → `search_files_with_pattern_2` (bottom-up): a search name
+         once its callees are read first, never "main". `GetResString` → `get_ui_string_resource` only with
+         the call lines (F1 0.86, the one clear win); `SaveLastError`, `SetReason`, `GetReason`, `InitGlobals`
+         stay in the family everywhere. The program's summary itself says "initializes UI configuration"
+         (from the tree's names): the run without it tells whether it is the carrier.
+       - Choosing among readings instead of making one more (no GPU, the six readings of each of the 314
+         functions with their stored verdicts: baseline, no thinking, four no-draft second passes;
+         `E:\mafdet-tools\bench-runs\scripts\choose.py`): **a perfect chooser has a lot to gain**, names-only
+         judge 0.382 for one reading → 0.444 best of 2 → 0.473 of 3 → 0.516 of 6 (judge with the summary 0.502 →
+         0.659; top layer 0.464 → 0.641; F1 0.155 → 0.236), part of it the judge's own noise. **Nothing that
+         chooses without the real name gets it**: the name closest to the others (medoid) +0.019 names-only
+         (+0.005..+0.034), what one no-draft pass gives alone; the model's own confidence -0.008 (it says which
+         functions are easy: high 0.493, medium 0.349 names-only across functions; within a function +0.040);
+         tokens by majority give fragments (`DisplayHelpUsage` → `ui`). Agreement is a weak sign of being
+         right: the same name in 5-6 of 6 readings judge 0.69 (n 27), all different 0.385 (n 48), correlation
+         ~0.2, and a consistent mistake is stable too (`InitGlobals` is `initialize_ui_config` in 5 of 6). In
+         where.exe the readings leave the "ui/config" family for 2-3 of the 7 hubs and a vote never follows
+         them: the majority is the mistake. Left to try, cheap: the model choosing among the candidates with
+         the code in front of it (`research/walk_choose.py`, being built; every pick is a name already
+         judged; ~15-20 minutes without thinking; worth building further only above ~+0.04 names-only).
+     - *The GPU queue (2026-11-13 23:37 → killed 2026-11-14 00:05 at the user's request):* `noprog` finished;
+       `nocallers` was cut; `fromnothink`, the chooser and `revise-nodraft-think` never started. Command shape,
+       to go on one day: from the repo, `PYTHONIOENCODING=utf-8`,
+       `.venv/Scripts/python research/walk_bench.py second <label> --tree <a tree with the switches> --pass-args="--revise --revise-no-draft" --walk-args="--no-think" --work E:/mafdet-tools/bench-runs/<label> --judge-from <finished results>`,
+       then `rejudge <base> <results> --names-only`. Homes kept: `E:\mafdet-toolsench-runs\<label>\<binary>-r<N>`;
+       analysis scripts in `E:\mafdet-toolsench-runs\scripts`.
+     - *The second pass is built, not merged, not run on a real model:* commit `bcd6429` on branch
+       `worktree-agent-a81c60131c7482ae5` (worktree `.claude/worktrees/agent-a81c60131c7482ae5`), 305 tests
+       pass there. `--walk ... --revise [--revise-depth N]`: first a summary of the program (one call, tool
+       `record_program`, from the file, the imports, the top of the call tree and the strings), then the
+       functions again top-down, each with the program's summary, its callers, its code with the given
+       names and its first name as a draft; the book keeps `first` and `revision` per function
+       (`Book.names(1|2)`). Hidden switches for the measure: `--revise-skip-high`, `--revise-no-program`,
+       `--revise-no-callers`. A test pins the first pass's requests byte for byte, so the baseline stays
+       valid after the merge. Not checked on real servers: the adapters' `strings` operation (rea
+       `list_strings` / `search_strings`, pyghidra `search_strings`).
+     - *To do, in this order:* (1) the noise and `--no-think` runs above; (2) merge `bcd6429` into main (it
+       touches `walk.py`, `book.py`, `backend.py`, `cli.py`, `agent/__init__.py`, `tests/agent_fake_re.py`,
+       `tests/test_agent_walk.py`; the benchmark touched none of them), full suite; (3) `walk_bench.py`
+       scores `names(1)` and `names(2)` from one book; (4) `--revise` on copies of the baseline's homes
+       (the first pass is not paid again), then each variant, with the paired comparison: keep what beats
+       the noise, look at the top layer first (0.104, where the first pass is weakest), renames per depth,
+       seconds per function, the program's summary of where.exe read by hand, the mirror through pyghidra;
+       (5) the results into "Done and measured" and both READMEs; (6) the user decides: the commit, symbols
+       on or off for pyghidra.
    - **Phase 3, MAFDET's own part.** Thinking ahead while the request is typed: **built 2026-11-12** ("Done
      and measured"), to measure on the 5070 Ti with the 14B: the 24 word problems are not an agent's tasks;
      a set of agent requests (read a file and answer, find a function in a binary, a search in a folder),
