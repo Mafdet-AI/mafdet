@@ -332,7 +332,8 @@ def run(args) -> int:
         from .walk import run as walk
         return walk(args)
     if getattr(args, "revise", False) or getattr(args, "revise_depth", None) is not None or any(
-            getattr(args, k, False) for k in ("revise_skip_high", "revise_no_program", "revise_no_callers")):
+            getattr(args, k, False) for k in ("revise_skip_high", "revise_no_program", "revise_no_callers",
+                                              "revise_no_draft", "revise_bottom_up", "revise_call_lines")):
         raise SystemExit("--revise is a second pass of a walk: --walk <binary> --mcp <server> --revise")
     from .loop import Agent
     from .permissions import Permissions

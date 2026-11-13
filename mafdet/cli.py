@@ -466,6 +466,9 @@ def _agent_args(p):
     p.add_argument("--revise-skip-high", action="store_true", help=argparse.SUPPRESS)
     p.add_argument("--revise-no-program", action="store_true", help=argparse.SUPPRESS)
     p.add_argument("--revise-no-callers", action="store_true", help=argparse.SUPPRESS)
+    p.add_argument("--revise-no-draft", action="store_true", help=argparse.SUPPRESS)
+    p.add_argument("--revise-bottom-up", action="store_true", help=argparse.SUPPRESS)
+    p.add_argument("--revise-call-lines", action="store_true", help=argparse.SUPPRESS)
     p.add_argument("--refine", action="store_true",
                    help="with --walk: once every function is named, read again from the top down those that call "
                         "others, now with their callers and the lines that call them, keeping or changing each name; "

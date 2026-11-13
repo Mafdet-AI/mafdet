@@ -42,7 +42,13 @@ what is below it (main became `validate_config_and_initialize` in where.exe, 202
      unless wrong. The book keeps the first pass's record next to the second's (`book.revise`); a
      changed name or summary is written back as in step 6. `--revise-depth`, `--revise-skip-high` and
      `--max-functions` (counted over both passes) limit it; `--revise-no-program` and
-     `--revise-no-callers` leave a piece out of its prompt, to measure what each brings.
+     `--revise-no-callers` leave a piece out of its prompt, to measure what each brings;
+     `--revise-no-draft` (an experiment) hides the first reading from it: no first name, summary or
+     confidence, and a plain request to name the function (REVISE_NODRAFT_SYSTEM), so what the callers and
+     the program bring is not hidden behind a draft kept out of inertia;
+     `--revise-bottom-up` (an experiment) goes in the first pass's order instead, callees first, so a
+     correction travels upward as the mistakes did; `--revise-call-lines` (an experiment) shows each caller
+     with up to CALL_LINES lines of its code that call the function, as upstream's --refine does.
 
 --refine and --revise are two designs of the second pass, kept side by side until measured; a run
 takes one of them.
@@ -120,6 +126,52 @@ Answer only by calling record_function, once:
 - confidence: high when the code says it plainly, medium for a reasonable reading, low for a guess.
 The callers say what the function is for; the code says what it does: do not invent what the code does not show."""
 
+# --revise-no-draft: the second pass without the first reading's name and summary of the function (the first
+# real numbers, 2026-11-13: shown its first name, a second pass kept it 9 times in 10 though two first readings
+# of where.exe agree on 11-18 names of 81). The same pieces otherwise; the callers and callees are still shown
+# under the names given so far: they are context, not this function's draft.
+REVISE_NODRAFT_SYSTEM = """You name the functions of a compiled program, one function at a time, for a reverse engineer, now that all of it has been read once.
+
+A first reading named every function from the bottom up, each one seeing only its own pseudo-code and the functions it calls, never what calls it or what the program is. Its names are mostly right at the bottom of the call tree and often wrong near the top, where a word read in one function (config, buffer, handle) travels up into the names of its callers.
+
+Now the functions come again from the top down, one at a time. You get what the program is and the functions that call this one, when they are known (the callers were read again already), its pseudo-code with the names given so far, and the functions it calls with what they do. The names of the other functions can be wrong too: trust the code over a name.
+
+Answer only by calling record_function, once:
+- name: a C identifier in snake_case that says what the function does (parse_config_header, xor_decrypt_buffer, send_beacon), not how; no address in it.
+- summary: one line: what it does, with what inputs, what it returns, what it changes.
+- comment: optional, a few lines on what is not obvious (a constant, an algorithm, a data format).
+- confidence: high when the code says it plainly, medium for a reasonable reading, low for a guess.
+The callers say what the function is for; the code says what it does: do not invent what the code does not show."""
+
+# --revise-bottom-up and --revise-call-lines change what the second pass's system prompt says of its order and of
+# its callers; built from the two above so that only those sentences differ, and checked here.
+_TOP_DOWN = {
+    REVISE_SYSTEM: "Now the functions come again from the top down, one at a time. You get what the program is and the functions that call this one, when they are known (the callers were reviewed already), its pseudo-code",
+    REVISE_NODRAFT_SYSTEM: "Now the functions come again from the top down, one at a time. You get what the program is and the functions that call this one, when they are known (the callers were read again already), its pseudo-code"}
+_BOTTOM_UP = {
+    REVISE_SYSTEM: "Now the functions come again from the bottom up, in the first reading's order, one at a time: the functions this one calls were reviewed already and appear under their reviewed names and summaries; the functions that call it were not, and appear as the first reading named them (inside a cycle, some of either). You get what the program is and the functions that call this one, when they are known, its pseudo-code",
+    REVISE_NODRAFT_SYSTEM: "Now the functions come again from the bottom up, in the first reading's order, one at a time: the functions this one calls were read again already and appear under their new names and summaries; the functions that call it were not, and appear as the first reading named them (inside a cycle, some of either). You get what the program is and the functions that call this one, when they are known, its pseudo-code"}
+_CALL_LINES = "the functions that call this one, when they are known"
+
+
+def revise_system(draft: bool = True, bottom_up: bool = False, call_lines: bool = False) -> str:
+    """The second pass's system prompt: REVISE_SYSTEM or REVISE_NODRAFT_SYSTEM as they are, or with the
+    sentences on the order (--revise-bottom-up) and on the callers' lines of code (--revise-call-lines) changed."""
+    base = REVISE_SYSTEM if draft else REVISE_NODRAFT_SYSTEM
+    text = base
+    if bottom_up:
+        assert _TOP_DOWN[base] in text
+        text = text.replace(_TOP_DOWN[base], _BOTTOM_UP[base])
+    if call_lines:
+        assert text.count(_CALL_LINES) == 1
+        text = text.replace(_CALL_LINES, "the functions that call this one, with the lines of their code that call it, when they are known")
+    return text
+
+
+for _d in (True, False):
+    for _b in (True, False):
+        revise_system(_d, _b, True)                     # every variant builds (an import fails otherwise)
+
 PROGRAM_SYSTEM = """You describe a compiled program for a reverse engineer, from what a first reading of it found.
 
 You get the file's name, the functions it imports grouped by library, the top of its call tree with the names and one-line summaries the first reading gave, and, when available, some of the strings in the binary. Each function was named seeing only the functions it calls, so the names near the top can be wrong: trust the imports and the strings over the names.
@@ -152,7 +204,7 @@ SUMMARY_CHARS = 300
 COMMENT_CHARS = 2000
 CALLEES_SHOWN = 60          # a dispatcher calling hundreds: the first ones, and a count
 REFINE_CALLERS = 8          # --refine: callers shown with their call lines
-CALL_LINES = 3              # lines of each caller's code that call the function
+CALL_LINES = 3              # lines of each caller's code that call the function (--refine, --revise-call-lines)
 CALL_LINE_CHARS = 200
 PARAGRAPH_LINES = 120       # --refine: the tree's lines the program's paragraph reads
 PARAGRAPH_DEPTH = 4
@@ -293,7 +345,8 @@ class Walk:
                  stop: threading.Event | None = None, max_functions: int = 0, time_limit: float = 0.0,
                  retry_failed: bool = False, ready_timeout: float = 1800.0, model_label: str = "",
                  poll: float = 5.0, refine: bool = False, revise: bool = False, revise_depth: int | None = None,
-                 revise_skip_high: bool = False, revise_program: bool = True, revise_callers: bool = True):
+                 revise_skip_high: bool = False, revise_program: bool = True, revise_callers: bool = True,
+                 revise_draft: bool = True, revise_bottom_up: bool = False, revise_call_lines: bool = False):
         from .permissions import Permissions
         self.book = book
         self.server = server
@@ -315,7 +368,6 @@ class Walk:
         self.model_label = model_label
         self.refine = refine
         self.sent = 0                                   # functions sent to the model in this run (--max-functions)
-        self._caller_code: dict[str, str] = {}
         self.adapter: Adapter | None = None
         self.mirror: dict[str, str] = {}                # op -> "" (written) or why not
         # The second pass and its scope; `program` and `callers` are the pieces of its prompt, each
@@ -324,6 +376,14 @@ class Walk:
         self.revise_depth = revise_depth                # None: every function the model named
         self.revise_skip_high = revise_skip_high        # leave out what the first pass named with high confidence
         self.revise_with = {"program": revise_program, "callers": revise_callers}
+        if not revise_draft:                            # recorded only when hidden: --revise's books stay as they were
+            self.revise_with["draft"] = False
+        if revise_bottom_up:                            # the same: recorded only when set
+            self.revise_with["order"] = "bottom_up"
+        if revise_call_lines:
+            self.revise_with["call_lines"] = True
+        self._first_order: list[str] = []               # the first pass's order (--revise-bottom-up)
+        self._caller_code: dict[str, str] = {}          # a caller's pseudo-code, fetched once (--refine, --revise-call-lines)
         self._callers: dict[str, list[str]] | None = None
         self._facts_counts: dict[str, int] = {}
 
@@ -367,6 +427,7 @@ class Walk:
             components = bottom_up(sorted(book.functions, key=sort_key),
                                    {a: f.get("callees") or [] for a, f in book.functions.items()})
             order = [a for comp in components for a in comp]
+            self._first_order = order
             todo = [a for a in order if book.functions[a]["status"] == "pending"
                     or self.retry_failed and book.functions[a]["status"] == "failed"]
             if self.max_functions:
@@ -554,14 +615,16 @@ class Walk:
             text += "\nIt also calls (imports, or not resolved): " + ", ".join(f["outside"][:30])
         return text
 
-    def rename_in(self, code: str) -> str:
-        """Default names in the code of functions already named -> their given names; and, after a
-        second reading renamed some, their first names (in a decompiler written back to) -> the new ones."""
+    def rename_in(self, code: str, but: str = "") -> str:
+        """Default names in the code of functions already named -> their given names (not `but`'s: in the
+        second pass a function's own code keeps its decompiler's name, as the heading says it, so the draft's
+        name is read once, in the draft, not again in the code's first line); and, after --refine renamed some,
+        their first names (in a decompiler written back to) -> the new ones."""
         book = self.book
 
         def sub(m):
             a = book.resolve(m.group(0))
-            g = book.functions.get(a) if a else None
+            g = book.functions.get(a) if a and a != but else None
             return g["name"] if g and g["status"] == "done" and g["name"] else m.group(0)
         code = DEFAULT_IN_TEXT.sub(sub, code)
         # (--refine's renames only: --revise puts its own in, callee by callee, in revise_code)
@@ -679,8 +742,8 @@ class Walk:
         if not run["stopped"] and (todo or not book.data.get("program")):
             self._paragraph(run)
 
-    def call_lines(self, caller: str, names: set[str]) -> list[str]:
-        """The lines of a caller's code that call one of `names` (its own signature left out)."""
+    def refine_call_lines(self, caller: str, names: set[str]) -> list[str]:
+        """--refine: the lines of a caller's code that call one of `names` (its own signature left out)."""
         g = self.book.functions[caller]
         code = self._caller_code.get(caller)
         if code is None:
@@ -713,7 +776,7 @@ class Walk:
         lines = []
         for c in callers[:REFINE_CALLERS]:
             lines.append("- " + self.book.line(fs[c], 300).split(" ", 1)[1])
-            lines += [f"    `{line}`" for line in self.call_lines(c, names)]
+            lines += [f"    `{line}`" for line in self.refine_call_lines(c, names)]
         if len(callers) > REFINE_CALLERS:
             lines.append(f"- … and {len(callers) - REFINE_CALLERS} more")
         return "It is called by:\n" + "\n".join(lines)
@@ -848,6 +911,10 @@ class Walk:
         run["revise"] = {"depth": self.revise_depth, "skip_high": self.revise_skip_high, **self.revise_with}
         todo = [a for a in order if fs[a]["status"] == "done" and (
             "revision" not in fs[a] or self.retry_failed and fs[a]["revision"].get("status") == "failed")]
+        bottom_up = self.revise_with.get("order") == "bottom_up"
+        if bottom_up:                                   # the first pass's order: callees first, a cycle as it was
+            rank = {a: i for i, a in enumerate(self._first_order or list(reversed(order)))}
+            todo.sort(key=lambda a: rank.get(a, len(rank)))
         scope = ""
         if self.revise_depth is not None:
             depth = book.depths(order)
@@ -862,7 +929,8 @@ class Walk:
                 scope += f", {left} of {len(todo)} in this run (--max-functions)"
             todo = todo[:left]
         reviewed = sum(1 for f in fs.values() if (f.get("revision") or {}).get("status") == "done")
-        self.say(f"\nsecond pass  {len(todo)} functions, from the roots down{scope} ({reviewed} reviewed before)")
+        self.say(f"\nsecond pass  {len(todo)} functions, " + ("from the leaves up" if bottom_up else "from the roots down")
+                 + f"{scope} ({reviewed} reviewed before)")
         if not todo:
             return
         if self.revise_with["program"] and (book.data.get("program") or {}).get("status") != "done":
@@ -922,23 +990,33 @@ class Walk:
                 if k not in reach:
                     reach[k] = book.reach(k)
             return sorted(found, key=lambda k: (-reach[k], sort_key(k)))
-        chosen, level = [], book.roots()
+        # Each function is drawn once, under the function the choice reached it through, so the drawing is as
+        # deep as the choice (PROGRAM_DEPTH levels) and a function's callees chosen at the next level sit side by
+        # side under it. Drawn depth first instead, where.exe's tree went 12 levels down one mislabelled chain,
+        # its siblings nested under whichever deep path reached them first (2026-11-13).
+        chosen, under, level = [], {}, [(a, None) for a in book.roots()]
         for depth in range(PROGRAM_DEPTH):
-            level = [a for a in dict.fromkeys(level) if a not in chosen]
-            chosen += level[:PROGRAM_FUNCTIONS - len(chosen)]
+            fresh: dict[str, str | None] = {}
+            for a, parent in level:
+                if a not in under and a not in fresh:
+                    fresh[a] = parent
+            taken = list(fresh.items())[:PROGRAM_FUNCTIONS - len(chosen)]
+            for a, parent in taken:
+                chosen.append(a)
+                under[a] = parent
             if len(chosen) >= PROGRAM_FUNCTIONS:
                 break
-            level = [k for a in level for k in kids(a)]
-        keep, tree, drawn = set(chosen), [], set()
-        stack = [(r, 0) for r in reversed([a for a in book.roots() if a in keep])]
+            level = [(k, a) for a, _ in taken for k in kids(a)]
+        below: dict[str | None, list[str]] = {}
+        for a in chosen:
+            below.setdefault(under[a], []).append(a)
+        tree = []
+        stack = [(r, 0) for r in reversed(below.get(None, []))]
         while stack:
             a, depth = stack.pop()
-            if a in drawn:
-                continue
-            drawn.add(a)
             line = self.function_line(fs[a])
             tree.append("  " * depth + (line if len(line) <= 200 else line[:199] + "…"))
-            stack += [(k, depth + 1) for k in reversed(kids(a)) if k in keep and k not in drawn]
+            stack += [(k, depth + 1) for k in reversed(below.get(a, []))]
         if tree:
             parts.append("The call tree from the top, as the first reading named it (the most below first; "
                          "imports left out):\n" + "\n".join(tree))
@@ -949,11 +1027,15 @@ class Walk:
             except Exception as e:                  # optional: the summary goes on without
                 book.data.setdefault("program", {})["strings_error"] = str(e)[:200]
                 found = []
-            seen_text = set()
+            seen_text = {n.lower() for n in listed} | {lib.lower() for lib in libraries}
             for s in found:
                 s = " ".join(s.split())
-                if len(s) >= 4 and s not in seen_text and sum(ch.isalpha() for ch in s) >= 3:
-                    seen_text.add(s)
+                low = s.lower()
+                if (low.endswith((".dll", ".drv", ".sys")) and " " not in s or s.startswith(".") and " " not in s
+                        or re.fullmatch(r"\?\w+@@\w*", s)):     # libraries, sections, decorated imports
+                    continue
+                if len(s) >= 4 and low not in seen_text and sum(ch.isalpha() for ch in s) >= 3:
+                    seen_text.add(low)
                     texts.append(s if len(s) <= STRING_CHARS else s[:STRING_CHARS - 1] + "…")
             texts = sorted(texts, key=lambda s: " " not in s)[:STRINGS_SHOWN]   # stable: messages first
         if texts:
@@ -985,16 +1067,54 @@ class Walk:
         callers = (self._callers or {}).get(f["address"]) or []
         if not callers:
             return "Nothing in the program calls it directly (an entry point, or called through a pointer or a table)."
-        lines = [self.function_line(fs[c]) for c in callers[:CALLERS_SHOWN]]
+        lines = []
+        for c in callers[:CALLERS_SHOWN]:
+            lines.append(self.function_line(fs[c]))
+            if self.revise_with.get("call_lines"):
+                lines += [f"    `{line}`" for line in self.call_lines(c, f)]
         if len(callers) > CALLERS_SHOWN:
             lines.append(f"- … and {len(callers) - CALLERS_SHOWN} more")
-        return "It is called by:\n" + "\n".join(lines)
+        head = ("It is called by (as the first reading named them: not read again yet):"
+                if self.revise_with.get("order") == "bottom_up" else "It is called by:")
+        return head + "\n" + "\n".join(lines)
+
+    def call_lines(self, caller: str, f: dict) -> list[str]:
+        """--revise-call-lines: the lines of a caller's code that call `f` (not a mention, not the caller's own
+        signature), at most CALL_LINES. Other functions under their current names; `f` under its decompiler's
+        name when the draft is hidden, else under its current name."""
+        g = self.book.functions[caller]
+        code = self._caller_code.get(caller)
+        if code is None:
+            try:
+                code = self.adapter.code(caller) if has_code(g) and self.adapter is not None else ""
+            except BackendError:
+                code = ""
+            self._caller_code[caller] = code
+        hidden = self.revise_with.get("draft", True) is False
+        names = {n for n in (f["orig"], f["name"], (f.get("first") or {}).get("name")) if n}
+        rx = re.compile(r"(?<![\w.])(?:" + "|".join(map(re.escape, sorted(names, key=len, reverse=True))) + r")(?![\w.])")
+        shown = f["orig"] if hidden else f["name"]
+        out = []
+        for line in code.replace("\r\n", "\n").splitlines():
+            m = rx.search(line)
+            if not m or not re.match(r"\s*\(", line[m.end():]):
+                continue                                    # a mention, not a call
+            if line[:1] not in (" ", "\t") and line.rstrip().endswith(")"):
+                continue                                    # the caller's own signature, at column 0
+            line = rx.sub(shown, self.rename_in(line.strip(), but=f["address"]))
+            line = line if len(line) <= CALL_LINE_CHARS else line[:CALL_LINE_CHARS - 1] + "…"
+            if line in out:                                 # the same call again (where.exe: `SaveLastError();` x3)
+                continue
+            out.append(line)
+            if len(out) >= CALL_LINES:
+                break
+        return out
 
     def revise_code(self, f: dict, code: str) -> str:
         """The code with the current names: the decompiler's default names as in the first pass, and the
         first-pass names of callees renamed since, where the decompiler still says them (a rename it was
         not given or that failed), unless that old name is someone else's now."""
-        code = self.rename_in(code)
+        code = self.rename_in(code, but=f["address"])
         fs, taken = self.book.functions, None
         for c in f.get("callees") or []:
             old = self.book.renamed(fs[c]) if c in fs else ""
@@ -1003,6 +1123,10 @@ class Walk:
             taken = self.book.taken() if taken is None else taken
             if old not in taken:
                 code = re.sub(rf"(?<![\w.]){re.escape(old)}(?![\w.])", fs[c]["name"], code)
+        if self.revise_with.get("draft", True) is False and f["name"] and f["orig"] and f["name"] != f["orig"]:
+            # The draft hidden: a decompiler written back to (pyghidra-mcp) says the function's first name in
+            # its own code; it goes back to the decompiler's, as the heading says it.
+            code = re.sub(rf"(?<![\w.]){re.escape(f['name'])}(?![\w.])", f["orig"], code)
         return code
 
     @staticmethod
@@ -1017,8 +1141,13 @@ class Walk:
         if self.revise_with["callers"]:
             head.append(self.caller_text(f))
         callee_text, draft = self.callee_text(f), self.draft_text(f)
+        # The same budget with the draft hidden (counted, not shown): the code is clipped the same way in both.
         budget = self.code_budget("\n\n".join(head) + callee_text + draft) - 600     # its system prompt is longer
         body = clip(self.revise_code(f, code).strip("\n"), max(1500, budget))
+        if self.revise_with.get("draft", True) is False:
+            return ("\n\n".join(head) + f"\n\nIts pseudo-code:\n\n```c\n{body}\n```\n\n{callee_text}\n\n"
+                    "Call record_function for this function: name it from its code, from what calls it and from "
+                    "what the program is.")
         return ("\n\n".join(head) + f"\n\nIts pseudo-code:\n\n```c\n{body}\n```\n\n{callee_text}\n\n{draft}\n\n"
                 "Call record_function for this function: keep the draft's name if it is right, change it only if "
                 "it is wrong or misleading.")
@@ -1044,7 +1173,9 @@ class Walk:
         code, why = self._code(f, r)
         if code is None:
             return end("failed" if r.get("backend_error") else "skipped", why)
-        messages = [{"role": "system", "content": REVISE_SYSTEM}, {"role": "user", "content": self.revise_prompt(f, code)}]
+        system = revise_system(self.revise_with.get("draft", True) is not False,
+                               self.revise_with.get("order") == "bottom_up", bool(self.revise_with.get("call_lines")))
+        messages = [{"role": "system", "content": system}, {"role": "user", "content": self.revise_prompt(f, code)}]
         before = (f["name"], f["summary"], f.get("comment") or "")
         record, error, steps, status = self._ask(messages, [RECORD], check, NO_CALL, r)
         if not record:
@@ -1106,7 +1237,8 @@ def run(args) -> int:
     resolve(args)                               # a provider in the cloud: --list-models exits here
     if getattr(args, "refine", False) and (getattr(args, "revise", False) or getattr(args, "revise_depth", None) is not None
                                            or any(getattr(args, k, False) for k in ("revise_skip_high", "revise_no_program",
-                                                                                    "revise_no_callers"))):
+                                                                                    "revise_no_callers", "revise_no_draft",
+                                                                                    "revise_bottom_up", "revise_call_lines"))):
         raise SystemExit("--refine and --revise are two designs of the second pass: one of them per run.")
     binary = Path(args.walk).expanduser().resolve()
     if not binary.is_file():
@@ -1143,11 +1275,15 @@ def run(args) -> int:
                     # any --revise-* option implies --revise
                     revise=bool(getattr(args, "revise", False) or getattr(args, "revise_depth", None) is not None
                                 or any(getattr(args, k, False) for k in ("revise_skip_high", "revise_no_program",
-                                                                         "revise_no_callers"))),
+                                                                         "revise_no_callers", "revise_no_draft",
+                                                                         "revise_bottom_up", "revise_call_lines"))),
                     revise_depth=getattr(args, "revise_depth", None),
                     revise_skip_high=bool(getattr(args, "revise_skip_high", False)),
                     revise_program=not getattr(args, "revise_no_program", False),
-                    revise_callers=not getattr(args, "revise_no_callers", False))
+                    revise_callers=not getattr(args, "revise_no_callers", False),
+                    revise_draft=not getattr(args, "revise_no_draft", False),
+                    revise_bottom_up=bool(getattr(args, "revise_bottom_up", False)),
+                    revise_call_lines=bool(getattr(args, "revise_call_lines", False)))
         result = walk.run(binary)
         return 0 if not result.get("stopped") or result["stopped"] in ("time limit", "interrupted", "stopped", "max functions") else 1
     finally:
