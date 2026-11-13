@@ -223,16 +223,15 @@ costs 2.4 decoding steps. To speed up the 14B, take work away from the CPU.
        `revise-nodraft-nocallers-nothink`. **Not run:** `nocallers`, `revise-nodraft-fromnothink` (the whole
        pipeline without thinking), the chooser (`research/walk_choose.py`: built, tested on fakes, never run on
        a model), thinking in the no-draft pass over the set. `walk_bench_revise-nodraft-noprog-nothink.json`
-       finished and was not read (run `walk_bench.py score` on it). **The benchmark's files are back in the
-       main tree, untracked and not pushed** (`research/walk_bench.py`, `walk_bench_keys.py`, `walk_choose.py`,
-       their tests, `research/data/walk_bench_*`: ~22 MB of results with whole books; the user decides whether
-       they go in the repo); the copies in `.claude/worktrees/bench` are the same. The GitHub Desktop stash and
-       `refs/backup/desktop-stash-20261113` hold the older versions and can be dropped. **For the user to
+       finished and was not read (run `walk_bench.py score` on it). **The benchmark's files were committed and pushed on 2026-11-14 at the user's word** (`ed7f31f`:
+       `research/walk_bench.py`, `walk_bench_keys.py`, `walk_choose.py`, their tests, `research/data/walk_bench_*`,
+       ~20 MB of results with whole books, ~2 MB packed); `.claude/` is ignored; the GitHub Desktop stash of
+       their older versions was dropped (`refs/backup/desktop-stash-20261113` still points at it). **For the user to
        decide:** which second pass stays and under which name (measured: with the first name shown both are a
        no-op; `--revise --revise-no-draft` gains on the judges at the leaves; `record_program` before the pass
        is right where `--refine`'s paragraph invents suspicion), `--no-think` as the walk's default (same
        quality, a sixth of the time), the READMEs' lines on `--refine` ("built, not yet measured": it is
-       measured now), the benchmark's commit, Defender and the tests' fake `b.exe`, `anthropic` and `keyring`
+       measured now), Defender and the tests' fake `b.exe`, `anthropic` and `keyring`
        missing from this machine's venv. What follows is the day's record, as written while it went.
      - ***Resumed 2026-11-13, read this first: the work moved out of the main tree.*** `origin/main` had gained
        14 commits from the RTX 2060 desktop since 2026-11-12 19:24, among them `--walk --refine` (`8c3eb4f`), a
