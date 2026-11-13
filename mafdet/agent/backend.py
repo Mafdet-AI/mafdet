@@ -1,5 +1,8 @@
 """A decompiler's MCP server as the five operations the walk needs (`walk.py`): list the functions,
-the callees of one, its pseudo-code, and, when the server can, rename it and comment it.
+the callees of one, its pseudo-code, and, when the server can, rename it and comment it; and one
+optional operation for the second pass (--revise): the binary's strings, for the program's summary.
+An optional operation may be given as a list of candidates: the first tool the server lists that its
+schema lets us call is taken (`Adapter._candidate`).
 
 Each server spells them differently, so a server is described as data: for each operation, the
 tool, its arguments (templates: "{address}", "{name}", "{comment}", "{path}", "{basename}",
@@ -87,6 +90,10 @@ REA = {
     "code": {"tool": "procedure_pseudo_code", "args": {"procedure": "{address}"}, "timeout": 600},
     "rename": {"tool": "set_address_name", "args": {"address": "{address}", "name": "{name}"}},
     "comment": {"tool": "set_comment", "args": {"address": "{address}", "comment": "{comment}"}},
+    # Optional, for the program's summary (--revise): candidates, the first the server has and can be called
+    # with these arguments (those its schema does not name are dropped). NOT checked on a real server.
+    "strings": [{"tool": "list_strings", "args": {"limit": 400, "offset": 0}, "timeout": 300},
+                {"tool": "search_strings", "args": {"query": "", "pattern": "", "limit": 400}, "timeout": 300}],
 }
 
 PYGHIDRA = {
@@ -111,11 +118,14 @@ PYGHIDRA = {
     "comment": {"tool": "set_comment", "args": {"binary_name": "{binary}", "target": "{address}",
                                                 "comment": "{comment}", "comment_type": "plate"}},
     "save": {"tool": "save", "args": {}, "timeout": 600},
+    # As rea's: from pyghidra-mcp's documentation, NOT checked on a real server (what an empty query returns).
+    "strings": [{"tool": "search_strings", "args": {"binary_name": "{binary}", "query": "", "limit": 400},
+                 "timeout": 300}],
 }
 
 TABLES = (REA, PYGHIDRA)
 NEEDED = ("list", "callees", "code")
-OPTIONAL = ("open", "rename", "comment")
+OPTIONAL = ("open", "rename", "comment", "strings")
 
 
 class BackendError(RuntimeError):
@@ -269,6 +279,28 @@ def refs(data) -> list[str]:
     return [x for x in out if x]
 
 
+STRING_KEYS = ("value", "string", "text", "content", "str", "data")
+
+
+def strings(data) -> list[str]:
+    """String literals of a listing, whatever its shape: a list of strings, of {value|string|text, address},
+    an object holding such a list, or plain lines."""
+    if isinstance(data, dict):
+        for key in ("strings", "items", "results", "matches", "data"):
+            if isinstance(data.get(key), list):
+                data = data[key]
+                break
+    if isinstance(data, str):
+        data = data.splitlines()
+    out = []
+    for item in data if isinstance(data, list) else []:
+        if isinstance(item, dict):
+            item = _first(item, STRING_KEYS)
+        if isinstance(item, str) and item.strip():
+            out.append(item.strip())
+    return out
+
+
 def text(data) -> str:
     if data is None:
         return ""
@@ -298,9 +330,10 @@ class Adapter:
 
     def __init__(self, server, table: dict, specs: list[dict], binary: Path):
         self.server = server
-        self.table = table
         self.name = table["name"]
         self.specs = {s.get("name"): s for s in specs if isinstance(s, dict)}
+        self.table = {op: self._candidate(spec) if isinstance(spec, list) else spec for op, spec in table.items()}
+        self.table = {op: spec for op, spec in self.table.items() if spec is not None}
         self.vars = {"path": str(binary), "basename": binary.name, "binary": binary.name, "sha1_6": ""}
         if "{sha1_6}" in json.dumps(table) and binary.is_file():
             h = hashlib.sha1()
@@ -319,6 +352,20 @@ class Adapter:
             wanted = "; ".join(f"{t['name']}: " + ", ".join(t[op]["tool"] for op in NEEDED) for t in TABLES)
             raise BackendError(f"the server {server.name} has none of the tool sets the walk knows ({wanted})")
         return cls(server, table, specs, Path(binary).resolve())
+
+    def _candidate(self, specs: list[dict]) -> dict | None:
+        """An optional operation given as candidates: the first tool the server lists whose required
+        arguments the template gives, with the arguments its schema does not name dropped."""
+        for spec in specs:
+            tool = self.specs.get(spec["tool"])
+            if tool is None:
+                continue
+            schema = tool.get("inputSchema") if isinstance(tool.get("inputSchema"), dict) else {}
+            props = schema.get("properties") if isinstance(schema.get("properties"), dict) else {}
+            args = {k: v for k, v in spec["args"].items() if not props or k in props}
+            if all(r in args for r in schema.get("required") or []):
+                return {**spec, "args": args}
+        return None
 
     def has(self, op: str) -> bool:
         return op in self.table and self.table[op]["tool"] in self.specs and self.table[op]["tool"] not in self.unavailable
@@ -450,6 +497,10 @@ class Adapter:
 
     def code(self, address: str) -> str:
         return text(self.call("code", address=address))
+
+    def strings(self) -> list[str]:
+        """The binary's string literals, when the server lists them (optional: [] when it cannot)."""
+        return strings(self.call("strings")) if self.has("strings") else []
 
     def write(self, op: str, **values) -> str:
         """rename / comment: "" when done, else why not. Never raises."""

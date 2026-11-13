@@ -8,6 +8,12 @@ of sessions, in ~/.mafdet/binaries/<first 16 hex digits of the file's sha256>/:
                 file and a rename, after every function: a kill loses at most the function in flight.
     book.md     the same for a person, regenerated from it: the functions from the roots down.
 
+The second pass (`--revise`) adds, per function it reviewed, `first` (the first pass's name, summary,
+comment and confidence, kept as they were) and `revision` (status done / failed / skipped, `renamed`,
+what it cost, what it wrote back, which pieces its prompt had); a function without `revision` has not
+been reviewed yet, which is what a rerun goes on from. The program's summary is `program` at the top.
+A book from before the second pass has none of these and loads as it is.
+
 The walk (`walk.py`) fills it; an interactive session reads it with the `book` tool.
 """
 from __future__ import annotations
@@ -15,7 +21,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import time
+from collections import deque
 from pathlib import Path
 
 from .backend import addr_int, default_address
@@ -204,6 +212,59 @@ class Book:
         self.by_name.setdefault(f["name"], address)
         return f["name"]
 
+    def revise(self, address: str, name: str, summary: str, comment: str, confidence: str, **info) -> bool:
+        """The second pass's answer for a function the first named. The first pass's record stays in
+        `first`; `revision` says what the second did. A name given back with the suffix taken off
+        (parse_input for parse_input_2) is the same name. Returns whether the name changed."""
+        f = self.functions[address]
+        f.setdefault("first", {k: f.get(k) or "" for k in ("name", "summary", "comment", "confidence")})
+        before = f["name"]
+        new = self.unique(name, address)
+        if new != before and re.fullmatch(re.escape(name) + r"_\d+", before or ""):
+            new = before
+        renamed = new != before
+        f.update(name=new, summary=summary, comment=comment, confidence=confidence, updated=now())
+        f["revision"] = {"status": "done", "renamed": renamed, "name": new, "summary": summary, "comment": comment,
+                         "confidence": confidence, "reason": "", **info, "updated": now()}
+        self.by_name[new] = address                     # a name freed by a rename may be someone's now
+        return renamed
+
+    def names(self, which: int = 2) -> dict[str, str]:
+        """address -> the name the model gave, after the first pass (1) or after the second (2: a function
+        the second pass did not reach keeps the first's), for scoring one book's two passes."""
+        out = {}
+        for a, f in self.functions.items():
+            if f["status"] == "done" and f.get("name"):
+                out[a] = (f.get("first") or {}).get("name") or f["name"] if which == 1 else f["name"]
+        return out
+
+    @staticmethod
+    def renamed(f: dict) -> str:
+        """The first pass's name of a function the second pass renamed, else ""."""
+        rev = f.get("revision") or {}
+        return (f.get("first") or {}).get("name", "") if rev.get("status") == "done" and rev.get("renamed") else ""
+
+    def depths(self, order: list[str] | None = None) -> dict[str, int]:
+        """How many calls below a root each function is (roots 0). A cycle nobody else calls starts at its
+        first member in `order` (the walk's top-down order), else at its lowest address."""
+        fs, depth = self.functions, {}
+
+        def spread(seeds):
+            queue = deque(seeds)
+            for s in seeds:
+                depth[s] = 0
+            while queue:
+                a = queue.popleft()
+                for c in fs[a].get("callees") or []:
+                    if c in fs and c not in depth:
+                        depth[c] = depth[a] + 1
+                        queue.append(c)
+        spread(self.roots())
+        for a in order or sorted(fs, key=sort_key):
+            if a in fs and a not in depth and has_code(fs[a]):
+                spread([a])
+        return depth
+
     def counts(self) -> dict:
         out = {s: 0 for s in STATUSES}
         for f in self.functions.values():
@@ -225,7 +286,9 @@ class Book:
                                     "skipped": f"skipped ({f.get('reason')})"}.get(f["status"], "")
         was = f" (was {f['orig']})" if f.get("name") and f["orig"] and f["orig"] != f["name"] else ""
         first = (f.get("first") or {}).get("name")
-        if first and first != f.get("name"):
+        if self.renamed(f):                         # --revise
+            was = was[:-1] + f"; first named {self.renamed(f)})" if was else f" (first named {self.renamed(f)})"
+        elif first and first != f.get("name") and not f.get("revision"):     # --refine
             was = was[:-1] + f", first read as {first})" if was else f" (first read as {first})"
         text = f"{f['address']} {label(f)}{was} — {what}"
         return text if len(text) <= chars else text[:chars - 1] + "…"
@@ -258,13 +321,18 @@ class Book:
                f"- path: `{info.get('path', '')}`", f"- sha256: `{info.get('sha256', '')}`",
                f"- backend: {self.data['backend'].get('server', '?')} ({self.data['backend'].get('adapter', '?')})",
                f"- updated: {self.data.get('updated', '')}",
-               f"- functions: {len(fs)}: " + ", ".join(f"{n} {s}" for s, n in c.items() if n), ""]
+               f"- functions: {len(fs)}: " + ", ".join(f"{n} {s}" for s, n in c.items() if n)]
+        revised = [f for f in fs.values() if (f.get("revision") or {}).get("status") == "done"]
+        if revised:
+            out.append(f"- second pass (from the roots down): {len(revised)} of {c['done']} reviewed, "
+                       f"{sum(1 for f in revised if self.renamed(f))} renamed (shown as `first name → new name`)")
         program = self.data.get("program") or {}
         if program.get("summary"):
-            out += ["## The program", "", program["summary"], "",
-                    f"*Written by {program.get('model') or 'the model'} from the names and summaries below, "
-                    "which can be wrong.*", ""]
-        out += ["## From the roots down", "",
+            out += ["", "## The program", "", program["summary"]]
+            if "status" not in program:             # --refine's paragraph, written after its pass
+                out += ["", f"*Written by {program.get('model') or 'the model'} from the names and summaries "
+                            "below, which can be wrong.*"]
+        out += ["", "## From the roots down", "",
                "Each function once, the callees with the most below them first; later calls to it say *(above)*. "
                "The `calls:` line under a function names all it calls; imports and other named functions with "
                "nothing below them are only there.", ""]
@@ -289,6 +357,8 @@ class Book:
                     continue
                 seen.add(a)
                 name = f"**{label(f)}**" if f["status"] == "done" else label(f)
+                if self.renamed(f):
+                    name = f"{self.renamed(f)} → {name}"
                 rest = self.line(f, 400).split(" — ", 1)[1]
                 conf = f" [{f['confidence']}]" if f.get("confidence") else ""
                 out.append(f"{pad}- {name} `{a}`{conf} — {rest}")
@@ -327,11 +397,12 @@ class Book:
         for a in sorted(fs, key=sort_key):
             f = fs[a]
             cell = (f.get("summary") or "").replace("|", "\\|")
+            name = f"{self.renamed(f)} → {label(f)}" if self.renamed(f) else label(f)
             was = f["orig"] if f.get("name") else ""
             first = (f.get("first") or {}).get("name")
-            if first and first != f.get("name"):
+            if first and first != f.get("name") and not f.get("revision"):
                 was += f", first read as {first}"
-            out.append(f"| `{a}` | {label(f)} | {was} | {f['status']} | {cell} |")
+            out.append(f"| `{a}` | {name} | {was} | {f['status']} | {cell} |")
         return "\n".join(out) + "\n"
 
     # ------------------------------------------------------------ for the model of a session

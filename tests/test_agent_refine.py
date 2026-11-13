@@ -4,7 +4,7 @@ import json
 import re
 
 from mafdet.agent.model import Reply
-from mafdet.agent.walk import PROGRAM_SYSTEM, REFINE_SYSTEM, WALK_SYSTEM
+from mafdet.agent.walk import PARAGRAPH_SYSTEM, REFINE_SYSTEM, WALK_SYSTEM
 
 from test_agent_walk import ANALYSED, calls_logged, good, walk_on
 
@@ -23,7 +23,7 @@ class Reader:
 
     def chat(self, messages, tools=None, should_stop=None, **kw):
         system, user = messages[0]["content"], messages[1]["content"]
-        if system == PROGRAM_SYSTEM:
+        if system == PARAGRAPH_SYSTEM:
             self.program.append(user)
             return Reply(content="<think>x</think>A small test program that prints a number.",
                          prompt_tokens=300, completion_tokens=40)
