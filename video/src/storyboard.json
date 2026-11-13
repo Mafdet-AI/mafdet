@@ -1,0 +1,17 @@
+[
+  {"id": "S01", "file": "S01_Hook", "component": "S01_Hook", "fromBeat": 0, "toBeat": 4, "block": "A"},
+  {"id": "S02", "file": "S02_WhatItIs", "component": "S02_WhatItIs", "fromBeat": 4, "toBeat": 12, "block": "A"},
+  {"id": "S03", "file": "S03_Command", "component": "S03_Command", "fromBeat": 12, "toBeat": 16, "block": "A"},
+  {"id": "S04", "file": "S04_Drop", "component": "S04_Drop", "fromBeat": 16, "toBeat": 20, "block": "A"},
+  {"id": "S05", "file": "S05_Flow", "component": "S05_Flow", "fromBeat": 20, "toBeat": 32, "block": "A"},
+  {"id": "S06", "file": "S06_LoopCode", "component": "S06_LoopCode", "fromBeat": 32, "toBeat": 36, "block": "A"},
+  {"id": "S07", "file": "S07_SelfCorrect", "component": "S07_SelfCorrect", "fromBeat": 36, "toBeat": 40, "block": "A"},
+  {"id": "S08", "file": "S08_ThinkAhead", "component": "S08_ThinkAhead", "fromBeat": 40, "toBeat": 48, "block": "A"},
+  {"id": "S09", "file": "S09_Numbers", "component": "S09_Numbers", "fromBeat": 48, "toBeat": 52, "block": "B"},
+  {"id": "S10", "file": "S10_Approvals", "component": "S10_Approvals", "fromBeat": 52, "toBeat": 60, "block": "B"},
+  {"id": "S11", "file": "S11_Context", "component": "S11_Context", "fromBeat": 60, "toBeat": 64, "block": "B"},
+  {"id": "S12", "file": "S12_McpTools", "component": "S12_McpTools", "fromBeat": 64, "toBeat": 72, "block": "B"},
+  {"id": "S13", "file": "S13_Walk", "component": "S13_Walk", "fromBeat": 72, "toBeat": 78, "block": "B"},
+  {"id": "S14", "file": "S14_Recap", "component": "S14_Recap", "fromBeat": 78, "toBeat": 80, "block": "B"},
+  {"id": "S15", "file": "S15_Outro", "component": "S15_Outro", "fromBeat": 80, "toBeat": 88, "block": "B"}
+]

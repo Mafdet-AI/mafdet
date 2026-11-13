@@ -17,3 +17,10 @@ training/mafdet-gatherer/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# The phonk edit (video/): dependencies, renders, and the music, which is not ours to publish
+video/node_modules/
+video/.venv-audio/
+video/public/audio/
+assets/music/
+out/
