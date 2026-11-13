@@ -17,8 +17,11 @@ export type Beats = {
   energy: number[];            // one value per video frame, 0..1 (smoothed RMS), length durationInFrames
 };
 
-/** The look: black, white, one accent. Nothing else, except the red/cyan of a glitch split. */
-export const COLORS = {black: "#050505", white: "#F5F5F5", accent: "#E10600", dim: "#8A8A8A", line: "#2A2A2A"} as const;
+/** The look: MAFDET agent's own colours (mafdet/tui/fx.py, mafdet/identity.py), an amber phosphor screen.
+ * black the screen, white the wordmark's paper, accent the brand's amber; hot, text and soft the phosphor's
+ * ramp; alarm only for the split of a glitch (and a diff's removed line, as in the agent). */
+export const COLORS = {black: "#050302", white: "#EEEAE2", accent: "#D4892A", dim: "#A8742F", line: "#4A3312",
+  hot: "#FFC46B", text: "#F2CB8E", soft: "#D9AE6E", alarm: "#F0603A"} as const;
 export const SIZE = {width: 1080, height: 1920} as const;
 /** Keep text inside this box: TikTok's interface covers the rest on a phone. */
 export const SAFE = {top: 220, bottom: 420, side: 70} as const;

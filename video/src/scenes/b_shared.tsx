@@ -44,7 +44,7 @@ export const Caption: React.FC<{
   until?: number;
   size?: number;
   color?: string;
-}> = ({text, top, from = 0, until = Infinity, size = 30, color = "#B5B5B5"}) => {
+}> = ({text, top, from = 0, until = Infinity, size = 30, color = COLORS.soft}) => {
   const frame = useCurrentFrame();
   if (frame < from || frame >= until) return null;
   const lines = Array.isArray(text) ? text : [text];
@@ -100,7 +100,8 @@ export const Shake: React.FC<{hits: {at: number; k?: number}[]; children: React.
     <>
       {levels.reduce<React.ReactNode>(
         (inner, k) => (
-          <ShakeOnBeat hits={hits.filter((h) => (h.k ?? 1) === k).map((h) => h.at)} strength={14 * k} zoom={0.06 * k}>
+          <ShakeOnBeat hits={hits.filter((h) => (h.k ?? 1) === k).map((h) => h.at)} strength={k > 1 ? 14 * k : 6 * k}
+                       zoom={k > 1 ? 0.05 * k : 0.025 * k}>
             {inner}
           </ShakeOnBeat>
         ),

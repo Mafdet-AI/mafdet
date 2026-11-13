@@ -1,7 +1,7 @@
 // S01, beats 0-4: the question, one phrase per beat.
 import React from "react";
 import {AbsoluteFill} from "remotion";
-import {FlashCut, GlitchTransition} from "../components";
+import {GlitchTransition} from "../components";
 import {COLORS} from "../contracts";
 import {Punch, Shake} from "./a_shared";
 import {sceneTiming} from "./sceneTiming";
@@ -21,6 +21,5 @@ export const S01_Hook: React.FC = () => (
         </Shake>
       </AbsoluteFill>
     </GlitchTransition>
-    <FlashCut at={T.at(0) + 1} />
   </AbsoluteFill>
 );

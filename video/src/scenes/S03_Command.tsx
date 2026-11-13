@@ -1,7 +1,7 @@
 // S03, beats 12-16: one command, the screen emptying with the bass, then the pickup into the drop.
 import React from "react";
 import {AbsoluteFill} from "remotion";
-import {CodeReveal, FlashCut, GlitchTransition} from "../components";
+import {CodeReveal, GlitchTransition} from "../components";
 import {COLORS} from "../contracts";
 import {Punch, Shake, ZONE, Zoom} from "./a_shared";
 import {sceneTiming} from "./sceneTiming";
@@ -33,6 +33,5 @@ export const S03_Command: React.FC = () => (
         </Shake>
       </AbsoluteFill>
     </GlitchTransition>
-    <FlashCut at={T.at(15)} />
   </AbsoluteFill>
 );

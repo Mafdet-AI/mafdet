@@ -1,7 +1,7 @@
 // S11, beats 60-64: the context that fits, one number per beat.
 import React from "react";
 import {AbsoluteFill} from "remotion";
-import {FlashCut, PunchText} from "../components";
+import {PunchText} from "../components";
 import {COLORS} from "../contracts";
 import {Caption, Hold, Shake, Y, fitSize, lineTop} from "./b_shared";
 import {sceneTiming} from "./sceneTiming";
@@ -49,8 +49,6 @@ export const S11_Context: React.FC = () => {
         />
         <Figure text="NOTES STAY" size={300} caption="notes and the to-do list are never left out" at={b63} until={T.frames} />
       </Shake>
-      <FlashCut at={b60} frames={2} />
-      <FlashCut at={b62} frames={1} />
     </AbsoluteFill>
   );
 };

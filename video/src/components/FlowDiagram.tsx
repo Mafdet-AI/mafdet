@@ -101,7 +101,7 @@ export const FlowDiagram: React.FC<FlowDiagramProps> = ({nodes, appear, loopBack
         const flash = isActive && frame === activeSince; // one white frame on the hit, then the accent
         const fill = flash ? COLORS.white : isActive ? COLORS.accent : "transparent";
         const edge = flash ? COLORS.white : isActive ? COLORS.accent : COLORS.white;
-        const ink = flash ? COLORS.black : COLORS.white;
+        const ink = flash || isActive ? COLORS.black : COLORS.white; // black on the amber, as the agent's own highlights
         const label = node.label.toUpperCase();
         const labelSize = Math.min(node.note ? 58 : 68, (nodeW - 150) / Math.max(1, label.length * 0.48));
 
@@ -167,7 +167,7 @@ export const FlowDiagram: React.FC<FlowDiagramProps> = ({nodes, appear, loopBack
                     fontSize: 27,
                     lineHeight: 1.3,
                     marginTop: 2,
-                    color: flash ? COLORS.black : isActive ? COLORS.white : "#B0B0B0",
+                    color: flash ? COLORS.black : isActive ? COLORS.black : COLORS.soft,
                     whiteSpace: "pre",
                   }}
                 >
@@ -185,7 +185,7 @@ export const FlowDiagram: React.FC<FlowDiagramProps> = ({nodes, appear, loopBack
                   fontFamily: MONO,
                   fontWeight: 800,
                   fontSize: 26,
-                  color: flash ? COLORS.black : isActive ? COLORS.white : COLORS.dim,
+                  color: flash ? COLORS.black : isActive ? COLORS.black : COLORS.dim,
                 }}
               >
                 {String(i + 1).padStart(2, "0")}

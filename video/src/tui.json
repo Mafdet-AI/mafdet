@@ -1,0 +1,1526 @@
+{
+ "size": {
+  "columns": 100,
+  "lines": 58
+ },
+ "clips": {
+  "banner": {
+   "frames": [
+    {
+     "file": "tui/banner/0000.png",
+     "t": 0.016,
+     "kitten": 6
+    },
+    {
+     "file": "tui/banner/0001.png",
+     "t": 0.125,
+     "kitten": 6
+    },
+    {
+     "file": "tui/banner/0002.png",
+     "t": 0.234,
+     "kitten": 7
+    },
+    {
+     "file": "tui/banner/0003.png",
+     "t": 0.344,
+     "kitten": 8
+    },
+    {
+     "file": "tui/banner/0004.png",
+     "t": 0.437,
+     "kitten": 9
+    },
+    {
+     "file": "tui/banner/0005.png",
+     "t": 0.531,
+     "kitten": 10
+    },
+    {
+     "file": "tui/banner/0006.png",
+     "t": 0.625,
+     "kitten": 10
+    },
+    {
+     "file": "tui/banner/0007.png",
+     "t": 0.734,
+     "kitten": 11
+    },
+    {
+     "file": "tui/banner/0008.png",
+     "t": 0.859,
+     "kitten": 12
+    },
+    {
+     "file": "tui/banner/0009.png",
+     "t": 0.969,
+     "kitten": 13
+    },
+    {
+     "file": "tui/banner/0010.png",
+     "t": 1.078,
+     "kitten": 14
+    },
+    {
+     "file": "tui/banner/0011.png",
+     "t": 1.172,
+     "kitten": 15
+    },
+    {
+     "file": "tui/banner/0012.png",
+     "t": 1.266,
+     "kitten": 16
+    },
+    {
+     "file": "tui/banner/0013.png",
+     "t": 1.375,
+     "kitten": 16
+    },
+    {
+     "file": "tui/banner/0014.png",
+     "t": 1.484,
+     "kitten": 17
+    },
+    {
+     "file": "tui/banner/0015.png",
+     "t": 1.578,
+     "kitten": 18
+    },
+    {
+     "file": "tui/banner/0016.png",
+     "t": 1.687,
+     "kitten": 19
+    },
+    {
+     "file": "tui/banner/0017.png",
+     "t": 1.781,
+     "kitten": 20
+    },
+    {
+     "file": "tui/banner/0018.png",
+     "t": 1.875,
+     "kitten": 20
+    },
+    {
+     "file": "tui/banner/0019.png",
+     "t": 1.984,
+     "kitten": 21
+    },
+    {
+     "file": "tui/banner/0020.png",
+     "t": 2.109,
+     "kitten": 22
+    },
+    {
+     "file": "tui/banner/0021.png",
+     "t": 2.234,
+     "kitten": 23
+    },
+    {
+     "file": "tui/banner/0022.png",
+     "t": 2.359,
+     "kitten": 24
+    },
+    {
+     "file": "tui/banner/0023.png",
+     "t": 2.484,
+     "kitten": 25
+    },
+    {
+     "file": "tui/banner/0024.png",
+     "t": 2.578,
+     "kitten": 26
+    },
+    {
+     "file": "tui/banner/0025.png",
+     "t": 2.687,
+     "kitten": 27
+    },
+    {
+     "file": "tui/banner/0026.png",
+     "t": 2.781,
+     "kitten": 28
+    },
+    {
+     "file": "tui/banner/0027.png",
+     "t": 2.875,
+     "kitten": 28
+    },
+    {
+     "file": "tui/banner/0028.png",
+     "t": 2.984,
+     "kitten": 29
+    },
+    {
+     "file": "tui/banner/0029.png",
+     "t": 3.109,
+     "kitten": 30
+    },
+    {
+     "file": "tui/banner/0030.png",
+     "t": 3.234,
+     "kitten": 31
+    },
+    {
+     "file": "tui/banner/0031.png",
+     "t": 3.359,
+     "kitten": 32
+    },
+    {
+     "file": "tui/banner/0032.png",
+     "t": 3.484,
+     "kitten": 33
+    },
+    {
+     "file": "tui/banner/0033.png",
+     "t": 3.578,
+     "kitten": 34
+    },
+    {
+     "file": "tui/banner/0034.png",
+     "t": 3.672,
+     "kitten": 35
+    },
+    {
+     "file": "tui/banner/0035.png",
+     "t": 3.766,
+     "kitten": 36
+    },
+    {
+     "file": "tui/banner/0036.png",
+     "t": 3.875,
+     "kitten": 36
+    },
+    {
+     "file": "tui/banner/0037.png",
+     "t": 3.984,
+     "kitten": 37
+    },
+    {
+     "file": "tui/banner/0038.png",
+     "t": 4.094,
+     "kitten": 38
+    },
+    {
+     "file": "tui/banner/0039.png",
+     "t": 4.219,
+     "kitten": 39
+    },
+    {
+     "file": "tui/banner/0040.png",
+     "t": 4.328,
+     "kitten": 40
+    },
+    {
+     "file": "tui/banner/0041.png",
+     "t": 4.422,
+     "kitten": 41
+    },
+    {
+     "file": "tui/banner/0042.png",
+     "t": 4.516,
+     "kitten": 42
+    },
+    {
+     "file": "tui/banner/0043.png",
+     "t": 4.625,
+     "kitten": 42
+    },
+    {
+     "file": "tui/banner/0044.png",
+     "t": 4.734,
+     "kitten": 43
+    },
+    {
+     "file": "tui/banner/0045.png",
+     "t": 4.844,
+     "kitten": 44
+    },
+    {
+     "file": "tui/banner/0046.png",
+     "t": 4.937,
+     "kitten": 45
+    },
+    {
+     "file": "tui/banner/0047.png",
+     "t": 5.031,
+     "kitten": 46
+    },
+    {
+     "file": "tui/banner/0048.png",
+     "t": 5.125,
+     "kitten": 46
+    },
+    {
+     "file": "tui/banner/0049.png",
+     "t": 5.25,
+     "kitten": 47
+    },
+    {
+     "file": "tui/banner/0050.png",
+     "t": 5.359,
+     "kitten": 48
+    },
+    {
+     "file": "tui/banner/0051.png",
+     "t": 5.469,
+     "kitten": 49
+    },
+    {
+     "file": "tui/banner/0052.png",
+     "t": 5.578,
+     "kitten": 50
+    },
+    {
+     "file": "tui/banner/0053.png",
+     "t": 5.672,
+     "kitten": 51
+    },
+    {
+     "file": "tui/banner/0054.png",
+     "t": 5.766,
+     "kitten": 52
+    },
+    {
+     "file": "tui/banner/0055.png",
+     "t": 5.875,
+     "kitten": 52
+    },
+    {
+     "file": "tui/banner/0056.png",
+     "t": 5.984,
+     "kitten": 53
+    },
+    {
+     "file": "tui/banner/0057.png",
+     "t": 6.109,
+     "kitten": 54
+    },
+    {
+     "file": "tui/banner/0058.png",
+     "t": 6.234,
+     "kitten": 55
+    },
+    {
+     "file": "tui/banner/0059.png",
+     "t": 6.359,
+     "kitten": 56
+    },
+    {
+     "file": "tui/banner/0060.png",
+     "t": 6.453,
+     "kitten": 57
+    },
+    {
+     "file": "tui/banner/0061.png",
+     "t": 6.578,
+     "kitten": 58
+    },
+    {
+     "file": "tui/banner/0062.png",
+     "t": 6.687,
+     "kitten": 59
+    },
+    {
+     "file": "tui/banner/0063.png",
+     "t": 6.781,
+     "kitten": 60
+    },
+    {
+     "file": "tui/banner/0064.png",
+     "t": 6.875,
+     "kitten": 60
+    },
+    {
+     "file": "tui/banner/0065.png",
+     "t": 6.984,
+     "kitten": 61
+    },
+    {
+     "file": "tui/banner/0066.png",
+     "t": 7.109,
+     "kitten": 62
+    },
+    {
+     "file": "tui/banner/0067.png",
+     "t": 7.234,
+     "kitten": 63
+    },
+    {
+     "file": "tui/banner/0068.png",
+     "t": 7.359,
+     "kitten": 0
+    },
+    {
+     "file": "tui/banner/0069.png",
+     "t": 7.484,
+     "kitten": 1
+    },
+    {
+     "file": "tui/banner/0070.png",
+     "t": 7.578,
+     "kitten": 2
+    },
+    {
+     "file": "tui/banner/0071.png",
+     "t": 7.703,
+     "kitten": 3
+    },
+    {
+     "file": "tui/banner/0072.png",
+     "t": 7.812,
+     "kitten": 4
+    },
+    {
+     "file": "tui/banner/0073.png",
+     "t": 7.922,
+     "kitten": 5
+    },
+    {
+     "file": "tui/banner/0074.png",
+     "t": 8.016,
+     "kitten": 6
+    },
+    {
+     "file": "tui/banner/0075.png",
+     "t": 8.125,
+     "kitten": 6
+    },
+    {
+     "file": "tui/banner/0076.png",
+     "t": 8.234,
+     "kitten": 7
+    },
+    {
+     "file": "tui/banner/0077.png",
+     "t": 8.344,
+     "kitten": 8
+    }
+   ],
+   "marks": {},
+   "duration": 8.344
+  },
+  "ahead": {
+   "frames": [
+    {
+     "file": "tui/ahead/0000.png",
+     "t": 0.016,
+     "kitten": 6
+    },
+    {
+     "file": "tui/ahead/0001.png",
+     "t": 0.125,
+     "kitten": 6
+    },
+    {
+     "file": "tui/ahead/0002.png",
+     "t": 0.235,
+     "kitten": 7
+    },
+    {
+     "file": "tui/ahead/0003.png",
+     "t": 0.344,
+     "kitten": 8
+    },
+    {
+     "file": "tui/ahead/0004.png",
+     "t": 0.438,
+     "kitten": 9
+    },
+    {
+     "file": "tui/ahead/0005.png",
+     "t": 0.547,
+     "kitten": 10
+    },
+    {
+     "file": "tui/ahead/0006.png",
+     "t": 0.641,
+     "kitten": 10
+    },
+    {
+     "file": "tui/ahead/0007.png",
+     "t": 0.75,
+     "kitten": 11
+    },
+    {
+     "file": "tui/ahead/0008.png",
+     "t": 0.86,
+     "kitten": 12
+    },
+    {
+     "file": "tui/ahead/0009.png",
+     "t": 0.969,
+     "kitten": 13
+    },
+    {
+     "file": "tui/ahead/0010.png",
+     "t": 1.078,
+     "kitten": 14
+    },
+    {
+     "file": "tui/ahead/0011.png",
+     "t": 1.188,
+     "kitten": 15
+    },
+    {
+     "file": "tui/ahead/0012.png",
+     "t": 1.297,
+     "kitten": 16
+    },
+    {
+     "file": "tui/ahead/0013.png",
+     "t": 1.391,
+     "kitten": 16
+    },
+    {
+     "file": "tui/ahead/0014.png",
+     "t": 1.516,
+     "kitten": 17
+    },
+    {
+     "file": "tui/ahead/0015.png",
+     "t": 1.625,
+     "kitten": 18
+    },
+    {
+     "file": "tui/ahead/0016.png",
+     "t": 1.735,
+     "kitten": 19
+    },
+    {
+     "file": "tui/ahead/0017.png",
+     "t": 1.844,
+     "kitten": 20
+    },
+    {
+     "file": "tui/ahead/0018.png",
+     "t": 1.953,
+     "kitten": 21
+    },
+    {
+     "file": "tui/ahead/0019.png",
+     "t": 2.047,
+     "kitten": 22
+    },
+    {
+     "file": "tui/ahead/0020.png",
+     "t": 2.141,
+     "kitten": 22
+    },
+    {
+     "file": "tui/ahead/0021.png",
+     "t": 2.266,
+     "kitten": 23
+    },
+    {
+     "file": "tui/ahead/0022.png",
+     "t": 2.375,
+     "kitten": 24
+    },
+    {
+     "file": "tui/ahead/0023.png",
+     "t": 2.485,
+     "kitten": 25
+    },
+    {
+     "file": "tui/ahead/0024.png",
+     "t": 2.594,
+     "kitten": 26
+    },
+    {
+     "file": "tui/ahead/0025.png",
+     "t": 2.719,
+     "kitten": 27
+    },
+    {
+     "file": "tui/ahead/0026.png",
+     "t": 2.828,
+     "kitten": 28
+    },
+    {
+     "file": "tui/ahead/0027.png",
+     "t": 2.922,
+     "kitten": 29
+    },
+    {
+     "file": "tui/ahead/0028.png",
+     "t": 3.016,
+     "kitten": 29
+    },
+    {
+     "file": "tui/ahead/0029.png",
+     "t": 3.11,
+     "kitten": 30
+    },
+    {
+     "file": "tui/ahead/0030.png",
+     "t": 3.219,
+     "kitten": 31
+    },
+    {
+     "file": "tui/ahead/0031.png",
+     "t": 3.328,
+     "kitten": 32
+    },
+    {
+     "file": "tui/ahead/0032.png",
+     "t": 3.422,
+     "kitten": 33
+    },
+    {
+     "file": "tui/ahead/0033.png",
+     "t": 3.516,
+     "kitten": 33
+    },
+    {
+     "file": "tui/ahead/0034.png",
+     "t": 3.625,
+     "kitten": 34
+    },
+    {
+     "file": "tui/ahead/0035.png",
+     "t": 3.735,
+     "kitten": 35
+    },
+    {
+     "file": "tui/ahead/0036.png",
+     "t": 3.828,
+     "kitten": 36
+    },
+    {
+     "file": "tui/ahead/0037.png",
+     "t": 3.922,
+     "kitten": 37
+    },
+    {
+     "file": "tui/ahead/0038.png",
+     "t": 4.016,
+     "kitten": 37
+    },
+    {
+     "file": "tui/ahead/0039.png",
+     "t": 4.125,
+     "kitten": 38
+    },
+    {
+     "file": "tui/ahead/0040.png",
+     "t": 4.235,
+     "kitten": 39
+    },
+    {
+     "file": "tui/ahead/0041.png",
+     "t": 4.344,
+     "kitten": 40
+    },
+    {
+     "file": "tui/ahead/0042.png",
+     "t": 4.438,
+     "kitten": 41
+    },
+    {
+     "file": "tui/ahead/0043.png",
+     "t": 4.547,
+     "kitten": 42
+    },
+    {
+     "file": "tui/ahead/0044.png",
+     "t": 4.641,
+     "kitten": 42
+    },
+    {
+     "file": "tui/ahead/0045.png",
+     "t": 4.75,
+     "kitten": 43
+    },
+    {
+     "file": "tui/ahead/0046.png",
+     "t": 4.844,
+     "kitten": 44
+    },
+    {
+     "file": "tui/ahead/0047.png",
+     "t": 4.938,
+     "kitten": 45
+    },
+    {
+     "file": "tui/ahead/0048.png",
+     "t": 5.047,
+     "kitten": 46
+    },
+    {
+     "file": "tui/ahead/0049.png",
+     "t": 5.141,
+     "kitten": 46
+    },
+    {
+     "file": "tui/ahead/0050.png",
+     "t": 5.266,
+     "kitten": 47
+    },
+    {
+     "file": "tui/ahead/0051.png",
+     "t": 5.375,
+     "kitten": 48
+    },
+    {
+     "file": "tui/ahead/0052.png",
+     "t": 5.485,
+     "kitten": 49
+    },
+    {
+     "file": "tui/ahead/0053.png",
+     "t": 5.594,
+     "kitten": 50
+    },
+    {
+     "file": "tui/ahead/0054.png",
+     "t": 5.703,
+     "kitten": 51
+    },
+    {
+     "file": "tui/ahead/0055.png",
+     "t": 5.797,
+     "kitten": 52
+    },
+    {
+     "file": "tui/ahead/0056.png",
+     "t": 5.891,
+     "kitten": 52
+    },
+    {
+     "file": "tui/ahead/0057.png",
+     "t": 5.985,
+     "kitten": 53
+    },
+    {
+     "file": "tui/ahead/0058.png",
+     "t": 6.078,
+     "kitten": 54
+    },
+    {
+     "file": "tui/ahead/0059.png",
+     "t": 6.172,
+     "kitten": 55
+    },
+    {
+     "file": "tui/ahead/0060.png",
+     "t": 6.266,
+     "kitten": 55
+    },
+    {
+     "file": "tui/ahead/0061.png",
+     "t": 6.36,
+     "kitten": 56
+    },
+    {
+     "file": "tui/ahead/0062.png",
+     "t": 6.453,
+     "kitten": 57
+    },
+    {
+     "file": "tui/ahead/0063.png",
+     "t": 6.563,
+     "kitten": 58
+    },
+    {
+     "file": "tui/ahead/0064.png",
+     "t": 6.672,
+     "kitten": 59
+    },
+    {
+     "file": "tui/ahead/0065.png",
+     "t": 6.766,
+     "kitten": 59
+    },
+    {
+     "file": "tui/ahead/0066.png",
+     "t": 6.86,
+     "kitten": 60
+    },
+    {
+     "file": "tui/ahead/0067.png",
+     "t": 6.969,
+     "kitten": 61
+    },
+    {
+     "file": "tui/ahead/0068.png",
+     "t": 7.063,
+     "kitten": 62
+    },
+    {
+     "file": "tui/ahead/0069.png",
+     "t": 7.172,
+     "kitten": 63
+    },
+    {
+     "file": "tui/ahead/0070.png",
+     "t": 7.266,
+     "kitten": 63
+    },
+    {
+     "file": "tui/ahead/0071.png",
+     "t": 7.375,
+     "kitten": 0
+    },
+    {
+     "file": "tui/ahead/0072.png",
+     "t": 7.485,
+     "kitten": 1
+    },
+    {
+     "file": "tui/ahead/0073.png",
+     "t": 7.578,
+     "kitten": 2
+    },
+    {
+     "file": "tui/ahead/0074.png",
+     "t": 7.672,
+     "kitten": 3
+    },
+    {
+     "file": "tui/ahead/0075.png",
+     "t": 7.766,
+     "kitten": 3
+    },
+    {
+     "file": "tui/ahead/0076.png",
+     "t": 7.86,
+     "kitten": 4
+    },
+    {
+     "file": "tui/ahead/0077.png",
+     "t": 7.969,
+     "kitten": 5
+    },
+    {
+     "file": "tui/ahead/0078.png",
+     "t": 8.078,
+     "kitten": 6
+    },
+    {
+     "file": "tui/ahead/0079.png",
+     "t": 8.172,
+     "kitten": 7
+    },
+    {
+     "file": "tui/ahead/0080.png",
+     "t": 8.266,
+     "kitten": 7
+    },
+    {
+     "file": "tui/ahead/0081.png",
+     "t": 8.375,
+     "kitten": 8
+    }
+   ],
+   "marks": {
+    "type": 0.532,
+    "typed": 4.219,
+    "enter": 5.125,
+    "first:start": 5.157,
+    "first:end": 6.032,
+    "second:start": 6.032,
+    "second:end": 6.438
+   },
+   "duration": 8.375
+  },
+  "turn": {
+   "frames": [
+    {
+     "file": "tui/turn/0000.png",
+     "t": 0.015,
+     "kitten": 6
+    },
+    {
+     "file": "tui/turn/0001.png",
+     "t": 0.125,
+     "kitten": 6
+    },
+    {
+     "file": "tui/turn/0002.png",
+     "t": 0.25,
+     "kitten": 7
+    },
+    {
+     "file": "tui/turn/0003.png",
+     "t": 0.375,
+     "kitten": 8
+    },
+    {
+     "file": "tui/turn/0004.png",
+     "t": 0.468,
+     "kitten": 9
+    },
+    {
+     "file": "tui/turn/0005.png",
+     "t": 0.562,
+     "kitten": 10
+    },
+    {
+     "file": "tui/turn/0006.png",
+     "t": 0.656,
+     "kitten": 11
+    },
+    {
+     "file": "tui/turn/0007.png",
+     "t": 0.75,
+     "kitten": 11
+    },
+    {
+     "file": "tui/turn/0008.png",
+     "t": 0.843,
+     "kitten": 12
+    },
+    {
+     "file": "tui/turn/0009.png",
+     "t": 0.937,
+     "kitten": 13
+    },
+    {
+     "file": "tui/turn/0010.png",
+     "t": 1.031,
+     "kitten": 14
+    },
+    {
+     "file": "tui/turn/0011.png",
+     "t": 1.14,
+     "kitten": 14
+    },
+    {
+     "file": "tui/turn/0012.png",
+     "t": 1.265,
+     "kitten": 15
+    },
+    {
+     "file": "tui/turn/0013.png",
+     "t": 1.375,
+     "kitten": 16
+    },
+    {
+     "file": "tui/turn/0014.png",
+     "t": 1.484,
+     "kitten": 17
+    },
+    {
+     "file": "tui/turn/0015.png",
+     "t": 1.578,
+     "kitten": 18
+    },
+    {
+     "file": "tui/turn/0016.png",
+     "t": 1.671,
+     "kitten": 19
+    },
+    {
+     "file": "tui/turn/0017.png",
+     "t": 1.765,
+     "kitten": 19
+    },
+    {
+     "file": "tui/turn/0018.png",
+     "t": 1.89,
+     "kitten": 20
+    },
+    {
+     "file": "tui/turn/0019.png",
+     "t": 1.984,
+     "kitten": 21
+    },
+    {
+     "file": "tui/turn/0020.png",
+     "t": 2.093,
+     "kitten": 22
+    },
+    {
+     "file": "tui/turn/0021.png",
+     "t": 2.187,
+     "kitten": 23
+    },
+    {
+     "file": "tui/turn/0022.png",
+     "t": 2.296,
+     "kitten": 24
+    },
+    {
+     "file": "tui/turn/0023.png",
+     "t": 2.39,
+     "kitten": 24
+    },
+    {
+     "file": "tui/turn/0024.png",
+     "t": 2.515,
+     "kitten": 25
+    },
+    {
+     "file": "tui/turn/0025.png",
+     "t": 2.609,
+     "kitten": 26
+    },
+    {
+     "file": "tui/turn/0026.png",
+     "t": 2.703,
+     "kitten": 27
+    },
+    {
+     "file": "tui/turn/0027.png",
+     "t": 2.796,
+     "kitten": 28
+    },
+    {
+     "file": "tui/turn/0028.png",
+     "t": 2.89,
+     "kitten": 28
+    },
+    {
+     "file": "tui/turn/0029.png",
+     "t": 2.984,
+     "kitten": 29
+    },
+    {
+     "file": "tui/turn/0030.png",
+     "t": 3.078,
+     "kitten": 30
+    },
+    {
+     "file": "tui/turn/0031.png",
+     "t": 3.171,
+     "kitten": 31
+    },
+    {
+     "file": "tui/turn/0032.png",
+     "t": 3.265,
+     "kitten": 31
+    },
+    {
+     "file": "tui/turn/0033.png",
+     "t": 3.375,
+     "kitten": 32
+    },
+    {
+     "file": "tui/turn/0034.png",
+     "t": 3.5,
+     "kitten": 33
+    },
+    {
+     "file": "tui/turn/0035.png",
+     "t": 3.593,
+     "kitten": 34
+    },
+    {
+     "file": "tui/turn/0036.png",
+     "t": 3.687,
+     "kitten": 35
+    },
+    {
+     "file": "tui/turn/0037.png",
+     "t": 3.781,
+     "kitten": 36
+    },
+    {
+     "file": "tui/turn/0038.png",
+     "t": 3.875,
+     "kitten": 36
+    },
+    {
+     "file": "tui/turn/0039.png",
+     "t": 3.984,
+     "kitten": 37
+    },
+    {
+     "file": "tui/turn/0040.png",
+     "t": 4.078,
+     "kitten": 38
+    },
+    {
+     "file": "tui/turn/0041.png",
+     "t": 4.171,
+     "kitten": 39
+    },
+    {
+     "file": "tui/turn/0042.png",
+     "t": 4.265,
+     "kitten": 39
+    },
+    {
+     "file": "tui/turn/0043.png",
+     "t": 4.375,
+     "kitten": 40
+    },
+    {
+     "file": "tui/turn/0044.png",
+     "t": 4.5,
+     "kitten": 41
+    },
+    {
+     "file": "tui/turn/0045.png",
+     "t": 4.625,
+     "kitten": 42
+    },
+    {
+     "file": "tui/turn/0046.png",
+     "t": 4.75,
+     "kitten": 43
+    },
+    {
+     "file": "tui/turn/0047.png",
+     "t": 4.859,
+     "kitten": 44
+    },
+    {
+     "file": "tui/turn/0048.png",
+     "t": 4.984,
+     "kitten": 45
+    },
+    {
+     "file": "tui/turn/0049.png",
+     "t": 5.093,
+     "kitten": 46
+    },
+    {
+     "file": "tui/turn/0050.png",
+     "t": 5.187,
+     "kitten": 47
+    },
+    {
+     "file": "tui/turn/0051.png",
+     "t": 5.296,
+     "kitten": 48
+    }
+   ],
+   "marks": {
+    "enter": 0.906,
+    "read:start": 0.906,
+    "read:end": 1.593,
+    "edit:start": 1.593,
+    "edit:end": 2.671,
+    "answer:start": 2.718,
+    "answer:end": 3.953,
+    "done": 4.109
+   },
+   "duration": 5.296
+  },
+  "approve": {
+   "frames": [
+    {
+     "file": "tui/approve/0000.png",
+     "t": 0.032,
+     "kitten": 6
+    },
+    {
+     "file": "tui/approve/0001.png",
+     "t": 0.141,
+     "kitten": 6
+    },
+    {
+     "file": "tui/approve/0002.png",
+     "t": 0.25,
+     "kitten": 7
+    },
+    {
+     "file": "tui/approve/0003.png",
+     "t": 0.375,
+     "kitten": 8
+    },
+    {
+     "file": "tui/approve/0004.png",
+     "t": 0.5,
+     "kitten": 9
+    },
+    {
+     "file": "tui/approve/0005.png",
+     "t": 0.594,
+     "kitten": 10
+    },
+    {
+     "file": "tui/approve/0006.png",
+     "t": 0.688,
+     "kitten": 11
+    },
+    {
+     "file": "tui/approve/0007.png",
+     "t": 0.782,
+     "kitten": 12
+    },
+    {
+     "file": "tui/approve/0008.png",
+     "t": 0.891,
+     "kitten": 12
+    },
+    {
+     "file": "tui/approve/0009.png",
+     "t": 1.0,
+     "kitten": 13
+    },
+    {
+     "file": "tui/approve/0010.png",
+     "t": 1.11,
+     "kitten": 14
+    },
+    {
+     "file": "tui/approve/0011.png",
+     "t": 1.219,
+     "kitten": 15
+    },
+    {
+     "file": "tui/approve/0012.png",
+     "t": 1.329,
+     "kitten": 16
+    },
+    {
+     "file": "tui/approve/0013.png",
+     "t": 1.422,
+     "kitten": 17
+    },
+    {
+     "file": "tui/approve/0014.png",
+     "t": 1.516,
+     "kitten": 17
+    },
+    {
+     "file": "tui/approve/0015.png",
+     "t": 1.625,
+     "kitten": 18
+    },
+    {
+     "file": "tui/approve/0016.png",
+     "t": 1.735,
+     "kitten": 19
+    },
+    {
+     "file": "tui/approve/0017.png",
+     "t": 1.86,
+     "kitten": 20
+    },
+    {
+     "file": "tui/approve/0018.png",
+     "t": 1.954,
+     "kitten": 21
+    },
+    {
+     "file": "tui/approve/0019.png",
+     "t": 2.047,
+     "kitten": 22
+    },
+    {
+     "file": "tui/approve/0020.png",
+     "t": 2.141,
+     "kitten": 22
+    },
+    {
+     "file": "tui/approve/0021.png",
+     "t": 2.266,
+     "kitten": 23
+    },
+    {
+     "file": "tui/approve/0022.png",
+     "t": 2.375,
+     "kitten": 24
+    },
+    {
+     "file": "tui/approve/0023.png",
+     "t": 2.5,
+     "kitten": 25
+    },
+    {
+     "file": "tui/approve/0024.png",
+     "t": 2.594,
+     "kitten": 26
+    },
+    {
+     "file": "tui/approve/0025.png",
+     "t": 2.688,
+     "kitten": 27
+    },
+    {
+     "file": "tui/approve/0026.png",
+     "t": 2.782,
+     "kitten": 28
+    },
+    {
+     "file": "tui/approve/0027.png",
+     "t": 2.891,
+     "kitten": 28
+    },
+    {
+     "file": "tui/approve/0028.png",
+     "t": 3.0,
+     "kitten": 29
+    },
+    {
+     "file": "tui/approve/0029.png",
+     "t": 3.11,
+     "kitten": 30
+    },
+    {
+     "file": "tui/approve/0030.png",
+     "t": 3.204,
+     "kitten": 31
+    },
+    {
+     "file": "tui/approve/0031.png",
+     "t": 3.297,
+     "kitten": 32
+    },
+    {
+     "file": "tui/approve/0032.png",
+     "t": 3.391,
+     "kitten": 32
+    },
+    {
+     "file": "tui/approve/0033.png",
+     "t": 3.485,
+     "kitten": 33
+    },
+    {
+     "file": "tui/approve/0034.png",
+     "t": 3.579,
+     "kitten": 34
+    },
+    {
+     "file": "tui/approve/0035.png",
+     "t": 3.672,
+     "kitten": 35
+    },
+    {
+     "file": "tui/approve/0036.png",
+     "t": 3.766,
+     "kitten": 35
+    },
+    {
+     "file": "tui/approve/0037.png",
+     "t": 3.86,
+     "kitten": 36
+    },
+    {
+     "file": "tui/approve/0038.png",
+     "t": 3.954,
+     "kitten": 37
+    },
+    {
+     "file": "tui/approve/0039.png",
+     "t": 4.047,
+     "kitten": 38
+    },
+    {
+     "file": "tui/approve/0040.png",
+     "t": 4.141,
+     "kitten": 38
+    },
+    {
+     "file": "tui/approve/0041.png",
+     "t": 4.25,
+     "kitten": 39
+    },
+    {
+     "file": "tui/approve/0042.png",
+     "t": 4.375,
+     "kitten": 40
+    },
+    {
+     "file": "tui/approve/0043.png",
+     "t": 4.5,
+     "kitten": 41
+    },
+    {
+     "file": "tui/approve/0044.png",
+     "t": 4.594,
+     "kitten": 42
+    },
+    {
+     "file": "tui/approve/0045.png",
+     "t": 4.704,
+     "kitten": 43
+    },
+    {
+     "file": "tui/approve/0046.png",
+     "t": 4.797,
+     "kitten": 44
+    },
+    {
+     "file": "tui/approve/0047.png",
+     "t": 4.907,
+     "kitten": 44
+    },
+    {
+     "file": "tui/approve/0048.png",
+     "t": 5.0,
+     "kitten": 45
+    },
+    {
+     "file": "tui/approve/0049.png",
+     "t": 5.11,
+     "kitten": 46
+    },
+    {
+     "file": "tui/approve/0050.png",
+     "t": 5.235,
+     "kitten": 47
+    },
+    {
+     "file": "tui/approve/0051.png",
+     "t": 5.36,
+     "kitten": 48
+    },
+    {
+     "file": "tui/approve/0052.png",
+     "t": 5.469,
+     "kitten": 49
+    },
+    {
+     "file": "tui/approve/0053.png",
+     "t": 5.579,
+     "kitten": 50
+    },
+    {
+     "file": "tui/approve/0054.png",
+     "t": 5.688,
+     "kitten": 51
+    },
+    {
+     "file": "tui/approve/0055.png",
+     "t": 5.782,
+     "kitten": 52
+    },
+    {
+     "file": "tui/approve/0056.png",
+     "t": 5.891,
+     "kitten": 52
+    },
+    {
+     "file": "tui/approve/0057.png",
+     "t": 6.0,
+     "kitten": 53
+    },
+    {
+     "file": "tui/approve/0058.png",
+     "t": 6.125,
+     "kitten": 54
+    },
+    {
+     "file": "tui/approve/0059.png",
+     "t": 6.25,
+     "kitten": 55
+    },
+    {
+     "file": "tui/approve/0060.png",
+     "t": 6.36,
+     "kitten": 56
+    },
+    {
+     "file": "tui/approve/0061.png",
+     "t": 6.454,
+     "kitten": 57
+    },
+    {
+     "file": "tui/approve/0062.png",
+     "t": 6.547,
+     "kitten": 58
+    },
+    {
+     "file": "tui/approve/0063.png",
+     "t": 6.641,
+     "kitten": 58
+    },
+    {
+     "file": "tui/approve/0064.png",
+     "t": 6.735,
+     "kitten": 59
+    },
+    {
+     "file": "tui/approve/0065.png",
+     "t": 6.86,
+     "kitten": 60
+    },
+    {
+     "file": "tui/approve/0066.png",
+     "t": 6.954,
+     "kitten": 61
+    },
+    {
+     "file": "tui/approve/0067.png",
+     "t": 7.047,
+     "kitten": 62
+    },
+    {
+     "file": "tui/approve/0068.png",
+     "t": 7.141,
+     "kitten": 62
+    },
+    {
+     "file": "tui/approve/0069.png",
+     "t": 7.25,
+     "kitten": 63
+    },
+    {
+     "file": "tui/approve/0070.png",
+     "t": 7.36,
+     "kitten": 0
+    },
+    {
+     "file": "tui/approve/0071.png",
+     "t": 7.454,
+     "kitten": 1
+    },
+    {
+     "file": "tui/approve/0072.png",
+     "t": 7.547,
+     "kitten": 2
+    },
+    {
+     "file": "tui/approve/0073.png",
+     "t": 7.641,
+     "kitten": 2
+    },
+    {
+     "file": "tui/approve/0074.png",
+     "t": 7.766,
+     "kitten": 3
+    },
+    {
+     "file": "tui/approve/0075.png",
+     "t": 7.891,
+     "kitten": 4
+    },
+    {
+     "file": "tui/approve/0076.png",
+     "t": 8.0,
+     "kitten": 5
+    },
+    {
+     "file": "tui/approve/0077.png",
+     "t": 8.125,
+     "kitten": 6
+    },
+    {
+     "file": "tui/approve/0078.png",
+     "t": 8.25,
+     "kitten": 7
+    },
+    {
+     "file": "tui/approve/0079.png",
+     "t": 8.36,
+     "kitten": 8
+    },
+    {
+     "file": "tui/approve/0080.png",
+     "t": 8.469,
+     "kitten": 9
+    }
+   ],
+   "marks": {
+    "mode:edits": 0.594,
+    "mode:all": 1.438,
+    "mode:ask": 2.375,
+    "enter": 3.985,
+    "run:start": 3.985,
+    "run:end": 4.547,
+    "asked": 4.61,
+    "yes": 6.235,
+    "answer:start": 6.735,
+    "answer:end": 7.204,
+    "done": 7.25
+   },
+   "duration": 8.469
+  }
+ }
+}

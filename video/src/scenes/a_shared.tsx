@@ -2,6 +2,7 @@
 import React from "react";
 import {interpolate, useCurrentFrame} from "remotion";
 import {PunchText, ShakeOnBeat} from "../components";
+import {motionOf} from "../components/motion";
 import {COLORS, SAFE, SIZE} from "../contracts";
 import {MONO} from "../fonts";
 
@@ -26,7 +27,8 @@ export const Shake: React.FC<{hits: Hit[]; children: React.ReactNode}> = ({hits,
   const weights = [...new Set(hits.map((h) => h.k ?? 1))];
   return weights.reduce<React.ReactElement>(
     (inner, k) => (
-      <ShakeOnBeat hits={hits.filter((h) => (h.k ?? 1) === k).map((h) => h.at)} strength={14 * k} zoom={0.06 * k}>
+      <ShakeOnBeat hits={hits.filter((h) => (h.k ?? 1) === k).map((h) => h.at)} strength={k > 1 ? 14 * k : 6 * k}
+                   zoom={k > 1 ? 0.05 * k : 0.025 * k}>
         {inner}
       </ShakeOnBeat>
     ),
@@ -89,7 +91,8 @@ export const Punch: React.FC<{
         alignItems: "center",
       }}
     >
-      <PunchText text={line} at={hitAt ?? at} size={size} color={color} split={split} maxWidth={width} style={{position: "relative"}} />
+      <PunchText text={line} at={(hitAt ?? at) + (motionOf(line.toUpperCase()) === "slam" ? 0 : i * 3)} size={size}
+                 color={color} split={split} maxWidth={width} style={{position: "relative"}} />
       {i === lines.length - 1 ? after : null}
     </div>
   ));
@@ -107,7 +110,7 @@ export const Caption: React.FC<{text: string; top?: number; from?: number; until
   top = CAPTION_TOP,
   from = 0,
   until = Infinity,
-  color = "#B5B5B5",
+  color = COLORS.soft,
   size = 30,
 }) => {
   const frame = useCurrentFrame();

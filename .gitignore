@@ -24,3 +24,4 @@ video/.venv-audio/
 video/public/audio/
 assets/music/
 out/
+video/public/tui/
