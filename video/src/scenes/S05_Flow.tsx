@@ -1,7 +1,7 @@
 // S05, beats 20-32: the 7-step flow, one node per beat, the loop going back, then held to be read.
 import React from "react";
 import {AbsoluteFill, useCurrentFrame} from "remotion";
-import {FlashCut, FlowDiagram, GlitchTransition} from "../components";
+import {FlowDiagram, GlitchTransition} from "../components";
 import {COLORS} from "../contracts";
 import {Caption, Shake, Zoom} from "./a_shared";
 import {sceneTiming} from "./sceneTiming";
@@ -64,8 +64,5 @@ export const S05_Flow: React.FC = () => (
       </AbsoluteFill>
     </GlitchTransition>
     {/* the 1-frame flash of the cut out of the drop */}
-    <FlashCut at={T.at(20)} frames={1} />
-    <FlashCut at={T.at(26)} frames={1} />
-    <FlashCut at={T.at(28)} />
   </AbsoluteFill>
 );

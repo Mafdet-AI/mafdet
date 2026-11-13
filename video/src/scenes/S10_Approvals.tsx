@@ -2,7 +2,7 @@
 // a beat; then a command that asks first, y on beat 58, and it runs.
 import React from "react";
 import {AbsoluteFill} from "remotion";
-import {FlashCut, tuiMark} from "../components";
+import {tuiMark} from "../components";
 import {COLORS} from "../contracts";
 import {Caption, Punch, Shake, ZONE} from "./a_shared";
 import {LIVE_NOTE, Viewport} from "./live_shared";
@@ -50,7 +50,5 @@ export const S10_Approvals: React.FC = () => (
       <Caption text="ask · edits · all: what runs without asking you" from={T.at(52)} until={T.at(56)} />
       <Caption text={LIVE_NOTE} from={T.at(56)} />
     </Shake>
-    <FlashCut at={T.at(52)} frames={2} />
-    <FlashCut at={T.at(58)} frames={1} />
   </AbsoluteFill>
 );

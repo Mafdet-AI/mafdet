@@ -1,7 +1,7 @@
 // S12, beats 64-72: 207 tools, 16 on at the start, the model turns on the rest itself.
 import React from "react";
 import {AbsoluteFill, interpolate, useCurrentFrame} from "remotion";
-import {CodeReveal, FlashCut, GlitchTransition, PunchText} from "../components";
+import {CodeReveal, GlitchTransition, PunchText} from "../components";
 import {COLORS, SAFE} from "../contracts";
 import {MONO} from "../fonts";
 import {Caption, Hold, Shake, WIDTH, Y, Zoom, codeBox, lineTop} from "./b_shared";
@@ -110,7 +110,6 @@ export const S12_McpTools: React.FC = () => {
           </AbsoluteFill>
         </GlitchTransition>
       </Shake>
-      <FlashCut at={b(64)} frames={2} />
     </AbsoluteFill>
   );
 };

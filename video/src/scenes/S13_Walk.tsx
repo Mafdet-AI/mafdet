@@ -1,7 +1,7 @@
 // S13, beats 72-78: --walk, every function of a binary named from the leaves up.
 import React from "react";
 import {AbsoluteFill} from "remotion";
-import {CodeReveal, FlashCut, PunchText} from "../components";
+import {CodeReveal, PunchText} from "../components";
 import {COLORS} from "../contracts";
 import {Caption, Hold, Shake, Y, lineTop} from "./b_shared";
 import {sceneTiming} from "./sceneTiming";
@@ -54,7 +54,6 @@ export const S13_Walk: React.FC = () => {
           color={COLORS.white}
         />
       </Shake>
-      <FlashCut at={b(72)} frames={2} />
     </AbsoluteFill>
   );
 };

@@ -122,8 +122,6 @@ export const S15_Outro: React.FC = () => {
         </>
       ) : null}
       <FlashCut at={0} frames={2} color={COLORS.hot} />
-      <FlashCut at={b(88)} frames={1} />
-      <FlashCut at={b(90)} frames={1} color={COLORS.hot} />
     </AbsoluteFill>
   );
 };

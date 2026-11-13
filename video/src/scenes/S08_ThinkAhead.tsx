@@ -2,7 +2,7 @@
 // what the model reasons on it; the camera goes into that count during the break; ENTER on the pickup.
 import React from "react";
 import {AbsoluteFill} from "remotion";
-import {FlashCut, tuiMark} from "../components";
+import {tuiMark} from "../components";
 import {COLORS} from "../contracts";
 import {Caption, Punch, Shake, ZONE} from "./a_shared";
 import {Viewport} from "./live_shared";
@@ -37,6 +37,5 @@ export const S08_ThinkAhead: React.FC = () => (
       <Caption text="needs llama-server and a reasoning model (Qwen3)" from={T.at(44)} until={T.at(47)} />
       <Caption text="the first step starts from those notes" from={T.at(47)} />
     </Shake>
-    <FlashCut at={T.at(47)} />
   </AbsoluteFill>
 );

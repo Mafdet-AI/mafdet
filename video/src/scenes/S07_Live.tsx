@@ -2,7 +2,7 @@
 // comes back, the edit shows as a diff, the answer.
 import React from "react";
 import {AbsoluteFill} from "remotion";
-import {FlashCut, tuiMark} from "../components";
+import {tuiMark} from "../components";
 import {COLORS} from "../contracts";
 import {Caption, Punch, Shake, ZONE} from "./a_shared";
 import {LIVE_NOTE, Viewport} from "./live_shared";
@@ -37,6 +37,5 @@ export const S07_Live: React.FC = () => (
       <Punch text="ANSWERS" at={T.at(39)} until={T.frames} size={250} color={COLORS.hot} zone={ZONE.top} />
       <Caption text={LIVE_NOTE} from={T.at(36)} />
     </Shake>
-    <FlashCut at={T.at(36)} frames={1} />
   </AbsoluteFill>
 );

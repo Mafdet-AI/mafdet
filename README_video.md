@@ -62,6 +62,19 @@ To work on it with a live preview: `npx remotion studio src/index.ts`. One frame
    with another shape needs `video/src/storyboard.json` moved to its beats (the scenes take theirs from
    there and from `sceneTiming(fromBeat, toBeat)` at the top of each file).
 
+## How it moves
+
+- Headlines have roles, set in one table, `video/src/components/motion.ts`. **slam** (oversized, blurred, an
+  RGB split) is kept for what matters most: the name, the numbers, the key words. Lead lines **rise** from
+  behind a mask or fall in letter by letter (**stagger**); what you type is **typed** with a cursor; calm
+  statements **track** in; words of a list **slide** in from alternating sides. Every headline keeps moving
+  after it lands.
+- Each scene enters with a camera move of its own (zoom through, whip left or right, drop), in turn, then the
+  camera keeps pushing and panning (`Edit.tsx`). A warm light drifts over everything, and a sweep of light
+  crosses the frame every other bar of the drop.
+- Flashes only on the three hits that carry the edit: the drop (beat 16), the relaunch (48), the last hit (80).
+  Ordinary beats nudge the camera; only weighted hits shake it hard.
+
 ## Change what it says
 
 Texts are in the scenes, one file each. What the video may claim is in `docs/mafdet_brief.md`, with a
