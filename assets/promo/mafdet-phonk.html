@@ -1,0 +1,464 @@
+<title>MAFDET Phonk Edit</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=JetBrains+Mono:wght@500;800&display=swap">
+<style>
+/* Layout: one stage, the video, centered on black; the controls under it. Single dark look on purpose. */
+:root {
+  --ink: #050302;        /* the screen */
+  --paper: #EEEAE2;      /* the wordmark's paper */
+  --amber: #D4892A;      /* MAFDET's amber: the aura */
+  --hot: #FFC46B;        /* amber at its brightest */
+  --dim: #7A6A55;        /* captions */
+  --line: #2A2118;       /* borders */
+  --display: "Anton", "Impact", "Arial Narrow", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  background: var(--ink); color: var(--paper); font-family: var(--mono);
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  padding-block: 16px; padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px)); box-sizing: border-box;
+}
+.stage { position: relative; height: min(78vh, 1280px); max-width: 100%; aspect-ratio: 9 / 16; }
+.stage.wide { height: auto; width: min(100%, 1100px); aspect-ratio: 16 / 9; }
+canvas { width: 100%; height: 100%; display: block; background: var(--ink); border: 1px solid var(--line); }
+.play {
+  position: absolute; inset: 0; display: grid; place-items: center; background: rgba(5, 3, 2, .45);
+  border: 0; color: var(--paper); cursor: pointer; font: inherit;
+}
+.play span {
+  font-family: var(--display); font-size: clamp(28px, 6vw, 56px); letter-spacing: .06em;
+  border: 2px solid var(--amber); padding: .2em .9em; box-shadow: 0 0 40px rgba(212, 137, 42, .45);
+}
+.play:focus-visible span, button:focus-visible { outline: 2px solid var(--hot); outline-offset: 3px; }
+.bar { width: min(100%, 720px); display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; }
+button.ctl {
+  font: 800 12px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--paper);
+  background: transparent; border: 1px solid var(--line); padding: 10px 14px; cursor: pointer;
+}
+button.ctl[aria-pressed="true"] { border-color: var(--amber); color: var(--hot); }
+button.ctl:hover { border-color: var(--amber); }
+.progress { width: min(100%, 720px); height: 3px; background: var(--line); }
+.progress i { display: block; height: 100%; width: 0; background: var(--amber); }
+.note { color: var(--dim); font-size: 11px; max-width: 62ch; text-align: center; line-height: 1.6; margin: 0; }
+.out { width: min(100%, 720px); display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.out video { max-width: 100%; max-height: 50vh; border: 1px solid var(--line); }
+.out a { color: var(--hot); }
+</style>
+
+<div class="stage" id="stage">
+  <canvas id="c" width="720" height="1280" aria-label="MAFDET promo edit"></canvas>
+  <button class="play" id="play" aria-label="Play the edit with sound"><span>▶ PLAY</span></button>
+</div>
+<div class="progress" aria-hidden="true"><i id="prog"></i></div>
+<div class="bar">
+  <button class="ctl" id="replay">Replay</button>
+  <button class="ctl" id="vertical" aria-pressed="true">9:16</button>
+  <button class="ctl" id="horizontal" aria-pressed="false">16:9</button>
+  <button class="ctl" id="export">Export video</button>
+</div>
+<p class="note">Original beat, synthesized live in the browser. Contains fast flashes. Export records one full run (about 32 s) with its sound; the saved file is WebM or MP4, whichever this browser records.</p>
+<div class="out" id="out" hidden></div>
+
+<script>
+(() => {
+"use strict";
+// ------------------------------------------------------------------ timing: everything hangs off the beat
+const BPM = 132, STEP = 60 / BPM / 4, BAR = STEP * 16;
+const BARS = { intro: 0, dropA: 2, brk: 10, dropB: 12, end: 16 };
+const END = BARS.end * BAR, TOTAL = END + 2.8;
+const at = (bar, step = 0) => (bar + step / 16) * BAR;
+const KICK = [0, 3, 6, 10], CLAP = [4, 12], TOM = [7, 13];
+// the cowbell riff (MIDI notes on 16ths), C# minor, two bars that answer each other
+const COW = [
+  [[0, 73], [2, 73], [3, 76], [5, 73], [6, 71], [8, 73], [10, 80], [11, 78], [13, 76], [14, 73]],
+  [[0, 73], [2, 73], [3, 76], [5, 73], [6, 71], [8, 69], [10, 71], [11, 73], [13, 76], [14, 78]],
+];
+const BASS = [[37, 37, 40, 35], [37, 37, 33, 35]];          // 808 under each kick
+const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// the hits the picture follows
+const kicks = [], claps = [], flashes = [at(BARS.dropA), at(BARS.dropB), END];
+for (let b = BARS.dropA; b < BARS.end; b++) {
+  if (b >= BARS.brk && b < BARS.dropB) continue;
+  KICK.forEach(s => kicks.push(at(b, s)));
+  CLAP.forEach(s => claps.push(at(b, s)));
+}
+[at(BARS.brk), at(BARS.brk, 8), at(BARS.brk + 1), at(BARS.brk + 1, 8)].forEach(t => kicks.push(t));
+kicks.push(END); kicks.sort((a, b) => a - b);
+const lastBefore = (list, t) => { let lo = 0, hi = list.length - 1, r = -1;
+  while (lo <= hi) { const m = (lo + hi) >> 1; if (list[m] <= t) { r = m; lo = m + 1; } else hi = m - 1; } return r; };
+const env = (list, t, k = 9) => { const i = lastBefore(list, t); return i < 0 ? 0 : Math.exp(-(t - list[i]) * k); };
+
+// ------------------------------------------------------------------ the beat, synthesized
+let ac = null, master = null, recDest = null, run = null, startAt = 0, playing = false;
+
+function audio() {
+  if (ac) return;
+  ac = new (window.AudioContext || window.webkitAudioContext)();
+  const comp = ac.createDynamicsCompressor();
+  comp.threshold.value = -16; comp.ratio.value = 6; comp.attack.value = 0.003; comp.release.value = 0.12;
+  master = ac.createGain(); master.gain.value = 0.9;
+  master.connect(comp); comp.connect(ac.destination);
+  recDest = ac.createMediaStreamDestination(); comp.connect(recDest);
+}
+
+function noiseBuffer() {
+  const len = ac.sampleRate, buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  return buf;
+}
+function shaper(amount) {
+  const n = 2048, c = new Float32Array(n);
+  for (let i = 0; i < n; i++) { const x = i / n * 2 - 1; c[i] = Math.tanh(x * amount); }
+  const ws = ac.createWaveShaper(); ws.curve = c; ws.oversample = "4x"; return ws;
+}
+
+function schedule(t0) {
+  const bus = ac.createGain(); bus.connect(master);
+  const noise = noiseBuffer();
+  // busses: drums, a distorted 808, the cowbell (filtered in the intro, ducked by the kick, with an echo)
+  const drums = ac.createGain(); drums.gain.value = 0.9; drums.connect(bus);
+  const bassLP = ac.createBiquadFilter(); bassLP.type = "lowpass"; bassLP.frequency.value = 1400;
+  const bassDist = shaper(6); const bass = ac.createGain(); bass.gain.value = 0.55;
+  bassDist.connect(bassLP); bassLP.connect(bass); bass.connect(bus);
+  const duck = ac.createGain(); duck.connect(bus);
+  const cowLP = ac.createBiquadFilter(); cowLP.type = "lowpass"; cowLP.Q.value = 6;
+  cowLP.frequency.setValueAtTime(280, t0); cowLP.frequency.exponentialRampToValueAtTime(9000, t0 + at(BARS.dropA));
+  const cow = ac.createGain(); cow.gain.value = 0.32; cow.connect(cowLP); cowLP.connect(duck);
+  const echo = ac.createDelay(1); echo.delayTime.value = STEP * 3; const fb = ac.createGain(); fb.gain.value = 0.32;
+  const wet = ac.createGain(); wet.gain.value = 0.35;
+  cowLP.connect(echo); echo.connect(fb); fb.connect(echo); echo.connect(wet); wet.connect(duck);
+  const hats = ac.createGain(); hats.gain.value = 0.22; hats.connect(duck);
+
+  const kick = (t, v = 1) => {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.frequency.setValueAtTime(170, t); o.frequency.exponentialRampToValueAtTime(44, t + 0.11);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.42);
+    o.connect(g); g.connect(drums); o.start(t); o.stop(t + 0.45);
+    duck.gain.setValueAtTime(0.3, t); duck.gain.linearRampToValueAtTime(1, t + 0.2);
+  };
+  const b808 = (t, m, dur, glide) => {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.frequency.setValueAtTime(mtof(m), t);
+    if (glide) o.frequency.exponentialRampToValueAtTime(mtof(glide), t + dur * 0.7);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(1, t + 0.006);
+    g.gain.setValueAtTime(1, t + dur * 0.55); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(bassDist); o.start(t); o.stop(t + dur + 0.02);
+  };
+  const bell = (t, m, v = 1) => {
+    const f = mtof(m), g = ac.createGain(), bp = ac.createBiquadFilter();
+    bp.type = "bandpass"; bp.frequency.value = f * 2.4; bp.Q.value = 1.2;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.002);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.24);
+    [f, f * 1.48].forEach(fr => { const o = ac.createOscillator(); o.type = "square"; o.frequency.value = fr;
+      o.connect(bp); o.start(t); o.stop(t + 0.26); });
+    bp.connect(g); g.connect(cow);
+  };
+  const hiss = (t, dur, type, freq, v, dest, q = 0.8) => {
+    const s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+    s.buffer = noise; f.type = type; f.frequency.value = freq; f.Q.value = q;
+    g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(f); f.connect(g); g.connect(dest); s.start(t, Math.random() * 0.5); s.stop(t + dur + 0.02);
+  };
+  const clap = t => { [0, 0.011, 0.022].forEach(d => hiss(t + d, 0.03, "bandpass", 1500, 0.8, drums));
+    hiss(t + 0.03, 0.2, "bandpass", 1300, 0.7, drums); };
+  const tom = t => { const o = ac.createOscillator(), g = ac.createGain();
+    o.frequency.setValueAtTime(240, t); o.frequency.exponentialRampToValueAtTime(120, t + 0.14);
+    g.gain.setValueAtTime(0.5, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+    o.connect(g); g.connect(drums); o.start(t); o.stop(t + 0.18); };
+  const riser = (ta, tb) => { const s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+    s.buffer = noise; s.loop = true; f.type = "bandpass"; f.Q.value = 3;
+    f.frequency.setValueAtTime(300, ta); f.frequency.exponentialRampToValueAtTime(9000, tb);
+    g.gain.setValueAtTime(0.0001, ta); g.gain.exponentialRampToValueAtTime(0.5, tb);
+    g.gain.setValueAtTime(0.0001, tb + 0.01);
+    s.connect(f); f.connect(g); g.connect(bus); s.start(ta); s.stop(tb + 0.05); };
+  const impact = t => { kick(t, 1.3); b808(t, 25, 2.2, 21);
+    const s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+    s.buffer = noise; s.loop = true; f.type = "lowpass"; f.frequency.setValueAtTime(12000, t);
+    f.frequency.exponentialRampToValueAtTime(200, t + 2); g.gain.setValueAtTime(0.6, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 2.2); s.connect(f); f.connect(g); g.connect(bus);
+    s.start(t); s.stop(t + 2.3); };
+
+  for (let b = 0; b < BARS.end; b++) {
+    const T = s => t0 + at(b, s), riff = COW[b % 2], drop = b >= BARS.dropA && (b < BARS.brk || b >= BARS.dropB);
+    const brk = b >= BARS.brk && b < BARS.dropB, late = b >= BARS.dropB;
+    riff.forEach(([s, m]) => { bell(T(s), m, brk ? 0.55 : 1); if (late && s % 4 === 3) bell(T(s), m + 12, 0.35); });
+    if (drop) {
+      KICK.forEach((s, i) => { kick(T(s)); const m = BASS[b % 2][i];
+        b808(T(s), m, STEP * (i === 3 ? 6 : 3) * 0.95, i === 3 && b % 2 ? 37 : 0); });
+      CLAP.forEach(s => clap(T(s)));
+      TOM.forEach(s => tom(T(s)));
+      for (let s = 0; s < 16; s += late ? 1 : 2) hiss(T(s), s === 14 ? 0.22 : 0.04, "highpass", 7500, s % 4 === 2 ? 0.9 : 0.5, hats);
+      if (late && b % 2) for (let k = 0; k < 4; k++) hiss(T(14 + k * 0.5), 0.03, "highpass", 8000, 0.7, hats);
+    }
+    if (brk) {
+      b808(T(0), 37, STEP * 7, 0); b808(T(8), 35, STEP * 7, 37);
+      for (let s = 2; s < 16; s += 4) hiss(T(s), 0.05, "highpass", 8000, 0.4, hats);
+      if (b === BARS.brk + 1) {
+        clap(T(12));
+        for (let k = 0; k < 8; k++) clap(T(8 + k * 0.5 + (k > 4 ? k * 0.05 : 0)));
+        riser(T(0), t0 + at(BARS.dropB));
+      }
+    }
+    if (b === 1) riser(t0 + at(1), t0 + at(BARS.dropA));
+  }
+  impact(t0 + END);
+  return bus;
+}
+
+// ------------------------------------------------------------------ the picture
+const cv = document.getElementById("c"), cx = cv.getContext("2d");
+let W = 720, H = 1280, U = 7.2, grain = [], overlay = null;
+const C = { ink: "#050302", paper: "#EEEAE2", amber: "#D4892A", hot: "#FFC46B", red: "#FF2B4E", cyan: "#21E6FF", dim: "#7A6A55" };
+const DISPLAY = '"Anton", Impact, "Arial Narrow", sans-serif', MONO = '"JetBrains Mono", Consolas, monospace';
+
+// the cheetah of `mafdet agent`, pixel for pixel
+const PAL = { F: "#D8B276", L: "#EFDDBA", S: "#A07A48", K: "#33251A", E: "#E0952E", N: "#7A5040", W: "#F6EEDF" };
+const CHEETAH = ["........F...F...", "........FF.FF...", ".......FFFFFFF..", "......FFFFFFFFF.", "......FFEFFFEFF.",
+  "......FFKFNFKFF.", ".......FFKWKFF..", "........FLWLF...", ".......SFLLLF...", "......SFFLLLLF..", ".....SFFKFLLLF..",
+  "....SFFFFFFLLF..", "...SFKFFSFFSLF..", "...SFFFFFKFSLF..", "..SFFSFFFFFSLFF.", "..SFKFFFKFFSLLF.", "..SFFFFSFFFSLLF.",
+  "..SFFFFFFFSLLLF.", ".SFKFFSFFKFFFFFF", "..SSFFFFSFFFKFFS"];
+const sprite = document.createElement("canvas"); sprite.width = 19; sprite.height = 20;
+{ const s = sprite.getContext("2d"); CHEETAH.forEach((row, r) => [...row].forEach((ch, c) => {
+  if (PAL[ch]) { s.fillStyle = PAL[ch]; s.fillRect(c, r, 1, 1); } }));
+  s.fillStyle = PAL.W; s.fillRect(18, 17, 1, 1); }
+
+function resize(vertical) {
+  W = vertical ? 720 : 1280; H = vertical ? 1280 : 720; U = Math.min(W, H) / 100;
+  cv.width = W; cv.height = H;
+  grain = [0, 1, 2, 3].map(() => { const g = document.createElement("canvas"); g.width = g.height = 256;
+    const x = g.getContext("2d"), d = x.createImageData(256, 256);
+    for (let i = 0; i < d.data.length; i += 4) { const v = Math.random() * 255; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 255; }
+    x.putImageData(d, 0, 0); return g; });
+  overlay = document.createElement("canvas"); overlay.width = W; overlay.height = H;
+  const o = overlay.getContext("2d"), vg = o.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.max(W, H) * 0.75);
+  vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(0,0,0,.85)"); o.fillStyle = vg; o.fillRect(0, 0, W, H);
+  o.fillStyle = "rgba(0,0,0,.18)"; for (let y = 0; y < H; y += 3) o.fillRect(0, y, W, 1);
+}
+
+// big type, fitted to a box, with a red/cyan split that grows with the hit
+function word(text, x, y, maxW, maxH, opt = {}) {
+  let size = maxH; cx.font = `${size}px ${DISPLAY}`;
+  const w = cx.measureText(text).width; if (w > maxW) size *= maxW / w;
+  cx.font = `${size}px ${DISPLAY}`; cx.textAlign = opt.align || "center"; cx.textBaseline = "middle";
+  const split = (opt.split ?? 0) * U;
+  if (split > 0.3) {
+    cx.globalCompositeOperation = "screen";
+    cx.fillStyle = C.red; cx.fillText(text, x - split, y);
+    cx.fillStyle = C.cyan; cx.fillText(text, x + split, y);
+    cx.globalCompositeOperation = "source-over";
+  }
+  if (opt.glow) { cx.shadowColor = opt.glow; cx.shadowBlur = 6 * U; }
+  cx.fillStyle = opt.color || C.paper; cx.fillText(text, x, y); cx.shadowBlur = 0;
+  return size;
+}
+function mono(text, x, y, size, color = C.paper, align = "left") {
+  cx.font = `800 ${size}px ${MONO}`; cx.textAlign = align; cx.textBaseline = "middle"; cx.fillStyle = color; cx.fillText(text, x, y);
+}
+function cheetah(x, y, h, glow) {
+  const s = h / 20; cx.imageSmoothingEnabled = false;
+  cx.drawImage(sprite, x - 9.5 * s, y - 10 * s, 19 * s, 20 * s);
+  if (glow > 0) {           // the eyes light up with the hit
+    [[8, 4], [12, 4]].forEach(([c, r]) => {
+      const ex = x - 9.5 * s + (c + 0.5) * s, ey = y - 10 * s + (r + 0.5) * s;
+      const g = cx.createRadialGradient(ex, ey, 0, ex, ey, s * (1.5 + glow * 5));
+      g.addColorStop(0, `rgba(255,196,107,${0.9 * glow})`); g.addColorStop(1, "rgba(212,137,42,0)");
+      cx.fillStyle = g; cx.fillRect(ex - s * 8, ey - s * 8, s * 16, s * 16);
+    });
+  }
+}
+function speedLines(t, n, alpha) {
+  cx.save(); cx.translate(W / 2, H / 2); cx.strokeStyle = `rgba(238,234,226,${alpha})`; cx.lineWidth = 0.4 * U;
+  for (let i = 0; i < n; i++) { const a = (i * 2.399 + t * 0.4) % (Math.PI * 2), r0 = Math.max(W, H) * (0.25 + (i * 0.137 + t * 2) % 0.4);
+    cx.beginPath(); cx.moveTo(Math.cos(a) * r0, Math.sin(a) * r0); cx.lineTo(Math.cos(a) * r0 * 1.6, Math.sin(a) * r0 * 1.6); cx.stroke(); }
+  cx.restore();
+}
+const slam = (t, tk) => 1.35 - 0.35 * Math.min(1, (t - tk) / 0.07);   // a word arrives big and lands
+
+// what is said, kick by kick (drop A: 4 kicks a bar, 2 bars a scene)
+const DROP_A = [
+  ["MAFDET", "AGENT", "IT", "READS", "WHILE", "YOU", "TYPE", "⏎"],
+  ["IT", "THINKS", "AHEAD", "BEFORE", "YOU", "HIT", "ENTER", "⚡"],
+  ["FIRST", "TOOL", "CALL", "0.95 S", "NOT", "5.5 S", "SAME", "GPU"],
+  ["YOUR", "MACHINE", "YOUR", "MODEL", "NOTHING", "LEAVES", "100%", "LOCAL"],
+];
+const DROP_B = ["/MODEL", "CLAUDE", "GEMINI", "QWEN", "/REASONING", "HIGH", "MCP", "GHIDRA", "--WALK", "BINARIES",
+  "NAMED", "LEAVES", "FIRST", "LOCAL", "OR", "CLOUD", "YOUR", "CALL", "THINK", "AHEAD", "READ", "AHEAD", "HUNT",
+  "FASTER", "AURA", "AURA", "AURA", "AURA", "▲", "▲", "▲", "▲"];
+const REQUEST = "> decompile crackme.exe and find what it checks";
+const CLAIM = "> local models are slow.";
+
+function frame(t) {
+  const bar = t / BAR, e = env(kicks, t), ec = env(claps, t, 12), fl = env(flashes, t, 7);
+  const k = reduced ? 0.3 : 1;
+  cx.setTransform(1, 0, 0, 1, 0, 0); cx.fillStyle = C.ink; cx.fillRect(0, 0, W, H);
+  // camera: punch-in and shake on every hit
+  const z = 1 + e * 0.07 * k, sx = (Math.random() - 0.5) * e * 4 * U * k, sy = (Math.random() - 0.5) * e * 4 * U * k;
+  cx.setTransform(z, 0, 0, z, W / 2 * (1 - z) + sx, H / 2 * (1 - z) + sy);
+  const midX = W / 2, midY = H / 2, vertical = H > W;
+
+  if (bar < BARS.dropA) {                                     // intro: the claim, then the answer
+    const typed = CLAIM.slice(0, Math.max(0, Math.floor((t - 0.3) / (STEP * 0.9))));
+    mono(typed, W * 0.08, midY - 8 * U, 3.6 * U);
+    if (Math.floor(t * 4) % 2 === 0) mono("▍", W * 0.08 + cx.measureText(typed).width, midY - 8 * U, 3.6 * U, C.hot);
+    if (bar >= 1) {
+      const p = bar - 1;
+      word("ARE THEY?", midX, midY + 6 * U, W * 0.8, 12 * U, { split: 2 + p * 4, color: C.paper });
+      cheetah(midX, midY + (vertical ? 34 : 28) * U, 22 * U * (0.6 + p * 0.6), p);
+      speedLines(t, Math.floor(p * 40), 0.08 + p * 0.2);
+    }
+  } else if (bar < BARS.brk) {                                // drop A: one word a kick
+    const scene = Math.floor((bar - BARS.dropA) / 2), ki = lastBefore(kicks, t), first = lastBefore(kicks, at(BARS.dropA + scene * 2) - 1e-6) + 1;
+    const n = Math.max(0, ki - first), w = DROP_A[scene][Math.min(7, n)], tk = kicks[ki];
+    const invert = n % 4 === 3 && !reduced;
+    if (invert) { cx.fillStyle = C.paper; cx.fillRect(-W, -H, W * 3, H * 3); }
+    if (scene === 0) {
+      cheetah(midX, midY + (vertical ? 22 : 8) * U, (vertical ? 70 : 62) * U, e);
+      speedLines(t, 50, 0.12 + e * 0.25);
+    } else if (scene === 1) {                               // the request being written, the model already on it
+      const typed = REQUEST.slice(0, Math.floor((bar - BARS.dropA - 2) * 34));
+      const px = W * 0.06, py = midY + (vertical ? 14 : 10) * U, pw = W * 0.88, ph = (vertical ? 22 : 30) * U;
+      cx.strokeStyle = C.amber; cx.lineWidth = 0.35 * U; cx.strokeRect(px, py, pw, ph);
+      mono(typed, px + 2 * U, py + 5 * U, (vertical ? 2.3 : 2.1) * U, invert ? C.ink : C.paper);
+      const tok = Math.floor((bar - BARS.dropA - 2) * 210);
+      mono(`thinking ahead · ${tok} tok`, px + 2 * U, py + ph - 4 * U, (vertical ? 2.3 : 2.1) * U, C.amber);
+      cheetah(px + pw - 7 * U, py - 7 * U, 12 * U, e);
+    } else if (scene === 2) {                               // the measured numbers
+      const y0 = midY + (vertical ? 16 : 12) * U;
+      mono("WITHOUT", W * 0.12, y0, 3 * U, C.dim); mono("5.5 s", W * 0.88, y0, 5 * U, invert ? C.ink : C.paper, "right");
+      if (n >= 5) { cx.strokeStyle = C.red; cx.lineWidth = 0.8 * U; cx.beginPath(); cx.moveTo(W * 0.62, y0); cx.lineTo(W * 0.9, y0); cx.stroke(); }
+      mono("MAFDET", W * 0.12, y0 + 9 * U, 3 * U, C.amber);
+      mono(`${Math.min(0.95, Math.max(0, (bar - BARS.dropA - 4) * 0.6)).toFixed(2)} s`, W * 0.88, y0 + 9 * U, 7 * U, C.hot, "right");
+      mono("first tool call after Enter · Qwen3-4B · RTX 2060", midX, y0 + 18 * U, 1.9 * U, C.dim, "center");
+    } else {                                                // what it works with
+      const chips = ["files", "shell", "MCP", "Ghidra", "notes", "to-do"], shown = Math.min(6, Math.floor((bar - BARS.dropA - 6) * 6));
+      const cols = vertical ? 2 : 3, cw = W * (vertical ? 0.38 : 0.26), ch = 7 * U;
+      chips.slice(0, shown).forEach((c, i) => { const col = i % cols, row = Math.floor(i / cols);
+        const x = midX + (col - (cols - 1) / 2) * (cw + 2 * U), y = midY + (vertical ? 14 : 12) * U + row * (ch + 2 * U);
+        cx.strokeStyle = C.amber; cx.lineWidth = 0.3 * U; cx.strokeRect(x - cw / 2, y - ch / 2, cw, ch);
+        mono(c, x, y, 2.8 * U, invert ? C.ink : C.paper, "center"); });
+      speedLines(t, 30, 0.1 + e * 0.2);
+    }
+    const yWord = vertical ? midY - 22 * U : midY - 22 * U;
+    cx.save(); const s = slam(t, tk); cx.translate(midX, yWord); cx.scale(s, s);
+    word(w, 0, 0, W * 0.9, (vertical ? 30 : 34) * U, { split: (1 + e * 6) * k, color: invert ? C.ink : (n % 2 ? C.hot : C.paper), glow: invert ? 0 : C.amber });
+    cx.restore();
+  } else if (bar < BARS.dropB) {                              // break: slow, dark, then the cloud
+    const p = (bar - BARS.brk) / 2;
+    for (let i = 0; i < 40; i++) {                            // aura rising
+      const x = (i * 97.3) % W, y = H - ((t * (40 + i * 3) * U / 10 + i * 53) % (H * 1.1));
+      cx.fillStyle = `rgba(212,137,42,${0.15 + (i % 5) * 0.06})`; cx.fillRect(x, y, U * (0.5 + i % 3), U * (0.5 + i % 3));
+    }
+    cheetah(midX, midY + (vertical ? 4 : 2) * U, (vertical ? 52 : 48) * U * (1 + p * 0.15), 0.4 + e * 0.6);
+    if (p > 0.25) word("OR GO", midX, midY - (vertical ? 52 : 38) * U, W * 0.8, (vertical ? 16 : 12) * U, { split: 1 + e * 3, color: C.paper });
+    if (p > 0.4) word("CLOUD.", midX, midY - (vertical ? 36 : 26) * U, W * 0.8, (vertical ? 20 : 14) * U, { split: 1 + e * 3, color: C.hot, glow: C.amber });
+    if (p > 0.5) {                                           // the /model picker, highlight running down
+      const items = ["This machine", "Anthropic Claude", "Google Gemini", "Qwen on Alibaba Cloud", "OpenRouter"];
+      const bx = W * (vertical ? 0.12 : 0.62), by = midY + (vertical ? 30 : -6) * U, bw = W * (vertical ? 0.76 : 0.32), lh = (vertical ? 4.2 : 3.6) * U;
+      cx.fillStyle = "rgba(15,10,5,.92)"; cx.fillRect(bx, by, bw, lh * (items.length + 1.6));
+      cx.strokeStyle = C.amber; cx.lineWidth = 0.3 * U; cx.strokeRect(bx, by, bw, lh * (items.length + 1.6));
+      mono("/model", bx + 1.5 * U, by + lh * 0.8, 2 * U, C.hot);
+      const hl = Math.floor((t / STEP) / 2) % items.length;
+      items.forEach((it, i) => { const y = by + lh * (i + 1.8);
+        if (i === hl) { cx.fillStyle = "#2E200C"; cx.fillRect(bx + 0.6 * U, y - lh * 0.45, bw - 1.2 * U, lh * 0.9); }
+        mono(it, bx + 2.5 * U, y, (vertical ? 2.1 : 1.7) * U, i === hl ? C.hot : C.paper); });
+    }
+  } else if (bar < BARS.end) {                                // drop B: cuts every two 16ths
+    const i = Math.floor((t - at(BARS.dropB)) / (STEP * 2)), w = DROP_B[Math.min(DROP_B.length - 1, i)];
+    const invert = i % 2 === 1 && !reduced && i < 24;
+    if (invert) { cx.fillStyle = C.amber; cx.fillRect(-W, -H, W * 3, H * 3); }
+    speedLines(t, 70, 0.15 + e * 0.3);
+    if (i % 4 === 0) cheetah(midX, midY + (vertical ? 30 : 22) * U, (vertical ? 34 : 30) * U, e);
+    const tk = at(BARS.dropB) + i * STEP * 2;
+    cx.save(); const s = slam(t, tk); cx.translate(midX, midY - (vertical ? 6 : 4) * U); cx.scale(s, s);
+    word(w, 0, 0, W * 0.92, (vertical ? 26 : 34) * U, { split: (2 + e * 8) * k, color: invert ? C.ink : C.paper, glow: invert ? 0 : C.amber });
+    cx.restore();
+    const p = (bar - BARS.dropB) / 4, aura = Math.floor(9999 * p * p);
+    mono("AURA", W * 0.08, H - 7 * U, 3 * U, C.amber); mono(`+${aura}`, W * 0.92, H - 7 * U, 4 * U, C.hot, "right");
+    cx.fillStyle = C.amber; cx.fillRect(W * 0.08, H - 3.6 * U, W * 0.84 * p, 0.6 * U);
+  } else {                                                    // the end card
+    const p = Math.min(1, (t - END) / 0.6);
+    cheetah(midX, midY - (vertical ? 22 : 18) * U, (vertical ? 36 : 30) * U, Math.max(0.2, 1 - (t - END) / 2));
+    word("MAFDET", midX, midY + (vertical ? 14 : 11) * U, W * 0.8, 16 * U, { split: (1 - p) * 8, color: C.paper, glow: C.amber });
+    mono("agent", midX, midY + (vertical ? 22 : 19) * U, 3 * U, C.hot, "center");
+    if (t > END + 0.5) {
+      mono("pip install mafdet", midX, midY + (vertical ? 31 : 27) * U, 2.6 * U, C.paper, "center");
+      mono("mafdet agent", midX, midY + (vertical ? 36 : 31) * U, 2.6 * U, C.amber, "center");
+      mono("github.com/Mafdet-AI/mafdet", midX, midY + (vertical ? 43 : 37) * U, 2 * U, C.dim, "center");
+    }
+  }
+  // film: flash, grain, vignette, scanlines
+  cx.setTransform(1, 0, 0, 1, 0, 0);
+  if (fl > 0.01) { cx.fillStyle = `rgba(255,244,228,${fl * 0.8 * (reduced ? 0.4 : 1)})`; cx.fillRect(0, 0, W, H); }
+  if (ec > 0.05 && !reduced) { cx.fillStyle = `rgba(255,43,78,${ec * 0.08})`; cx.fillRect(0, 0, W, H); }
+  cx.globalAlpha = 0.07; cx.fillStyle = cx.createPattern(grain[Math.floor(Math.random() * 4)], "repeat");
+  cx.save(); cx.translate(Math.random() * 256, Math.random() * 256); cx.fillRect(-256, -256, W + 256, H + 256); cx.restore();
+  cx.globalAlpha = 1; cx.drawImage(overlay, 0, 0);
+}
+
+// ------------------------------------------------------------------ playing, replaying, recording
+const playBtn = document.getElementById("play"), prog = document.getElementById("prog"), out = document.getElementById("out");
+let recorder = null, chunks = [];
+
+function start(record) {
+  audio(); ac.resume();
+  if (run) { try { run.disconnect(); } catch (e) {} }
+  startAt = ac.currentTime + 0.15; run = schedule(startAt); playing = true; playBtn.hidden = true;
+  if (record) {
+    const stream = new MediaStream([...cv.captureStream(30).getVideoTracks(), ...recDest.stream.getAudioTracks()]);
+    const types = ["video/mp4;codecs=avc1,mp4a.40.2", "video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
+    const type = types.find(t => window.MediaRecorder && MediaRecorder.isTypeSupported(t)) || "";
+    chunks = []; recorder = new MediaRecorder(stream, type ? { mimeType: type, videoBitsPerSecond: 8e6 } : undefined);
+    recorder.ondataavailable = ev => ev.data.size && chunks.push(ev.data);
+    recorder.onstop = () => {
+      const kind = (recorder.mimeType || "video/webm").split(";")[0], blob = new Blob(chunks, { type: kind });
+      const url = URL.createObjectURL(blob), ext = kind.includes("mp4") ? "mp4" : "webm";
+      out.hidden = false; out.replaceChildren();
+      const v = document.createElement("video"); v.src = url; v.controls = true; v.playsInline = true;
+      const a = document.createElement("a"); a.href = url; a.download = `mafdet-phonk.${ext}`;
+      a.textContent = `Save mafdet-phonk.${ext} (${(blob.size / 1e6).toFixed(1)} MB)`;
+      const p = document.createElement("p"); p.className = "note";
+      p.textContent = "If the save link does nothing here, right-click the video and save it, or open assets/promo/mafdet-phonk.html from the repository in Chrome and export there.";
+      out.append(v, a, p);
+      document.getElementById("export").textContent = "Export video";
+    };
+    setTimeout(() => recorder.start(250), 120);
+    document.getElementById("export").textContent = "Recording…";
+  }
+}
+function tick() {
+  if (playing) {
+    const t = ac.currentTime - startAt;
+    frame(Math.max(0, t)); prog.style.width = `${Math.min(100, Math.max(0, t) / TOTAL * 100)}%`;
+    if (t >= TOTAL) { playing = false; if (recorder && recorder.state === "recording") recorder.stop(); recorder = null; }
+  }
+  requestAnimationFrame(tick);
+}
+// the still before Play: the drop. `?t=12.5` shows that moment instead (for checking a frame by hand).
+const still = parseFloat(new URLSearchParams(location.search).get("t"));
+function poster() { frame(Number.isFinite(still) ? still : at(BARS.dropA, 8.5)); }
+
+playBtn.addEventListener("click", () => start(false));
+document.getElementById("replay").addEventListener("click", () => start(false));
+document.getElementById("export").addEventListener("click", () => { if (!recorder) start(true); });
+const setFormat = vertical => {
+  document.getElementById("stage").classList.toggle("wide", !vertical);
+  document.getElementById("vertical").setAttribute("aria-pressed", vertical);
+  document.getElementById("horizontal").setAttribute("aria-pressed", !vertical);
+  resize(vertical); if (!playing) poster();
+};
+document.getElementById("vertical").addEventListener("click", () => setFormat(true));
+document.getElementById("horizontal").addEventListener("click", () => setFormat(false));
+
+resize(true); poster();
+Promise.all([document.fonts.load(`40px ${DISPLAY}`), document.fonts.load(`800 20px ${MONO}`)]).then(() => { if (!playing) poster(); }).catch(() => {});
+requestAnimationFrame(tick);
+})();
+</script>
