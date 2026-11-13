@@ -5,3 +5,5 @@ export {ShakeOnBeat} from "./ShakeOnBeat";
 export {CodeReveal} from "./CodeReveal";
 export {FlowDiagram} from "./FlowDiagram";
 export {GrainOverlay} from "./GrainOverlay";
+export * from "./TuiClip";
+export * from "./Mascot";

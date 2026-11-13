@@ -33,10 +33,10 @@ export const GlitchTransition: React.FC<GlitchTransitionProps> = ({at, frames = 
       <svg width={0} height={0} style={{position: "absolute"}}>
         <defs>
           <filter id="glitch-red" x="0" y="0" width="100%" height="100%" colorInterpolationFilters="sRGB">
-            <feColorMatrix type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" />
+            <feColorMatrix type="matrix" values="0.31 0.31 0.31 0 0  0.13 0.13 0.13 0 0  0.08 0.08 0.08 0 0  0 0 0 1 0" />
           </filter>
           <filter id="glitch-cyan" x="0" y="0" width="100%" height="100%" colorInterpolationFilters="sRGB">
-            <feColorMatrix type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 1 0" />
+            <feColorMatrix type="matrix" values="0.33 0.33 0.33 0 0  0.26 0.26 0.26 0 0  0.14 0.14 0.14 0 0  0 0 0 1 0" />
           </filter>
         </defs>
       </svg>

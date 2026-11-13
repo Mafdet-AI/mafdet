@@ -3,8 +3,8 @@ import {interpolate, useCurrentFrame} from "remotion";
 import {COLORS, SAFE, SIZE, type PunchTextProps} from "../contracts";
 import {DISPLAY} from "../fonts";
 
-const RED = "#FF0030";
-const CYAN = "#00E5FF";
+const RED = "#F0603A";   // MAFDET's alarm
+const CYAN = "#FFC46B";  // MAFDET's hot amber
 
 /** Rough advance width of Anton in caps, in em. Slightly generous, so the text never touches `maxWidth`. */
 const widthEm = (text: string): number => {

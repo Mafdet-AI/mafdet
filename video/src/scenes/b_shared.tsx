@@ -44,7 +44,7 @@ export const Caption: React.FC<{
   until?: number;
   size?: number;
   color?: string;
-}> = ({text, top, from = 0, until = Infinity, size = 30, color = "#B5B5B5"}) => {
+}> = ({text, top, from = 0, until = Infinity, size = 30, color = COLORS.soft}) => {
   const frame = useCurrentFrame();
   if (frame < from || frame >= until) return null;
   const lines = Array.isArray(text) ? text : [text];

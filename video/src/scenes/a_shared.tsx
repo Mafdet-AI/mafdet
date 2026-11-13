@@ -107,7 +107,7 @@ export const Caption: React.FC<{text: string; top?: number; from?: number; until
   top = CAPTION_TOP,
   from = 0,
   until = Infinity,
-  color = "#B5B5B5",
+  color = COLORS.soft,
   size = 30,
 }) => {
   const frame = useCurrentFrame();

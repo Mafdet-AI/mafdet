@@ -5,7 +5,7 @@ import {S03_Command} from "./S03_Command";
 import {S04_Drop} from "./S04_Drop";
 import {S05_Flow} from "./S05_Flow";
 import {S06_LoopCode} from "./S06_LoopCode";
-import {S07_SelfCorrect} from "./S07_SelfCorrect";
+import {S07_Live} from "./S07_Live";
 import {S08_ThinkAhead} from "./S08_ThinkAhead";
 
 export const blockA: Record<string, React.FC> = {
@@ -15,6 +15,6 @@ export const blockA: Record<string, React.FC> = {
   S04_Drop,
   S05_Flow,
   S06_LoopCode,
-  S07_SelfCorrect,
+  S07_Live,
   S08_ThinkAhead,
 };

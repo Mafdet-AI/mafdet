@@ -1,5 +1,22 @@
 # MAFDET AGENT: phonk edit storyboard
 
+> **Revision 2 (2026-11-13).** MAFDET agent's own colours (amber phosphor, `contracts.ts`), the real window at work
+> and the cheetah mascot, and a theatrical close on the slogan. What changed against the table below:
+> - **S04 (16-20)**: the real window slams in on the drop under MAFDET / AGENT; the camera goes into its banner on 18
+>   (THE CHEETAH) and the cheetah taps its ball on 19 (HUNTS AHEAD).
+> - **S07_Live (36-40)** replaces S07_SelfCorrect: a whole turn in the real window, one event a beat
+>   (WATCH IT WORK, READS, EDITS, ANSWERS).
+> - **S08 (40-48)**: the request typed in the real window while its status line counts `thinking ahead` up to 273;
+>   the camera goes into that count in the break; ENTER on 47.
+> - **S10 (52-60)**: Shift+Tab through ask, edits, all on the real status line, one a beat; then the approval
+>   prompt of a shell command, y on 58, it runs.
+> - **S14_Eyes (78-80)** replaces S14_Recap: black, the cheetah's eyes open and burn, three black frames.
+> - **S15 (80-88)**: the cheetah slams in, the identity's wordmark uncovers, letterbox and push, black but the eyes,
+>   AHEAD, (84) TOGETHER. (85), the final card; everything fades but the eyes, which go out last.
+> The live clips are recorded from the real interface by `video/tools/capture_tui.py` with a scripted model and real
+> tools; every one says so in its caption.
+
+
 Vertical 1080x1920, 30 fps, 1347 frames (44.9 s), 88 beats = 22 bars of 4, one beat = 15.3 frames.
 The only source of facts is `docs/mafdet_brief.md`. Every on-screen claim is mapped to it in section 5.
 

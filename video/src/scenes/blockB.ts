@@ -4,7 +4,7 @@ import {S10_Approvals} from "./S10_Approvals";
 import {S11_Context} from "./S11_Context";
 import {S12_McpTools} from "./S12_McpTools";
 import {S13_Walk} from "./S13_Walk";
-import {S14_Recap} from "./S14_Recap";
+import {S14_Eyes} from "./S14_Eyes";
 import {S15_Outro} from "./S15_Outro";
 
 export const blockB: Record<string, React.FC> = {
@@ -13,6 +13,6 @@ export const blockB: Record<string, React.FC> = {
   S11_Context,
   S12_McpTools,
   S13_Walk,
-  S14_Recap,
+  S14_Eyes,
   S15_Outro,
 };
