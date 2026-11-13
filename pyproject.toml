@@ -34,6 +34,7 @@ dependencies = [
     "pywebview>=5",       # the window (mafdet gui)
     "textual>=8.0",       # the terminal app (mafdet tui) and the launcher
     "keyring>=24",        # the agent's API keys for models in the cloud, in the system's credential store
+    "anthropic>=2.8",     # the agent with Claude (Anthropic's own SDK)
 ]
 
 [project.optional-dependencies]

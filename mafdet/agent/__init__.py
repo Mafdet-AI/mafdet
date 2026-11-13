@@ -278,6 +278,11 @@ def remote_model(args):
     provider = resolve(args)                # already done by run(): it only gives back the provider
     if not args.url:
         return None, ""
+    if provider is not None and provider.thinking == "anthropic":
+        from .claude import ClaudeModel
+        args.ctx = args.ctx or provider.ctx
+        model = ClaudeModel(args.model, api_key=args.api_key, effort=getattr(args, "reasoning", "auto") or "auto")
+        return model, f"{model.model} · {provider.title}"
     args.ctx = args.ctx or engine_ctx(args.url)
     model = ChatModel(args.url, args.model or "default", llama=args.engine == "llama", api_key=args.api_key,
                       thinking=getattr(args, "thinking", "reasoning_effort"),

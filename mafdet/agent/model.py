@@ -33,6 +33,7 @@ class Reply:
     finish: str = ""
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    claude: list[dict] | None = None        # Claude's content blocks as they came (claude.py): sent back unchanged
 
     def message(self) -> dict:
         """The assistant message as it goes back into the history: the reasoning stays out, as in the
@@ -43,6 +44,8 @@ class Reply:
                                   "function": {"name": c["name"], "arguments": c["arguments"]},
                                   **({"extra_content": c["extra_content"]} if c.get("extra_content") else {})}
                                  for c in self.tool_calls]
+        if self.claude:
+            msg["claude"] = self.claude
         return msg
 
 
@@ -95,6 +98,7 @@ class ChatModel:
              temperature: float = 0.6, think: bool = True, on_delta=None, should_stop=None) -> Reply:
         """One assistant turn. `on_delta(kind, text)` gets "think" and "text" pieces as they are written;
         `should_stop()` turning true ends it with Stopped, and the engine stops writing."""
+        messages = [plain(m) for m in messages]
         body: dict = {"model": self.model, "messages": messages, "stream": True, "max_tokens": max_tokens,
                       "temperature": temperature, "stream_options": {"include_usage": True}}
         if tools:
@@ -178,6 +182,14 @@ class ChatModel:
                 raise ModelError(f"the engine answered {e.code}: {text}") from None
             except (urllib.error.URLError, OSError) as e:
                 raise ModelError(f"the engine at {self.url} does not answer: {e}") from None
+
+
+# What an OpenAI-compatible engine reads of a message; the rest (Claude's own blocks) stays out.
+FIELDS = ("role", "content", "tool_calls", "tool_call_id", "name")
+
+
+def plain(message: dict) -> dict:
+    return {k: v for k, v in message.items() if k in FIELDS}
 
 
 def _call_index(tc: dict, calls: dict[int, dict]) -> int:

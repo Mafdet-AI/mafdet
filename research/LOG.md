@@ -287,6 +287,11 @@ costs 2.4 decoding steps. To speed up the 14B, take work away from the CPU.
      the three endpoints answered as expected to a fake key (Google 400 "pass a valid API key", Alibaba 401,
      OpenRouter lists its models with no key). Not yet run with a real key on a task: to try, and to see whether
      MCP tool schemas pass Gemini's stricter schema checks.
+   - **Claude (2026-11-13)**: `--provider claude` / `/model` (`agent/claude.py`, Anthropic's SDK, Messages API):
+     thinking blocks echoed unchanged, `prefix_mismatch_behavior: "drop_block"` because the agent edits its history,
+     adaptive thinking with `effort`, automatic prompt caching, `fallbacks: "default"` on the models that take it.
+     Tested through the SDK against a fake Messages endpoint; the real API answered 401 to a fake key. To try with
+     a key: a reverse-engineering session (do cyber declines fall back cleanly?), and the cache hit rate per step.
    - **/model and /reasoning (2026-11-13)**: the model changes during a session (`agent/switch.py` Runtime,
      `agent/picker.py`): local or a provider, the key typed in once and kept in the system's credential store
      (`agent/keys.py`, keyring), the provider's model list; reasoning levels auto/off/low/medium/high per

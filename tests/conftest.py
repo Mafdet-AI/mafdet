@@ -52,6 +52,7 @@ def keyring_store(monkeypatch):
     store = MemoryKeyring()
     monkeypatch.setattr(keys, "_keyring", lambda: store)
     monkeypatch.setattr(keys, "_session", {})
-    for var in ("DASHSCOPE_API_KEY", "QWEN_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "OPENROUTER_API_KEY"):
+    for var in ("DASHSCOPE_API_KEY", "QWEN_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "OPENROUTER_API_KEY",
+                "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL"):
         monkeypatch.delenv(var, raising=False)
     return store

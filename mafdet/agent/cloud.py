@@ -1,6 +1,8 @@
-"""Models in the cloud for the agent: Qwen on Alibaba Cloud, Google Gemini, anything on OpenRouter.
+"""Models in the cloud for the agent: Anthropic's Claude, Qwen on Alibaba Cloud, Google Gemini, anything on
+OpenRouter.
 
-All three speak the OpenAI chat API, so they go through the same ChatModel as a local engine; a provider
+Claude goes through Anthropic's own SDK (claude.py). The others speak the OpenAI chat API, so they go
+through the same ChatModel as a local engine; a provider
 here is only where it is, which variable holds its key, the context to assume, and how it is told how
 much to reason. `--provider gemini --model gemini-…` is `--url <its address> --engine openai --api-key …`
 said shorter. The key comes from --api-key, the provider's environment variable, or the system's
@@ -25,11 +27,13 @@ class Provider:
     url: str                    # the base, version included: /chat/completions and /models go after it
     keys: tuple[str, ...]       # environment variables that may hold the key, in order
     ctx: int                    # context assumed when --ctx does not say
-    thinking: str               # how it is told how much to reason (model.reasoning_params)
+    thinking: str               # how it is told how much to reason (model.reasoning_params; "anthropic": claude.py)
     signup: str                 # where to get a key
 
 
 PROVIDERS = {p.name: p for p in (
+    Provider("claude", "Anthropic Claude", "https://api.anthropic.com", ("ANTHROPIC_API_KEY",), 131072, "anthropic",
+             "https://platform.claude.com (API keys)"),
     Provider("qwen", "Qwen on Alibaba Cloud", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
              ("DASHSCOPE_API_KEY", "QWEN_API_KEY"), 131072, "enable_thinking",
              "https://modelstudio.console.alibabacloud.com (Model Studio, API keys)"),
@@ -54,6 +58,9 @@ def api_key(provider: Provider, given: str = "") -> str:
 
 def list_models(provider: Provider, key: str, timeout: float = 20.0) -> list[str]:
     """The ids of the models the provider serves to this key (GET /models)."""
+    if provider.thinking == "anthropic":
+        from .claude import list_models as claude_models
+        return claude_models(key)
     req = urllib.request.Request(provider.url + "/models", headers={"Authorization": f"Bearer {key}"})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:

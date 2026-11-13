@@ -7,6 +7,7 @@ psutil>=5.9             # hardware panel: RAM and CPU
 pywebview>=5            # mafdet gui: the window
 textual>=8.0            # mafdet tui and the launcher
 keyring>=24             # mafdet agent: API keys of cloud models, in the system's credential store
+anthropic>=2.8          # mafdet agent with Claude (Anthropic's own SDK)
 # Measurements on PyTorch (race, hunt, judge with --backend hf), and demo_live.py:
 #   pip install torch --index-url https://download.pytorch.org/whl/cu128
 #   pip install rich
