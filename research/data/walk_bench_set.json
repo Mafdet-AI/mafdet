@@ -1,0 +1,17 @@
+{
+ "_note": "The walk benchmark's set (research/walk_bench.py): small Microsoft command-line tools copied from C:\\Windows\\System32 of Windows 11 (10.0.26300) into E:\\mafdet-tools\\samples\\bench, walked without symbols; the keys come from their public PDBs (research/walk_bench_keys.py), kept in E:\\mafdet-tools\\samples\\bench-pdb, away from the binaries. A key checks the binary's sha256 before a run. 354 functions to name through rea, 314 with a real name in the keys.",
+ "binaries": [
+  {"name": "where", "path": "E:/mafdet-tools/samples/bench/where.exe", "key": "walk_bench_keys/where.json",
+   "program": "where.exe, a Windows command-line tool"},
+  {"name": "findstr", "path": "E:/mafdet-tools/samples/bench/findstr.exe", "key": "walk_bench_keys/findstr.json",
+   "program": "findstr.exe, a Windows command-line tool"},
+  {"name": "sort", "path": "E:/mafdet-tools/samples/bench/sort.exe", "key": "walk_bench_keys/sort.json",
+   "program": "sort.exe, a Windows command-line tool"},
+  {"name": "icacls", "path": "E:/mafdet-tools/samples/bench/icacls.exe", "key": "walk_bench_keys/icacls.json",
+   "program": "icacls.exe, a Windows command-line tool"},
+  {"name": "xcopy", "path": "E:/mafdet-tools/samples/bench/xcopy.exe", "key": "walk_bench_keys/xcopy.json",
+   "program": "xcopy.exe, a Windows command-line tool"},
+  {"name": "more", "path": "E:/mafdet-tools/samples/bench/more.com", "key": "walk_bench_keys/more.json",
+   "program": "more.com, a Windows command-line tool"}
+ ]
+}

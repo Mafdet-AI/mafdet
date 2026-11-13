@@ -25,3 +25,6 @@ video/public/audio/
 assets/music/
 out/
 video/public/tui/
+
+# Claude Code: local worktrees and settings
+.claude/

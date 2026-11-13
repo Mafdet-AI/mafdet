@@ -1,0 +1,618 @@
+{
+ "binary": "where.exe",
+ "sha256": "f51fab8041e5023d7290b540a2106f051ef0bd2bc3443c9daf318628b560fa29",
+ "image_base": "0x140000000",
+ "pdb": {
+  "name": "where.pdb",
+  "guid": "A8B37774-47EF-BAA8-2506-17E8722F8ADC",
+  "age": 1,
+  "url": "https://msdl.microsoft.com/download/symbols/where.pdb/A8B3777447EFBAA8250617E8722F8ADC1/where.pdb",
+  "sha256": "77cef9f212f8a2978ae2ddcc27bc26f9fa303c8e6dd6e8828fc7831e06e1aa77"
+ },
+ "publics": 294,
+ "functions": {
+  "0x140001300": {
+   "name": "wmainCRTStartup",
+   "full": "wmainCRTStartup",
+   "raw": "wmainCRTStartup",
+   "function": true
+  },
+  "0x140001328": {
+   "name": "wcstok_mvcrt_legacy_two_parameter_form",
+   "full": "wcstok_mvcrt_legacy_two_parameter_form",
+   "raw": "wcstok_mvcrt_legacy_two_parameter_form",
+   "function": true
+  },
+  "0x140001340": {
+   "name": "__CxxUnhandledExceptionFilter",
+   "full": "__CxxUnhandledExceptionFilter",
+   "raw": "?__CxxUnhandledExceptionFilter@@YAJPEAU_EXCEPTION_POINTERS@@@Z",
+   "function": true
+  },
+  "0x140001380": {
+   "name": "__CxxSetUnhandledExceptionFilter",
+   "full": "__CxxSetUnhandledExceptionFilter",
+   "raw": "__CxxSetUnhandledExceptionFilter",
+   "function": true
+  },
+  "0x14000139e": {
+   "name": "_XcptFilter",
+   "full": "_XcptFilter",
+   "raw": "_XcptFilter",
+   "function": true
+  },
+  "0x1400013ac": {
+   "name": "RtlpImageNtHeader",
+   "full": "RtlpImageNtHeader",
+   "raw": "RtlpImageNtHeader",
+   "function": true
+  },
+  "0x140001408": {
+   "name": "_get_image_app_type",
+   "full": "_get_image_app_type",
+   "raw": "_get_image_app_type",
+   "function": true
+  },
+  "0x140001454": {
+   "name": "_amsg_exit",
+   "full": "_amsg_exit",
+   "raw": "_amsg_exit",
+   "function": true
+  },
+  "0x140001460": {
+   "name": "_wsetargv",
+   "full": "_wsetargv",
+   "raw": "_wsetargv",
+   "function": true,
+   "aliases": [
+    "_matherr"
+   ]
+  },
+  "0x140001470": {
+   "name": "_FindPESection",
+   "full": "_FindPESection",
+   "raw": "_FindPESection",
+   "function": true
+  },
+  "0x1400014c0": {
+   "name": "_IsNonwritableInCurrentImage",
+   "full": "_IsNonwritableInCurrentImage",
+   "raw": "_IsNonwritableInCurrentImage",
+   "function": true
+  },
+  "0x140001520": {
+   "name": "_ValidateImageBase",
+   "full": "_ValidateImageBase",
+   "raw": "_ValidateImageBase",
+   "function": true
+  },
+  "0x140001554": {
+   "name": "__security_init_cookie",
+   "full": "__security_init_cookie",
+   "raw": "__security_init_cookie",
+   "function": true
+  },
+  "0x140001633": {
+   "name": "_initterm",
+   "full": "_initterm",
+   "raw": "_initterm",
+   "function": true
+  },
+  "0x14000163f": {
+   "name": "__C_specific_handler",
+   "full": "__C_specific_handler",
+   "raw": "__C_specific_handler",
+   "function": true
+  },
+  "0x140001658": {
+   "name": "__raise_securityfailure",
+   "full": "__raise_securityfailure",
+   "raw": "__raise_securityfailure",
+   "function": true
+  },
+  "0x1400016a0": {
+   "name": "__report_gsfailure",
+   "full": "__report_gsfailure",
+   "raw": "__report_gsfailure",
+   "function": true
+  },
+  "0x140001850": {
+   "name": "_guard_check_icall_nop",
+   "full": "_guard_check_icall_nop",
+   "raw": "_guard_check_icall_nop",
+   "function": true
+  },
+  "0x140001868": {
+   "name": "__acrt_iob_func",
+   "full": "__acrt_iob_func",
+   "raw": "__acrt_iob_func",
+   "function": true
+  },
+  "0x14000188c": {
+   "name": "__iob_func",
+   "full": "__iob_func",
+   "raw": "__iob_func",
+   "function": true
+  },
+  "0x140001898": {
+   "name": "DisplayHelpUsage",
+   "full": "DisplayHelpUsage",
+   "raw": "DisplayHelpUsage",
+   "function": true
+  },
+  "0x1400018e4": {
+   "name": "DivideToken",
+   "full": "DivideToken",
+   "raw": "DivideToken",
+   "function": true
+  },
+  "0x14000197c": {
+   "name": "FindforFile",
+   "full": "FindforFile",
+   "raw": "FindforFile",
+   "function": true
+  },
+  "0x140001f18": {
+   "name": "FindforFileRecursive",
+   "full": "FindforFileRecursive",
+   "raw": "FindforFileRecursive",
+   "function": true
+  },
+  "0x1400027fc": {
+   "name": "FreeList",
+   "full": "FreeList",
+   "raw": "FreeList",
+   "function": true
+  },
+  "0x140002838": {
+   "name": "GetFileDateTimeandSize",
+   "full": "GetFileDateTimeandSize",
+   "raw": "GetFileDateTimeandSize",
+   "function": true
+  },
+  "0x140002ad4": {
+   "name": "Match",
+   "full": "Match",
+   "raw": "Match",
+   "function": true
+  },
+  "0x140002ba0": {
+   "name": "ProcessOptions",
+   "full": "ProcessOptions",
+   "raw": "ProcessOptions",
+   "function": true
+  },
+  "0x140003370": {
+   "name": "Push",
+   "full": "Push",
+   "raw": "Push",
+   "function": true
+  },
+  "0x140003424": {
+   "name": "StringCchPrintfW",
+   "full": "StringCchPrintfW",
+   "raw": "StringCchPrintfW",
+   "function": true
+  },
+  "0x1400034a0": {
+   "name": "Where",
+   "full": "Where",
+   "raw": "Where",
+   "function": true
+  },
+  "0x140003c54": {
+   "name": "found",
+   "full": "found",
+   "raw": "found",
+   "function": true
+  },
+  "0x140003dbc": {
+   "name": "wmain",
+   "full": "wmain",
+   "raw": "wmain",
+   "function": true
+  },
+  "0x140004534": {
+   "name": "AllocateMemory",
+   "full": "AllocateMemory",
+   "raw": "AllocateMemory",
+   "function": true
+  },
+  "0x140004610": {
+   "name": "AsFloat",
+   "full": "AsFloat",
+   "raw": "AsFloat",
+   "function": true
+  },
+  "0x140004708": {
+   "name": "AsLong",
+   "full": "AsLong",
+   "raw": "AsLong",
+   "function": true
+  },
+  "0x14000481c": {
+   "name": "CheckMemory",
+   "full": "CheckMemory",
+   "raw": "CheckMemory",
+   "function": true
+  },
+  "0x140004888": {
+   "name": "FindChar2",
+   "full": "FindChar2",
+   "raw": "FindChar2",
+   "function": true
+  },
+  "0x140004910": {
+   "name": "FindString",
+   "full": "FindString",
+   "raw": "FindString",
+   "function": true
+  },
+  "0x140004940": {
+   "name": "FindString2",
+   "full": "FindString2",
+   "raw": "FindString2",
+   "function": true
+  },
+  "0x140004a04": {
+   "name": "FreeMemory",
+   "full": "FreeMemory",
+   "raw": "FreeMemory",
+   "function": true
+  },
+  "0x140004aa8": {
+   "name": "GetBufferSize",
+   "full": "GetBufferSize",
+   "raw": "GetBufferSize",
+   "function": true
+  },
+  "0x140004b18": {
+   "name": "GetInternalTemporaryBuffer",
+   "full": "GetInternalTemporaryBuffer",
+   "raw": "GetInternalTemporaryBuffer",
+   "function": true
+  },
+  "0x140004d48": {
+   "name": "GetInternalTemporaryBufferRef",
+   "full": "GetInternalTemporaryBufferRef",
+   "raw": "GetInternalTemporaryBufferRef",
+   "function": true
+  },
+  "0x140004db8": {
+   "name": "GetReason",
+   "full": "GetReason",
+   "raw": "GetReason",
+   "function": true
+  },
+  "0x140004df8": {
+   "name": "GetResString",
+   "full": "GetResString",
+   "raw": "GetResString",
+   "function": true
+  },
+  "0x140004e30": {
+   "name": "GetResString2FromModule",
+   "full": "GetResString2FromModule",
+   "raw": "GetResString2FromModule",
+   "function": true
+  },
+  "0x1400050a0": {
+   "name": "InString",
+   "full": "InString",
+   "raw": "InString",
+   "function": true
+  },
+  "0x1400051e4": {
+   "name": "InitGlobals",
+   "full": "InitGlobals",
+   "raw": "InitGlobals",
+   "function": true
+  },
+  "0x1400052d4": {
+   "name": "IsConsoleFile",
+   "full": "IsConsoleFile",
+   "raw": "IsConsoleFile",
+   "function": true
+  },
+  "0x1400053cc": {
+   "name": "IsConsoleHandle",
+   "full": "IsConsoleHandle",
+   "raw": "IsConsoleHandle",
+   "function": true
+  },
+  "0x140005434": {
+   "name": "IsNumeric",
+   "full": "IsNumeric",
+   "raw": "IsNumeric",
+   "function": true
+  },
+  "0x140005554": {
+   "name": "IsWin2KOrLater",
+   "full": "IsWin2KOrLater",
+   "raw": "IsWin2KOrLater",
+   "function": true
+  },
+  "0x14000562c": {
+   "name": "ReallocateMemory",
+   "full": "ReallocateMemory",
+   "raw": "ReallocateMemory",
+   "function": true
+  },
+  "0x14000577c": {
+   "name": "ReleaseGlobals",
+   "full": "ReleaseGlobals",
+   "raw": "ReleaseGlobals",
+   "function": true
+  },
+  "0x1400058b4": {
+   "name": "SaveLastError",
+   "full": "SaveLastError",
+   "raw": "SaveLastError",
+   "function": true
+  },
+  "0x140005990": {
+   "name": "SetReason",
+   "full": "SetReason",
+   "raw": "SetReason",
+   "function": true
+  },
+  "0x140005a2c": {
+   "name": "SetReason2",
+   "full": "SetReason2",
+   "raw": "SetReason2",
+   "function": true
+  },
+  "0x140005b7c": {
+   "name": "ShowLastError",
+   "full": "ShowLastError",
+   "raw": "ShowLastError",
+   "function": true
+  },
+  "0x140005bc4": {
+   "name": "ShowLastErrorEx",
+   "full": "ShowLastErrorEx",
+   "raw": "ShowLastErrorEx",
+   "function": true
+  },
+  "0x140005c40": {
+   "name": "ShowMessage",
+   "full": "ShowMessage",
+   "raw": "ShowMessage",
+   "function": true
+  },
+  "0x140006000": {
+   "name": "ShowMessageEx",
+   "full": "ShowMessageEx",
+   "raw": "ShowMessageEx",
+   "function": true
+  },
+  "0x140006230": {
+   "name": "StringCompareW",
+   "full": "StringCompareW",
+   "raw": "StringCompareW",
+   "function": true
+  },
+  "0x1400062c4": {
+   "name": "StringConcatW",
+   "full": "StringConcatW",
+   "raw": "StringConcatW",
+   "function": true
+  },
+  "0x1400063c0": {
+   "name": "StringCopyA",
+   "full": "StringCopyA",
+   "raw": "StringCopyA",
+   "function": true
+  },
+  "0x140006454": {
+   "name": "StringCopyW",
+   "full": "StringCopyW",
+   "raw": "StringCopyW",
+   "function": true
+  },
+  "0x1400064f4": {
+   "name": "TrimString2",
+   "full": "TrimString2",
+   "raw": "TrimString2",
+   "function": true
+  },
+  "0x140006640": {
+   "name": "CreateDynamicArray",
+   "full": "CreateDynamicArray",
+   "raw": "CreateDynamicArray",
+   "function": true
+  },
+  "0x140006670": {
+   "name": "DestroyDynamicArray",
+   "full": "DestroyDynamicArray",
+   "raw": "DestroyDynamicArray",
+   "function": true
+  },
+  "0x1400066f0": {
+   "name": "DynArrayAddColumns",
+   "full": "DynArrayAddColumns",
+   "raw": "DynArrayAddColumns",
+   "function": true
+  },
+  "0x140006750": {
+   "name": "DynArrayAppendDWORD",
+   "full": "DynArrayAppendDWORD",
+   "raw": "DynArrayAppendDWORD",
+   "function": true
+  },
+  "0x1400067bc": {
+   "name": "DynArrayAppendDouble",
+   "full": "DynArrayAppendDouble",
+   "raw": "DynArrayAppendDouble",
+   "function": true
+  },
+  "0x14000682c": {
+   "name": "DynArrayAppendFloat",
+   "full": "DynArrayAppendFloat",
+   "raw": "DynArrayAppendFloat",
+   "function": true
+  },
+  "0x14000689c": {
+   "name": "DynArrayAppendLong",
+   "full": "DynArrayAppendLong",
+   "raw": "DynArrayAppendLong",
+   "function": true
+  },
+  "0x140006908": {
+   "name": "DynArrayAppendRow",
+   "full": "DynArrayAppendRow",
+   "raw": "DynArrayAppendRow",
+   "function": true
+  },
+  "0x1400069a4": {
+   "name": "DynArrayAppendString",
+   "full": "DynArrayAppendString",
+   "raw": "DynArrayAppendString",
+   "function": true
+  },
+  "0x140006a48": {
+   "name": "DynArrayGetCount2",
+   "full": "DynArrayGetCount2",
+   "raw": "DynArrayGetCount2",
+   "function": true
+  },
+  "0x140006a90": {
+   "name": "DynArrayGetItemType2",
+   "full": "DynArrayGetItemType2",
+   "raw": "DynArrayGetItemType2",
+   "function": true
+  },
+  "0x140006ae4": {
+   "name": "DynArrayItem2",
+   "full": "DynArrayItem2",
+   "raw": "DynArrayItem2",
+   "function": true
+  },
+  "0x140006b4c": {
+   "name": "DynArraySetString",
+   "full": "DynArraySetString",
+   "raw": "DynArraySetString",
+   "function": true
+  },
+  "0x140006c28": {
+   "name": "__DynArrayAppend",
+   "full": "__DynArrayAppend",
+   "raw": "__DynArrayAppend",
+   "function": true
+  },
+  "0x140006cc0": {
+   "name": "__DynArrayFind",
+   "full": "__DynArrayFind",
+   "raw": "__DynArrayFind",
+   "function": true
+  },
+  "0x140006d9c": {
+   "name": "__DynArrayFreeItemValue",
+   "full": "__DynArrayFreeItemValue",
+   "raw": "__DynArrayFreeItemValue",
+   "function": true
+  },
+  "0x140006e0c": {
+   "name": "__DynArrayGetItem",
+   "full": "__DynArrayGetItem",
+   "raw": "__DynArrayGetItem",
+   "function": true
+  },
+  "0x140006e4c": {
+   "name": "DoParseParam2",
+   "full": "DoParseParam2",
+   "raw": "DoParseParam2",
+   "function": true
+  },
+  "0x140007230": {
+   "name": "ExtractMainOption",
+   "full": "ExtractMainOption",
+   "raw": "ExtractMainOption",
+   "function": true
+  },
+  "0x14000731c": {
+   "name": "MatchOption",
+   "full": "MatchOption",
+   "raw": "MatchOption",
+   "function": true
+  },
+  "0x140007458": {
+   "name": "MatchOptionEx",
+   "full": "MatchOptionEx",
+   "raw": "MatchOptionEx",
+   "function": true
+  },
+  "0x1400075a0": {
+   "name": "ParseAndSaveOptionValue",
+   "full": "ParseAndSaveOptionValue",
+   "raw": "ParseAndSaveOptionValue",
+   "function": true
+  },
+  "0x140007c44": {
+   "name": "PrepareUsageHelperText",
+   "full": "PrepareUsageHelperText",
+   "raw": "PrepareUsageHelperText",
+   "function": true
+  },
+  "0x140007ff0": {
+   "name": "ReleaseAllocatedMemory",
+   "full": "ReleaseAllocatedMemory",
+   "raw": "ReleaseAllocatedMemory",
+   "function": true
+  },
+  "0x1400080b0": {
+   "name": "VerifyParserOptions",
+   "full": "VerifyParserOptions",
+   "raw": "VerifyParserOptions",
+   "function": true
+  },
+  "0x1400083d4": {
+   "name": "__GSHandlerCheck",
+   "full": "__GSHandlerCheck",
+   "raw": "__GSHandlerCheck",
+   "function": true
+  },
+  "0x1400083f8": {
+   "name": "__GSHandlerCheckCommon",
+   "full": "__GSHandlerCheckCommon",
+   "raw": "__GSHandlerCheckCommon",
+   "function": true
+  },
+  "0x140008459": {
+   "name": "memset",
+   "full": "memset",
+   "raw": "memset",
+   "function": true
+  },
+  "0x140008480": {
+   "name": "__security_check_cookie",
+   "full": "__security_check_cookie",
+   "raw": "__security_check_cookie",
+   "function": true
+  },
+  "0x1400084c0": {
+   "name": "_guard_dispatch_icall",
+   "full": "_guard_dispatch_icall",
+   "raw": "_guard_dispatch_icall",
+   "function": true
+  },
+  "0x1400084f0": {
+   "name": "_guard_dispatch_icall_nop",
+   "full": "_guard_dispatch_icall_nop",
+   "raw": "_guard_dispatch_icall_nop",
+   "function": true
+  },
+  "0x140008520": {
+   "name": "_guard_xfg_dispatch_icall_nop",
+   "full": "_guard_xfg_dispatch_icall_nop",
+   "raw": "_guard_xfg_dispatch_icall_nop",
+   "function": true
+  },
+  "0x140009010": {
+   "name": "_guard_dispatch_icall$thunk$10345483385596137414",
+   "full": "_guard_dispatch_icall$thunk$10345483385596137414",
+   "raw": "_guard_dispatch_icall$thunk$10345483385596137414",
+   "function": true
+  }
+ }
+}

@@ -1,0 +1,837 @@
+{
+ "_note": "Hand labels for the walk benchmark's calibration: right (the given name says what the real one means), vague (the right area, or part of it, too general, or with a wrong word such as 'config' for the command-line options), wrong (it says something else). Each label is for the given name it shows, from one book: where.exe's first walk through rea (2026-11-12, Qwen3-14B IQ4_XS, thinking on). Read with the real name, the given name and summary side by side (and the pseudo-code where the summary was not enough). The first walk's reader judged 23 functions against the code alone; only the six examples in research/LOG.md survive, and agree with these. sort and findstr: the baseline run of the benchmark (research/data/walk_bench_baseline.json), read before looking at their F1 or the judge's answers.",
+ "where": {
+  "0x140001340": {
+   "label": "wrong",
+   "real": "__CxxUnhandledExceptionFilter",
+   "given": "check_structure_validity",
+   "by": "LOG.md 2026-11-12 (the first walk's reader) and this reading"
+  },
+  "0x140001380": {
+   "label": "right",
+   "real": "__CxxSetUnhandledExceptionFilter",
+   "given": "set_unhandled_exception_filter",
+   "by": "this reading"
+  },
+  "0x1400013ac": {
+   "label": "vague",
+   "real": "RtlpImageNtHeader",
+   "given": "validate_pe_header",
+   "by": "this reading"
+  },
+  "0x140001408": {
+   "label": "vague",
+   "real": "_get_image_app_type",
+   "given": "check_pe_header_field",
+   "by": "this reading"
+  },
+  "0x140001460": {
+   "label": "vague",
+   "real": "_wsetargv",
+   "given": "return_zero",
+   "by": "this reading"
+  },
+  "0x140001520": {
+   "label": "right",
+   "real": "_ValidateImageBase",
+   "given": "validate_pe_header_2",
+   "by": "this reading"
+  },
+  "0x140001554": {
+   "label": "right",
+   "real": "__security_init_cookie",
+   "given": "initialize_security_token",
+   "by": "this reading"
+  },
+  "0x1400016a0": {
+   "label": "vague",
+   "real": "__report_gsfailure",
+   "given": "handle_security_exception",
+   "by": "this reading"
+  },
+  "0x140001868": {
+   "label": "right",
+   "real": "__acrt_iob_func",
+   "given": "get_standard_stream",
+   "by": "this reading"
+  },
+  "0x140001898": {
+   "label": "vague",
+   "real": "DisplayHelpUsage",
+   "given": "output_language_strings",
+   "by": "this reading"
+  },
+  "0x1400018e4": {
+   "label": "wrong",
+   "real": "DivideToken",
+   "given": "process_config_string",
+   "by": "this reading"
+  },
+  "0x14000197c": {
+   "label": "right",
+   "real": "FindforFile",
+   "given": "search_files_with_pattern",
+   "by": "this reading"
+  },
+  "0x140001f18": {
+   "label": "right",
+   "real": "FindforFileRecursive",
+   "given": "search_files_with_wildcards",
+   "by": "this reading"
+  },
+  "0x1400027fc": {
+   "label": "right",
+   "real": "FreeList",
+   "given": "free_linked_list",
+   "by": "this reading"
+  },
+  "0x140002838": {
+   "label": "right",
+   "real": "GetFileDateTimeandSize",
+   "given": "format_file_last_write_time",
+   "by": "this reading"
+  },
+  "0x140002ad4": {
+   "label": "right",
+   "real": "Match",
+   "given": "wildcard_match",
+   "by": "LOG.md 2026-11-12 (the first walk's reader) and this reading"
+  },
+  "0x140002ba0": {
+   "label": "wrong",
+   "real": "ProcessOptions",
+   "given": "validate_config_file_path",
+   "by": "LOG.md 2026-11-12 (the first walk's reader) and this reading"
+  },
+  "0x140003370": {
+   "label": "right",
+   "real": "Push",
+   "given": "add_string_node_to_list",
+   "by": "this reading"
+  },
+  "0x140003424": {
+   "label": "right",
+   "real": "StringCchPrintfW",
+   "given": "format_wide_string_with_check",
+   "by": "this reading"
+  },
+  "0x1400034a0": {
+   "label": "right",
+   "real": "Where",
+   "given": "search_executable_in_path",
+   "by": "LOG.md 2026-11-12 (the first walk's reader) and this reading"
+  },
+  "0x140003c54": {
+   "label": "right",
+   "real": "found",
+   "given": "display_file_info",
+   "by": "this reading"
+  },
+  "0x140003dbc": {
+   "label": "wrong",
+   "real": "wmain",
+   "given": "validate_config_and_initialize",
+   "by": "LOG.md 2026-11-12 (the first walk's reader) and this reading"
+  },
+  "0x140004534": {
+   "label": "right",
+   "real": "AllocateMemory",
+   "given": "allocate_heap_memory",
+   "by": "this reading"
+  },
+  "0x140004610": {
+   "label": "vague",
+   "real": "AsFloat",
+   "given": "parse_config_double",
+   "by": "this reading"
+  },
+  "0x140004708": {
+   "label": "vague",
+   "real": "AsLong",
+   "given": "parse_config_value",
+   "by": "this reading"
+  },
+  "0x14000481c": {
+   "label": "right",
+   "real": "CheckMemory",
+   "given": "validate_heap_block",
+   "by": "this reading"
+  },
+  "0x140004888": {
+   "label": "vague",
+   "real": "FindChar2",
+   "given": "check_string_presence",
+   "by": "this reading"
+  },
+  "0x140004910": {
+   "label": "right",
+   "real": "FindString",
+   "given": "find_wstring_substring",
+   "by": "this reading"
+  },
+  "0x140004940": {
+   "label": "vague",
+   "real": "FindString2",
+   "given": "compare_strings_with_flags",
+   "by": "this reading"
+  },
+  "0x140004a04": {
+   "label": "right",
+   "real": "FreeMemory",
+   "given": "free_heap_block",
+   "by": "this reading"
+  },
+  "0x140004aa8": {
+   "label": "right",
+   "real": "GetBufferSize",
+   "given": "get_heap_block_size",
+   "by": "this reading"
+  },
+  "0x140004b18": {
+   "label": "vague",
+   "real": "GetInternalTemporaryBuffer",
+   "given": "manage_config_buffer",
+   "by": "this reading"
+  },
+  "0x140004d48": {
+   "label": "vague",
+   "real": "GetInternalTemporaryBufferRef",
+   "given": "check_buffer_pointer",
+   "by": "this reading"
+  },
+  "0x140004db8": {
+   "label": "wrong",
+   "real": "GetReason",
+   "given": "get_config_pointer",
+   "by": "this reading"
+  },
+  "0x140004df8": {
+   "label": "vague",
+   "real": "GetResString",
+   "given": "increment_counter_and_load_language_string",
+   "by": "this reading"
+  },
+  "0x140004e30": {
+   "label": "right",
+   "real": "GetResString2FromModule",
+   "given": "load_language_string",
+   "by": "this reading"
+  },
+  "0x1400050a0": {
+   "label": "vague",
+   "real": "InString",
+   "given": "compare_config_strings",
+   "by": "this reading"
+  },
+  "0x1400051e4": {
+   "label": "vague",
+   "real": "InitGlobals",
+   "given": "initialize_language_config",
+   "by": "this reading"
+  },
+  "0x1400052d4": {
+   "label": "right",
+   "real": "IsConsoleFile",
+   "given": "is_console_file",
+   "by": "this reading"
+  },
+  "0x1400053cc": {
+   "label": "right",
+   "real": "IsConsoleHandle",
+   "given": "is_console_handle",
+   "by": "this reading"
+  },
+  "0x140005434": {
+   "label": "vague",
+   "real": "IsNumeric",
+   "given": "validate_and_convert_config_value",
+   "by": "this reading"
+  },
+  "0x140005554": {
+   "label": "right",
+   "real": "IsWin2KOrLater",
+   "given": "check_os_version_compatibility",
+   "by": "this reading"
+  },
+  "0x14000562c": {
+   "label": "right",
+   "real": "ReallocateMemory",
+   "given": "realloc_heap_block",
+   "by": "this reading"
+  },
+  "0x14000577c": {
+   "label": "vague",
+   "real": "ReleaseGlobals",
+   "given": "cleanup_config_structure",
+   "by": "this reading"
+  },
+  "0x1400058b4": {
+   "label": "vague",
+   "real": "SaveLastError",
+   "given": "handle_language_config_error",
+   "by": "this reading"
+  },
+  "0x140005990": {
+   "label": "wrong",
+   "real": "SetReason",
+   "given": "handle_language_config_initialization",
+   "by": "this reading"
+  },
+  "0x140005a2c": {
+   "label": "vague",
+   "real": "SetReason2",
+   "given": "format_config_string",
+   "by": "this reading"
+  },
+  "0x140005b7c": {
+   "label": "wrong",
+   "real": "ShowLastError",
+   "given": "check_language_config",
+   "by": "this reading"
+  },
+  "0x140005bc4": {
+   "label": "wrong",
+   "real": "ShowLastErrorEx",
+   "given": "log_config_info",
+   "by": "this reading"
+  },
+  "0x140005c40": {
+   "label": "right",
+   "real": "ShowMessage",
+   "given": "output_wide_string_to_console_or_file",
+   "by": "LOG.md 2026-11-12 (the first walk's reader) and this reading"
+  },
+  "0x140006000": {
+   "label": "right",
+   "real": "ShowMessageEx",
+   "given": "format_and_output_message",
+   "by": "this reading"
+  },
+  "0x140006230": {
+   "label": "right",
+   "real": "StringCompareW",
+   "given": "compare_wide_strings_with_locale",
+   "by": "this reading"
+  },
+  "0x1400062c4": {
+   "label": "wrong",
+   "real": "StringConcatW",
+   "given": "copy_short_string",
+   "by": "this reading"
+  },
+  "0x1400063c0": {
+   "label": "vague",
+   "real": "StringCopyA",
+   "given": "truncate_string_or_error",
+   "by": "this reading"
+  },
+  "0x140006454": {
+   "label": "right",
+   "real": "StringCopyW",
+   "given": "copy_string_with_length",
+   "by": "this reading"
+  },
+  "0x1400064f4": {
+   "label": "right",
+   "real": "TrimString2",
+   "given": "remove_chars_from_string",
+   "by": "this reading"
+  },
+  "0x140006640": {
+   "label": "vague",
+   "real": "CreateDynamicArray",
+   "given": "allocate_initialization_block",
+   "by": "this reading"
+  },
+  "0x140006670": {
+   "label": "right",
+   "real": "DestroyDynamicArray",
+   "given": "cleanup_linked_list_structure",
+   "by": "this reading"
+  },
+  "0x1400066f0": {
+   "label": "vague",
+   "real": "DynArrayAddColumns",
+   "given": "add_config_entries",
+   "by": "this reading"
+  },
+  "0x140006750": {
+   "label": "vague",
+   "real": "DynArrayAppendDWORD",
+   "given": "add_config_entry_type_9",
+   "by": "this reading"
+  },
+  "0x1400067bc": {
+   "label": "vague",
+   "real": "DynArrayAppendDouble",
+   "given": "add_config_entry_with_fixed_type",
+   "by": "this reading"
+  },
+  "0x14000682c": {
+   "label": "vague",
+   "real": "DynArrayAppendFloat",
+   "given": "add_config_value",
+   "by": "this reading"
+  },
+  "0x14000689c": {
+   "label": "vague",
+   "real": "DynArrayAppendLong",
+   "given": "add_config_32bit_value",
+   "by": "this reading"
+  },
+  "0x140006908": {
+   "label": "wrong",
+   "real": "DynArrayAppendRow",
+   "given": "initialize_config_structure",
+   "by": "this reading"
+  },
+  "0x1400069a4": {
+   "label": "vague",
+   "real": "DynArrayAppendString",
+   "given": "add_config_string_entry",
+   "by": "this reading"
+  },
+  "0x140006a48": {
+   "label": "wrong",
+   "real": "DynArrayGetCount2",
+   "given": "get_config_value_from_node",
+   "by": "this reading"
+  },
+  "0x140006a90": {
+   "label": "vague",
+   "real": "DynArrayGetItemType2",
+   "given": "get_linked_list_value",
+   "by": "this reading"
+  },
+  "0x140006ae4": {
+   "label": "vague",
+   "real": "DynArrayItem2",
+   "given": "get_linked_list_value_2",
+   "by": "this reading"
+  },
+  "0x140006b4c": {
+   "label": "right",
+   "real": "DynArraySetString",
+   "given": "resize_or_allocate_linked_list_node_string",
+   "by": "this reading"
+  },
+  "0x140006c28": {
+   "label": "vague",
+   "real": "__DynArrayAppend",
+   "given": "add_config_entry",
+   "by": "this reading"
+  },
+  "0x140006cc0": {
+   "label": "right",
+   "real": "__DynArrayFind",
+   "given": "lookup_entry_by_type",
+   "by": "this reading"
+  },
+  "0x140006d9c": {
+   "label": "vague",
+   "real": "__DynArrayFreeItemValue",
+   "given": "handle_deallocate",
+   "by": "this reading"
+  },
+  "0x140006e0c": {
+   "label": "vague",
+   "real": "__DynArrayGetItem",
+   "given": "traverse_linked_list",
+   "by": "this reading"
+  },
+  "0x140006e4c": {
+   "label": "wrong",
+   "real": "DoParseParam2",
+   "given": "process_config_entries",
+   "by": "this reading"
+  },
+  "0x140007230": {
+   "label": "wrong",
+   "real": "ExtractMainOption",
+   "given": "create_config_entry_buffer",
+   "by": "this reading"
+  },
+  "0x14000731c": {
+   "label": "vague",
+   "real": "MatchOption",
+   "given": "validate_config_entry",
+   "by": "this reading"
+  },
+  "0x140007458": {
+   "label": "vague",
+   "real": "MatchOptionEx",
+   "given": "parse_config_string",
+   "by": "this reading"
+  },
+  "0x1400075a0": {
+   "label": "vague",
+   "real": "ParseAndSaveOptionValue",
+   "given": "process_config_entry",
+   "by": "this reading"
+  },
+  "0x140007c44": {
+   "label": "vague",
+   "real": "PrepareUsageHelperText",
+   "given": "get_executable_internal_name",
+   "by": "this reading"
+  },
+  "0x140007ff0": {
+   "label": "vague",
+   "real": "ReleaseAllocatedMemory",
+   "given": "handle_config_cleanup",
+   "by": "this reading"
+  },
+  "0x1400080b0": {
+   "label": "vague",
+   "real": "VerifyParserOptions",
+   "given": "validate_config_structure",
+   "by": "this reading"
+  }
+ },
+ "findstr": {
+  "0x140001a70": {
+   "label": "wrong",
+   "real": "addexpr",
+   "given": "process_config_command",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140001ed4": {
+   "label": "right",
+   "real": "bitset",
+   "given": "set_bits_in_buffer",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x1400023f0": {
+   "label": "vague",
+   "real": "findall",
+   "given": "return_param1_if_less",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x14000288c": {
+   "label": "right",
+   "real": "filematch",
+   "given": "search_files_in_directory",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140003160": {
+   "label": "wrong",
+   "real": "CtrlHandler",
+   "given": "set_console_text_color",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x1400035bc": {
+   "label": "right",
+   "real": "alloc",
+   "given": "allocate_buffer_with_error_checking",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140003688": {
+   "label": "right",
+   "real": "error",
+   "given": "log_error_and_exit",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140003b7c": {
+   "label": "right",
+   "real": "freenode",
+   "given": "free_linked_list_nodes",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140003bd0": {
+   "label": "wrong",
+   "real": "grepbuffer",
+   "given": "parse_config_header",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140003e80": {
+   "label": "wrong",
+   "real": "grepvbuffer",
+   "given": "parse_config_buffer",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140004468": {
+   "label": "right",
+   "real": "openfile",
+   "given": "open_or_create_file",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140004564": {
+   "label": "right",
+   "real": "printmessage",
+   "given": "log_error_message",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x1400046e4": {
+   "label": "vague",
+   "real": "qgrep",
+   "given": "process_file_with_callback",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140004f60": {
+   "label": "right",
+   "real": "strncspn",
+   "given": "find_first_matching_char",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140004f98": {
+   "label": "right",
+   "real": "strnupr",
+   "given": "uppercase_string_with_dbcs_handling",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140005384": {
+   "label": "vague",
+   "real": "main",
+   "given": "process_command_line_args",
+   "by": "this reading (the baseline run, scores not seen)"
+  }
+ },
+ "sort": {
+  "0x140001370": {
+   "label": "right",
+   "real": "__report_gsfailure",
+   "given": "handle_stack_overflow_exception",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x1400016ac": {
+   "label": "vague",
+   "real": "RtlpImageNtHeader",
+   "given": "validate_pe_header",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140001760": {
+   "label": "vague",
+   "real": "_setargv",
+   "given": "return_zero",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140001854": {
+   "label": "vague",
+   "real": "__security_init_cookie",
+   "given": "generate_system_token",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x1400019b0": {
+   "label": "right",
+   "real": "SBCS_case_compare",
+   "given": "compare_strings_with_locale",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140001a20": {
+   "label": "right",
+   "real": "SBCS_compare",
+   "given": "compare_strings_with_flags",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140001a90": {
+   "label": "right",
+   "real": "Unicode_case_compare",
+   "given": "compare_wide_strings",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140001b10": {
+   "label": "right",
+   "real": "Unicode_compare",
+   "given": "compare_wide_strings_2",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140001b84": {
+   "label": "right",
+   "real": "check_run_reads",
+   "given": "handle_async_read_check",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140001cbc": {
+   "label": "wrong",
+   "real": "copy_shorts",
+   "given": "process_async_entries",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140001d10": {
+   "label": "right",
+   "real": "error",
+   "given": "log_error_and_exit",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140001d5c": {
+   "label": "wrong",
+   "real": "find_two_pass_mem_size",
+   "given": "compute_config_value",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140001e88": {
+   "label": "wrong",
+   "real": "flush_output_buf",
+   "given": "send_beacon",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x14000213c": {
+   "label": "vague",
+   "real": "get_next_temp_buf",
+   "given": "manage_async_read_state",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140002244": {
+   "label": "vague",
+   "real": "get_sector_size",
+   "given": "get_disk_free_space_for_path",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x14000233c": {
+   "label": "vague",
+   "real": "get_string",
+   "given": "convert_error_message_to_oem",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140002444": {
+   "label": "right",
+   "real": "init_input_output",
+   "given": "initialize_file_and_console_handles",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x1400025fc": {
+   "label": "right",
+   "real": "init_mem",
+   "given": "calculate_and_allocate_system_buffer",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140002a14": {
+   "label": "right",
+   "real": "init_two_pass",
+   "given": "create_temp_file_and_check_disk_space",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140002b34": {
+   "label": "vague",
+   "real": "main",
+   "given": "main_initialization",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140002ff4": {
+   "label": "vague",
+   "real": "merge_pass",
+   "given": "handle_async_operations",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x1400031d8": {
+   "label": "wrong",
+   "real": "merge_runs",
+   "given": "process_async_entries_2",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140003290": {
+   "label": "vague",
+   "real": "output_normal",
+   "given": "process_and_send_multiple_strings",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x1400032e4": {
+   "label": "vague",
+   "real": "output_rec",
+   "given": "process_and_send_string",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x1400035a8": {
+   "label": "vague",
+   "real": "output_shorts",
+   "given": "process_and_send_strings_array",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x1400035fc": {
+   "label": "vague",
+   "real": "queue_run_read",
+   "given": "setup_async_read_state",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140003650": {
+   "label": "right",
+   "real": "read_args",
+   "given": "parse_command_line_options",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140003974": {
+   "label": "right",
+   "real": "read_next_input_buf",
+   "given": "handle_async_file_read",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140003c14": {
+   "label": "vague",
+   "real": "read_rec",
+   "given": "process_async_file_data",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140003eb4": {
+   "label": "vague",
+   "real": "read_temp_rec",
+   "given": "process_async_data",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140004090": {
+   "label": "vague",
+   "real": "sched_run_read",
+   "given": "handle_async_read_operation",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x1400041a8": {
+   "label": "vague",
+   "real": "strategy",
+   "given": "allocate_temp_buffer_with_config",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x1400044c8": {
+   "label": "vague",
+   "real": "sys_error",
+   "given": "process_and_log_string",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140004724": {
+   "label": "wrong",
+   "real": "tree_insert",
+   "given": "lookup_in_hash_table",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x1400047d0": {
+   "label": "vague",
+   "real": "two_pass_fit",
+   "given": "validate_parameters",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140004854": {
+   "label": "vague",
+   "real": "usage",
+   "given": "print_error_and_exit",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x1400048d0": {
+   "label": "right",
+   "real": "warning",
+   "given": "log_error_message",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x14000490c": {
+   "label": "vague",
+   "real": "write_recs",
+   "given": "manage_async_data_transmission",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140004aa0": {
+   "label": "vague",
+   "real": "write_wait",
+   "given": "handle_async_io_operation",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140004bdc": {
+   "label": "right",
+   "real": "MicrosoftTelemetryAssertTriggeredNoArgs",
+   "given": "trigger_telemetry_assert",
+   "by": "this reading (the baseline run, scores not seen)"
+  },
+  "0x140004e10": {
+   "label": "right",
+   "real": "__chkstk",
+   "given": "stack_boundary_check",
+   "by": "this reading (the baseline run, scores not seen)"
+  }
+ }
+}

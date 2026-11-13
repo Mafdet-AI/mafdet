@@ -1,0 +1,501 @@
+{
+ "binary": "xcopy.exe",
+ "sha256": "96e01cdc713a4306abb3b58aef982d67a209dddadc8cff5c4c77a5595f712828",
+ "image_base": "0x140000000",
+ "pdb": {
+  "name": "xcopy.pdb",
+  "guid": "21BEA0DE-C09B-B18E-10B3-67F9F7025A28",
+  "age": 1,
+  "url": "https://msdl.microsoft.com/download/symbols/xcopy.pdb/21BEA0DEC09BB18E10B367F9F7025A281/xcopy.pdb",
+  "sha256": "750e6e9c4d918c4b5b377479e2bac7cff81b3972f25f99ee02dbea373163c024"
+ },
+ "publics": 423,
+ "functions": {
+  "0x140001010": {
+   "name": "DoCopy",
+   "full": "XCOPY::DoCopy",
+   "raw": "?DoCopy@XCOPY@@QEAAEXZ",
+   "function": true
+  },
+  "0x140001820": {
+   "name": "IsCyclicalCopy",
+   "full": "XCOPY::IsCyclicalCopy",
+   "raw": "?IsCyclicalCopy@XCOPY@@AEAAHPEAVPATH@@0@Z",
+   "function": true
+  },
+  "0x140001a90": {
+   "name": "GetDirectoryAndFilters",
+   "full": "XCOPY::GetDirectoryAndFilters",
+   "raw": "?GetDirectoryAndFilters@XCOPY@@AEAAXPEAVPATH@@PEAPEAVFSN_DIRECTORY@@PEAPEAVFSN_FILTER@@2PEAE@Z",
+   "function": true
+  },
+  "0x140001fd0": {
+   "name": "GetDirectoryAndFilePattern",
+   "full": "XCOPY::GetDirectoryAndFilePattern",
+   "raw": "?GetDirectoryAndFilePattern@XCOPY@@AEAAXPEAVPATH@@EPEAPEAV2@PEAPEAVWSTRING@@@Z",
+   "function": true
+  },
+  "0x1400024a0": {
+   "name": "AbortIfCtrlC",
+   "full": "XCOPY::AbortIfCtrlC",
+   "raw": "?AbortIfCtrlC@XCOPY@@AEAAXXZ",
+   "function": true
+  },
+  "0x1400024e0": {
+   "name": "Traverse",
+   "full": "XCOPY::Traverse",
+   "raw": "?Traverse@XCOPY@@AEAAEPEAVFSN_DIRECTORY@@PEAVPATH@@PEAVFSN_FILTER@@2E@Z",
+   "function": true
+  },
+  "0x140002fe0": {
+   "name": "Copier",
+   "full": "XCOPY::Copier",
+   "raw": "?Copier@XCOPY@@AEAAEPEAVFSN_FILE@@PEAVPATH@@@Z",
+   "function": true
+  },
+  "0x140003a20": {
+   "name": "ProgressCallBack",
+   "full": "XCOPY::ProgressCallBack",
+   "raw": "?ProgressCallBack@XCOPY@@CAHT_LARGE_INTEGER@@000KKPEAX11@Z",
+   "function": true
+  },
+  "0x140003b80": {
+   "name": "CheckArgumentConsistency",
+   "full": "XCOPY::CheckArgumentConsistency",
+   "raw": "?CheckArgumentConsistency@XCOPY@@AEAAXXZ",
+   "function": true
+  },
+  "0x140004090": {
+   "name": "QueryName",
+   "full": "PATH::QueryName",
+   "raw": "?QueryName@PATH@@QEBAPEAVWSTRING@@XZ",
+   "function": true
+  },
+  "0x1400040d0": {
+   "name": "destructor",
+   "full": "ARGUMENT::destructor",
+   "raw": "??1ARGUMENT@@UEAA@XZ",
+   "function": true
+  },
+  "0x140004110": {
+   "name": "main",
+   "full": "main",
+   "raw": "main",
+   "function": true
+  },
+  "0x140004250": {
+   "name": "MakeDirectory",
+   "full": "XCOPY::MakeDirectory",
+   "raw": "?MakeDirectory@XCOPY@@AEAAPEAVFSN_DIRECTORY@@PEAVPATH@@PEBV3@@Z",
+   "function": true
+  },
+  "0x140004420": {
+   "name": "QueryDevice",
+   "full": "PATH::QueryDevice",
+   "raw": "?QueryDevice@PATH@@QEAAPEAVWSTRING@@XZ",
+   "function": true
+  },
+  "0x140004460": {
+   "name": "DeallocateThings",
+   "full": "XCOPY::DeallocateThings",
+   "raw": "?DeallocateThings@XCOPY@@AEAAXXZ",
+   "function": true
+  },
+  "0x1400045f0": {
+   "name": "GetSourceAndDestinationPath",
+   "full": "GetSourceAndDestinationPath",
+   "raw": "?GetSourceAndDestinationPath@@YAXPEAVPATH_ARGUMENT@@000PEAVARGUMENT_LEXEMIZER@@PEAPEAVPATH@@2@Z",
+   "function": true
+  },
+  "0x140004870": {
+   "name": "QueryOverWriteSwitch",
+   "full": "XCOPY::QueryOverWriteSwitch",
+   "raw": "?QueryOverWriteSwitch@XCOPY@@AEAAEXZ",
+   "function": true
+  },
+  "0x140004a90": {
+   "name": "DisplayMessageAndExit",
+   "full": "XCOPY::DisplayMessageAndExit",
+   "raw": "?DisplayMessageAndExit@XCOPY@@QEAAXKPEAVWSTRING@@K@Z",
+   "function": true
+  },
+  "0x140004b40": {
+   "name": "constructor",
+   "full": "XCOPY::constructor",
+   "raw": "??0XCOPY@@QEAA@XZ",
+   "function": true
+  },
+  "0x140004bc0": {
+   "name": "IsExcluded",
+   "full": "XCOPY::IsExcluded",
+   "raw": "?IsExcluded@XCOPY@@AEAAEPEBVPATH@@@Z",
+   "function": true
+  },
+  "0x140004d40": {
+   "name": "destructor",
+   "full": "XCOPY::destructor",
+   "raw": "??1XCOPY@@UEAA@XZ",
+   "function": true
+  },
+  "0x140004da0": {
+   "name": "QueryPrefix",
+   "full": "PATH::QueryPrefix",
+   "raw": "?QueryPrefix@PATH@@QEAAPEAVWSTRING@@XZ",
+   "function": true
+  },
+  "0x140004de0": {
+   "name": "operator_new",
+   "full": "operator_new",
+   "raw": "??2@YAPEAX_K@Z",
+   "function": true
+  },
+  "0x140005100": {
+   "name": "mainCRTStartup",
+   "full": "mainCRTStartup",
+   "raw": "mainCRTStartup",
+   "function": true
+  },
+  "0x140005126": {
+   "name": "__C_specific_handler",
+   "full": "__C_specific_handler",
+   "raw": "__C_specific_handler",
+   "function": true
+  },
+  "0x140005134": {
+   "name": "__raise_securityfailure",
+   "full": "__raise_securityfailure",
+   "raw": "__raise_securityfailure",
+   "function": true
+  },
+  "0x140005170": {
+   "name": "__report_gsfailure",
+   "full": "__report_gsfailure",
+   "raw": "__report_gsfailure",
+   "function": true
+  },
+  "0x140005320": {
+   "name": "__CxxUnhandledExceptionFilter",
+   "full": "__CxxUnhandledExceptionFilter",
+   "raw": "?__CxxUnhandledExceptionFilter@@YAJPEAU_EXCEPTION_POINTERS@@@Z",
+   "function": true
+  },
+  "0x140005360": {
+   "name": "__CxxSetUnhandledExceptionFilter",
+   "full": "__CxxSetUnhandledExceptionFilter",
+   "raw": "__CxxSetUnhandledExceptionFilter",
+   "function": true
+  },
+  "0x14000537e": {
+   "name": "_XcptFilter",
+   "full": "_XcptFilter",
+   "raw": "_XcptFilter",
+   "function": true
+  },
+  "0x14000538c": {
+   "name": "RtlpImageNtHeader",
+   "full": "RtlpImageNtHeader",
+   "raw": "RtlpImageNtHeader",
+   "function": true
+  },
+  "0x1400053e8": {
+   "name": "_get_image_app_type",
+   "full": "_get_image_app_type",
+   "raw": "_get_image_app_type",
+   "function": true
+  },
+  "0x140005434": {
+   "name": "_amsg_exit",
+   "full": "_amsg_exit",
+   "raw": "_amsg_exit",
+   "function": true
+  },
+  "0x140005440": {
+   "name": "_setargv",
+   "full": "_setargv",
+   "raw": "_setargv",
+   "function": true,
+   "aliases": [
+    "_matherr"
+   ]
+  },
+  "0x140005450": {
+   "name": "_FindPESection",
+   "full": "_FindPESection",
+   "raw": "_FindPESection",
+   "function": true
+  },
+  "0x1400054a0": {
+   "name": "_IsNonwritableInCurrentImage",
+   "full": "_IsNonwritableInCurrentImage",
+   "raw": "_IsNonwritableInCurrentImage",
+   "function": true
+  },
+  "0x140005500": {
+   "name": "_ValidateImageBase",
+   "full": "_ValidateImageBase",
+   "raw": "_ValidateImageBase",
+   "function": true
+  },
+  "0x140005534": {
+   "name": "__security_init_cookie",
+   "full": "__security_init_cookie",
+   "raw": "__security_init_cookie",
+   "function": true
+  },
+  "0x140005613": {
+   "name": "_initterm",
+   "full": "_initterm",
+   "raw": "_initterm",
+   "function": true
+  },
+  "0x140005630": {
+   "name": "_guard_check_icall_nop",
+   "full": "_guard_check_icall_nop",
+   "raw": "_guard_check_icall_nop",
+   "function": true
+  },
+  "0x140005650": {
+   "name": "SPrintfAppend",
+   "full": "DSTRING::SPrintfAppend",
+   "raw": "?SPrintfAppend@DSTRING@@UEAAEPEBGZZ",
+   "function": true
+  },
+  "0x140005660": {
+   "name": "SPrintf",
+   "full": "DSTRING::SPrintf",
+   "raw": "?SPrintf@DSTRING@@UEAAEPEBGZZ",
+   "function": true
+  },
+  "0x140005670": {
+   "name": "NewBuf",
+   "full": "DSTRING::NewBuf",
+   "raw": "?NewBuf@DSTRING@@UEAAEK@Z",
+   "function": true
+  },
+  "0x140005680": {
+   "name": "Resize",
+   "full": "DSTRING::Resize",
+   "raw": "?Resize@DSTRING@@UEAAEK@Z",
+   "function": true
+  },
+  "0x140005690": {
+   "name": "DebugDump",
+   "full": "OBJECT::DebugDump",
+   "raw": "?DebugDump@OBJECT@@UEBAXE@Z",
+   "function": true
+  },
+  "0x1400056a0": {
+   "name": "Compare",
+   "full": "OBJECT::Compare",
+   "raw": "?Compare@OBJECT@@UEBAJPEBV1@@Z",
+   "function": true
+  },
+  "0x1400056b0": {
+   "name": "ValidateVersion",
+   "full": "PROGRAM::ValidateVersion",
+   "raw": "?ValidateVersion@PROGRAM@@UEBAXKK@Z",
+   "function": true
+  },
+  "0x1400056c0": {
+   "name": "Usage",
+   "full": "PROGRAM::Usage",
+   "raw": "?Usage@PROGRAM@@UEBAXXZ",
+   "function": true
+  },
+  "0x1400056d0": {
+   "name": "GetStandardError",
+   "full": "PROGRAM::GetStandardError",
+   "raw": "?GetStandardError@PROGRAM@@UEAAPEAVSTREAM@@XZ",
+   "function": true
+  },
+  "0x1400056e0": {
+   "name": "GetStandardOutput",
+   "full": "PROGRAM::GetStandardOutput",
+   "raw": "?GetStandardOutput@PROGRAM@@UEAAPEAVSTREAM@@XZ",
+   "function": true
+  },
+  "0x1400056f0": {
+   "name": "GetStandardInput",
+   "full": "PROGRAM::GetStandardInput",
+   "raw": "?GetStandardInput@PROGRAM@@UEAAPEAVSTREAM@@XZ",
+   "function": true
+  },
+  "0x140005700": {
+   "name": "Fatal",
+   "full": "PROGRAM::Fatal",
+   "raw": "?Fatal@PROGRAM@@UEBAXXZ",
+   "function": true
+  },
+  "0x140005710": {
+   "name": "Fatal",
+   "full": "PROGRAM::Fatal",
+   "raw": "?Fatal@PROGRAM@@UEBAXKKPEADZZ",
+   "function": true
+  },
+  "0x140005720": {
+   "name": "DisplayMessage",
+   "full": "PROGRAM::DisplayMessage",
+   "raw": "?DisplayMessage@PROGRAM@@UEBAEKW4MESSAGE_TYPE@@@Z",
+   "function": true
+  },
+  "0x140005730": {
+   "name": "DisplayMessage",
+   "full": "PROGRAM::DisplayMessage",
+   "raw": "?DisplayMessage@PROGRAM@@UEBAEKW4MESSAGE_TYPE@@PEADZZ",
+   "function": true
+  },
+  "0x14000573c": {
+   "name": "operator_delete",
+   "full": "operator_delete",
+   "raw": "??3@YAXPEAX@Z",
+   "function": true
+  },
+  "0x140005770": {
+   "name": "scalar_deleting_destructor",
+   "full": "DSTRING::scalar_deleting_destructor",
+   "raw": "??_GDSTRING@@UEAAPEAXI@Z",
+   "function": true,
+   "aliases": [
+    "??_EDSTRING@@UEAAPEAXI@Z"
+   ]
+  },
+  "0x1400057b0": {
+   "name": "AddToExclusionList",
+   "full": "XCOPY::AddToExclusionList",
+   "raw": "?AddToExclusionList@XCOPY@@AEAAEPEAVWSTRING@@@Z",
+   "function": true
+  },
+  "0x140005a30": {
+   "name": "GetArgumentsCmd",
+   "full": "XCOPY::GetArgumentsCmd",
+   "raw": "?GetArgumentsCmd@XCOPY@@AEAAXXZ",
+   "function": true
+  },
+  "0x140006aac": {
+   "name": "InitializeExclusionList",
+   "full": "XCOPY::InitializeExclusionList",
+   "raw": "?InitializeExclusionList@XCOPY@@AEAAEPEAVWSTRING@@@Z",
+   "function": true
+  },
+  "0x140006c68": {
+   "name": "ParseArguments",
+   "full": "XCOPY::ParseArguments",
+   "raw": "?ParseArguments@XCOPY@@AEAAPEAVARGUMENT_LEXEMIZER@@PEAVWSTRING@@PEAVARRAY@@@Z",
+   "function": true
+  },
+  "0x140006e80": {
+   "name": "SetArguments",
+   "full": "XCOPY::SetArguments",
+   "raw": "?SetArguments@XCOPY@@AEAAXXZ",
+   "function": true
+  },
+  "0x140007618": {
+   "name": "QueryMessageString",
+   "full": "XCOPY::QueryMessageString",
+   "raw": "?QueryMessageString@XCOPY@@AEAAPEAVWSTRING@@K@Z",
+   "function": true
+  },
+  "0x1400076b0": {
+   "name": "vector_deleting_destructor",
+   "full": "TIMEINFO::vector_deleting_destructor",
+   "raw": "??_ETIMEINFO@@UEAAPEAXI@Z",
+   "function": true,
+   "aliases": [
+    "??_GTIMEINFO@@UEAAPEAXI@Z"
+   ]
+  },
+  "0x1400076f0": {
+   "name": "scalar_deleting_destructor",
+   "full": "XCOPY::scalar_deleting_destructor",
+   "raw": "??_GXCOPY@@UEAAPEAXI@Z",
+   "function": true,
+   "aliases": [
+    "??_EXCOPY@@UEAAPEAXI@Z"
+   ]
+  },
+  "0x140007728": {
+   "name": "CheckTargetSpace",
+   "full": "XCOPY::CheckTargetSpace",
+   "raw": "?CheckTargetSpace@XCOPY@@AEAAEPEAVFSN_FILE@@PEAVPATH@@@Z",
+   "function": true
+  },
+  "0x140007d74": {
+   "name": "InitializeThings",
+   "full": "XCOPY::InitializeThings",
+   "raw": "?InitializeThings@XCOPY@@AEAAXXZ",
+   "function": true
+  },
+  "0x140007e70": {
+   "name": "IsFileName",
+   "full": "XCOPY::IsFileName",
+   "raw": "?IsFileName@XCOPY@@AEAAHPEAVPATH@@E@Z",
+   "function": true
+  },
+  "0x1400081c8": {
+   "name": "UpdateTraverse",
+   "full": "XCOPY::UpdateTraverse",
+   "raw": "?UpdateTraverse@XCOPY@@AEAAEPEAVFSN_DIRECTORY@@PEAVPATH@@PEAVFSN_FILTER@@2E@Z",
+   "function": true
+  },
+  "0x140008858": {
+   "name": "UserConfirmedCopy",
+   "full": "XCOPY::UserConfirmedCopy",
+   "raw": "?UserConfirmedCopy@XCOPY@@AEAAEPEBVWSTRING@@0@Z",
+   "function": true
+  },
+  "0x140008aa0": {
+   "name": "UserConfirmedOverWrite",
+   "full": "XCOPY::UserConfirmedOverWrite",
+   "raw": "?UserConfirmedOverWrite@XCOPY@@AEAAEPEAVPATH@@@Z",
+   "function": true
+  },
+  "0x140008d08": {
+   "name": "__GSHandlerCheck",
+   "full": "__GSHandlerCheck",
+   "raw": "__GSHandlerCheck",
+   "function": true
+  },
+  "0x140008d2c": {
+   "name": "__GSHandlerCheckCommon",
+   "full": "__GSHandlerCheckCommon",
+   "raw": "__GSHandlerCheckCommon",
+   "function": true
+  },
+  "0x140008d8d": {
+   "name": "memset",
+   "full": "memset",
+   "raw": "memset",
+   "function": true
+  },
+  "0x140008dc0": {
+   "name": "__security_check_cookie",
+   "full": "__security_check_cookie",
+   "raw": "__security_check_cookie",
+   "function": true
+  },
+  "0x140008e00": {
+   "name": "_guard_dispatch_icall",
+   "full": "_guard_dispatch_icall",
+   "raw": "_guard_dispatch_icall",
+   "function": true
+  },
+  "0x140008e30": {
+   "name": "_guard_dispatch_icall_nop",
+   "full": "_guard_dispatch_icall_nop",
+   "raw": "_guard_dispatch_icall_nop",
+   "function": true
+  },
+  "0x140008e60": {
+   "name": "_guard_xfg_dispatch_icall_nop",
+   "full": "_guard_xfg_dispatch_icall_nop",
+   "raw": "_guard_xfg_dispatch_icall_nop",
+   "function": true
+  },
+  "0x140009010": {
+   "name": "_guard_dispatch_icall$thunk$10345483385596137414",
+   "full": "_guard_dispatch_icall$thunk$10345483385596137414",
+   "raw": "_guard_dispatch_icall$thunk$10345483385596137414",
+   "function": true
+  }
+ }
+}
