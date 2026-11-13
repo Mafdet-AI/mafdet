@@ -287,6 +287,12 @@ costs 2.4 decoding steps. To speed up the 14B, take work away from the CPU.
      the three endpoints answered as expected to a fake key (Google 400 "pass a valid API key", Alibaba 401,
      OpenRouter lists its models with no key). Not yet run with a real key on a task: to try, and to see whether
      MCP tool schemas pass Gemini's stricter schema checks.
+   - **/model and /reasoning (2026-11-13)**: the model changes during a session (`agent/switch.py` Runtime,
+     `agent/picker.py`): local or a provider, the key typed in once and kept in the system's credential store
+     (`agent/keys.py`, keyring), the provider's model list; reasoning levels auto/off/low/medium/high per
+     provider. Tested in the interface against a fake provider and a fake llama-server (a switch that fails
+     restarts the previous model). To try for real: switching local -> cloud -> local on the 5070 Ti (llama-server
+     restarts, VRAM given back), and whether thinking ahead comes back after the return.
 
 ## Done and measured
 

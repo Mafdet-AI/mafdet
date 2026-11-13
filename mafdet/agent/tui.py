@@ -21,6 +21,8 @@ MAFDET's catalog that is not on (`kit.suggest`): Ctrl+T installs it, asking firs
     Up / Down       earlier messages
     Ctrl+C          clear the message, stop the model, or leave
     /help /tools /notes /compact /new /approve <mode> /quit
+    /model          another model, here or in the cloud (picker.py, switch.py): the conversation goes on
+    /reasoning      how much the model reasons: auto, off, low, medium, high
 """
 from __future__ import annotations
 
@@ -54,6 +56,8 @@ HELP = """Enter sends, Shift+Enter (or Ctrl+J) starts a new line, Esc stops the 
 Shift+Tab changes what runs without asking: ask (writes and commands ask), edits (writes in the folder run), all (commands too).
 Ctrl+O shows the reasoning and the tool outputs in full. Up and Down bring back earlier messages.
 /tools  the tools the model has      /notes  what the model wrote down      /compact  summarize to make room
+/model  another model, on this machine or in the cloud (the conversation goes on with it)
+/reasoning [auto|off|low|medium|high]  how much the model reasons before each step
 /new  a new conversation      /approve ask|edits|all      /quit"""
 
 FOLDED_LINES, OPEN_LINES = 4, 40
@@ -202,11 +206,13 @@ class AgentTUI(App):
                 Binding("ctrl+t", "use_hint", show=False, priority=True),
                 Binding("ctrl+c", "interrupt", show=False, priority=True)]
 
-    def __init__(self, make_agent, *, label: str, workdir: str, mode: str = "ask", ahead=None):
+    def __init__(self, make_agent, *, label: str, workdir: str, mode: str = "ask", ahead=None, runtime=None):
         """`make_agent(emit, ask, mode, fresh)` builds the agent; `fresh` asks for a new session. `ahead`
-        (ahead.Ahead) reasons on the message being written."""
+        (ahead.Ahead) reasons on the message being written. `runtime` (switch.Runtime) lets /model change
+        the model during the session."""
         super().__init__()
         self.ahead = ahead
+        self.runtime = runtime
         self.hint: dict | None = None             # kit.suggest's tool for the message being written
         self.installing = ""                      # what the Ctrl+T install is doing
         self.make_agent = make_agent
@@ -366,6 +372,9 @@ class AgentTUI(App):
         t = Text(no_wrap=True, overflow="ellipsis")
         t.append(label, style=TEXT)
         t.append(f" · {self.used:,}/{self.limit:,} tok · ")
+        level = self._reasoning() if self.agent is not None else "auto"
+        if level != "auto":
+            t.append(f"reasoning {level} · ", style=FAINT if level == "off" else TEXT)
         t.append(self.mode, style=HOT if self.mode != "ask" else TEXT)
         t.append(" ⇧⇥", style=FAINT)
         if self.asking:
@@ -466,6 +475,9 @@ class AgentTUI(App):
             self.used = d["after"]
         elif kind == "stopped":
             self._put(Text("  ⎿ stopped", style=DIM), "note")
+        elif kind == "note":                    # what a /model switch is doing
+            self.doing = d["text"]
+            self._put(Text(f"  {d['text']}", style=DIM), "note")
         elif kind == "error":
             self._put(Text("! " + d["text"]), "err")
         self._status()
@@ -624,7 +636,14 @@ class AgentTUI(App):
         line.update(t)
         line.display = bool(self.installing or self.hint)
 
+    def _picker(self) -> bool:
+        """A picker (/model, /reasoning) is open: Esc and Ctrl+C go back in it, the other keys are its own."""
+        from textual.screen import ModalScreen
+        return isinstance(self.screen, ModalScreen)
+
     def action_use_hint(self):
+        if self._picker():
+            return
         need = getattr(self.agent.toolbox, "need", None) if self.agent is not None else None
         if not self.hint or need is None or self.installing or self.asking:
             return
@@ -751,6 +770,24 @@ class AgentTUI(App):
                 self._set_mode(arg)
             else:
                 self._put(Text(f"  /approve {' | '.join(MODES)}", style=DIM), "note")
+        elif name == "/model":
+            if self.runtime is None:
+                self._put(Text("  /model is not available here", style=DIM), "note")
+            elif self.running:
+                self._put(Text("  stop the model first (Esc)", style=DIM), "note")
+            else:
+                from .picker import ModelPicker
+                self.push_screen(ModelPicker(self.runtime.choice), self._picked)
+        elif name == "/reasoning":
+            from .model import LEVELS
+            if arg in LEVELS:
+                self._set_reasoning(arg)
+            elif arg:
+                self._put(Text(f"  /reasoning {' | '.join(LEVELS)}", style=DIM), "note")
+            else:
+                from .picker import ReasoningPicker
+                self.push_screen(ReasoningPicker(self._reasoning(), self.runtime is None or self.runtime.local),
+                                 lambda level: level and self._set_reasoning(level))
         elif name == "/new":
             if self.running:
                 self._put(Text("  stop the model first (Esc)", style=DIM), "note")
@@ -762,19 +799,89 @@ class AgentTUI(App):
             self._put(Text(f"  no command {name}: /help", style=DIM), "note")
         self._status()
 
+    # ------------------------------------------------------------ the model and its reasoning
+
+    def _reasoning(self) -> str:
+        if self.runtime is not None:
+            return self.runtime.effort
+        return "auto" if self.agent.think else "off"
+
+    def _set_reasoning(self, level: str):
+        if self.runtime is not None:
+            self.runtime.set_effort(level)
+        self.agent.think = level != "off"
+        local = self.runtime is None or self.runtime.local
+        said = {"off": "off", "auto": "on, as much as the model decides"}.get(
+            level, "on" + ("" if local else f", {level}"))
+        self._put(Text(f"  reasoning {said}" + (" (a local model only reasons or not)"
+                                                 if local and level in ("low", "medium", "high") else ""),
+                       style=DIM), "note")
+        self._status()
+
+    def _picked(self, choice):
+        if choice is None:
+            return
+        where = choice.model + (f" · {choice.provider}" if choice.provider else " on this machine")
+        self._put(Text(f"  switching to {where}…", style=DIM), "note")
+        self.running, self.stopping, self.t_turn = True, False, time.monotonic()
+        self.pieces, self.doing, self.word = 0, "switching model", ""
+        if self.ahead is not None:
+            self.ahead.paused = True
+
+        def work():
+            error = ""
+            try:
+                self.runtime.switch(choice, progress=lambda text: self._emit("note", text=text))
+            except SystemExit as e:
+                error = str(e)
+            except Exception as e:
+                error = f"{type(e).__name__}: {e}"
+            try:
+                self.call_from_thread(self._switched, error)
+            except Exception:
+                pass
+        self.run_worker(work, thread=True)
+
+    def _switched(self, error: str):
+        """The switch is done (or failed): the agent goes on with the runtime's model and its context."""
+        from .context import Context
+        rt, agent = self.runtime, self.agent
+        if error:
+            self._put(Text(f"  {error}", style=ALARM), "err")
+        self.ahead = rt.ahead
+        if self.ahead is not None:
+            self.ahead.agent = agent
+        agent.model = rt.agent_model
+        agent.think = rt.think
+        if rt.ctx and rt.ctx != agent.context.limit:
+            agent.context = Context(rt.ctx, reserve=min(agent.max_tokens, rt.ctx // 3))
+        self.limit, self.label = agent.context.limit, rt.label
+        if not error:
+            self._put(Text(f"  now on {rt.label} · {rt.ctx:,} tokens of context"
+                           + ("" if rt.provider is None else " · the conversation now goes to the provider"),
+                           style=DIM), "note")
+        self.tps = 0.0
+        self._turn_done()
+
     def _set_mode(self, mode: str):
         self.mode = self.agent.permissions.mode = mode
         self._status()
 
     def action_cycle_mode(self):
+        if self._picker():
+            return
         self._set_mode(MODES[(MODES.index(self.mode) + 1) % len(MODES)])
 
     def action_toggle_detail(self):
+        if self._picker():
+            return
         self.detail = not self.detail
         for widget, kind, full in self.folds:
             self._fold(widget, kind, full)
 
     def action_stop(self):
+        if self._picker():
+            return self.screen.action_back()
         if self.asking:
             self._reply("n")
         elif self.running:
@@ -784,6 +891,8 @@ class AgentTUI(App):
             self._status()
 
     def action_interrupt(self):
+        if self._picker():
+            return self.screen.dismiss(None)
         prompt = self.query_one(Prompt)
         if prompt.text:
             prompt.text = ""

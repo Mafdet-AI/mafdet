@@ -1,10 +1,10 @@
 """Models in the cloud for the agent: Qwen on Alibaba Cloud, Google Gemini, anything on OpenRouter.
 
 All three speak the OpenAI chat API, so they go through the same ChatModel as a local engine; a provider
-here is only where it is, which variable holds its key, the context to assume, and how it is told to
-reason or not. `--provider gemini --model gemini-…` is `--url <its address> --engine openai --api-key …`
-said shorter. The key comes from --api-key or, better, from the provider's environment variable: it is
-never written to agent.json.
+here is only where it is, which variable holds its key, the context to assume, and how it is told how
+much to reason. `--provider gemini --model gemini-…` is `--url <its address> --engine openai --api-key …`
+said shorter. The key comes from --api-key, the provider's environment variable, or the system's
+credential store where `/model` keeps one typed in (keys.py): it is never written to agent.json.
 
 Unlike the rest of MAFDET, this sends the conversation, files the model reads and tool outputs to the
 provider. Nothing is sent before the user picks a provider.
@@ -12,7 +12,6 @@ provider. Nothing is sent before the user picks a provider.
 from __future__ import annotations
 
 import json
-import os
 import sys
 import urllib.error
 import urllib.request
@@ -26,7 +25,7 @@ class Provider:
     url: str                    # the base, version included: /chat/completions and /models go after it
     keys: tuple[str, ...]       # environment variables that may hold the key, in order
     ctx: int                    # context assumed when --ctx does not say
-    thinking: str               # how reasoning is turned off: "enable_thinking" or "reasoning_effort"
+    thinking: str               # how it is told how much to reason (model.reasoning_params)
     signup: str                 # where to get a key
 
 
@@ -41,17 +40,16 @@ PROVIDERS = {p.name: p for p in (
              ("GEMINI_API_KEY", "GOOGLE_API_KEY"), 131072, "reasoning_effort",
              "https://aistudio.google.com/apikey"),
     Provider("openrouter", "OpenRouter", "https://openrouter.ai/api/v1",
-             ("OPENROUTER_API_KEY",), 131072, "reasoning_effort", "https://openrouter.ai/keys"),
+             ("OPENROUTER_API_KEY",), 131072, "reasoning", "https://openrouter.ai/keys"),
 )}
 
 
 def api_key(provider: Provider, given: str = "") -> str:
+    """--api-key, else the environment, else the credential store (keys.py)."""
     if given:
         return given
-    for var in provider.keys:
-        if os.environ.get(var, "").strip():
-            return os.environ[var].strip()
-    return ""
+    from . import keys
+    return keys.get(provider.name, provider.keys)[0]
 
 
 def list_models(provider: Provider, key: str, timeout: float = 20.0) -> list[str]:
@@ -83,7 +81,8 @@ def resolve(args) -> Provider | None:
         raise SystemExit(f"Unknown provider {name!r}: {', '.join(PROVIDERS)}.")
     key = api_key(provider, getattr(args, "api_key", ""))
     if not key:
-        raise SystemExit(f"{provider.title} needs an API key: set {provider.keys[0]} (or pass --api-key).\n"
+        raise SystemExit(f"{provider.title} needs an API key: set {provider.keys[0]}, pass --api-key, or add it "
+                         f"in the agent with /model.\n"
                          f"Get one at {provider.signup}.")
     if getattr(args, "list_models", False) or not args.model:
         models = list_models(provider, key)

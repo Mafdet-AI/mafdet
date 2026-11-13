@@ -48,7 +48,23 @@ class Reply:
 
 # Parameters sent when they help but that not every provider takes: a 400 naming one of them (or naming
 # nothing) makes the request go again without them, and they stay off for the session.
-OPTIONAL = ("stream_options", "reasoning_effort", "enable_thinking")
+OPTIONAL = ("stream_options", "reasoning_effort", "enable_thinking", "thinking_budget", "reasoning")
+
+# How much to reason: "auto" leaves it to the engine, "off" turns it off, the others ask for that much.
+LEVELS = ("auto", "off", "low", "medium", "high")
+BUDGET = {"low": 2048, "medium": 8192, "high": 32768}      # Qwen on Alibaba Cloud takes a budget in tokens
+
+
+def reasoning_params(style: str, think: bool, effort: str = "auto") -> dict:
+    """The request's parameters for a reasoning level, the way each kind of engine takes them:
+    "reasoning_effort" (OpenAI's way, Gemini), "enable_thinking" (Qwen on Alibaba Cloud, with
+    thinking_budget), "reasoning" (OpenRouter's object)."""
+    level = effort if think and effort in BUDGET else ""
+    if style == "enable_thinking":
+        return {"enable_thinking": bool(think), **({"thinking_budget": BUDGET[level]} if level else {})}
+    if style == "reasoning":
+        return {"reasoning": {"enabled": False}} if not think else {"reasoning": {"effort": level}} if level else {}
+    return {"reasoning_effort": "none"} if not think else {"reasoning_effort": level} if level else {}
 
 
 def completions_url(url: str) -> str:
@@ -62,9 +78,9 @@ def completions_url(url: str) -> str:
 
 class ChatModel:
     def __init__(self, url: str, model: str = "default", *, llama: bool = True, api_key: str = "", slot: int = 0,
-                 timeout: float = 3600.0, thinking: str = "reasoning_effort"):
-        """`thinking`, for an engine other than llama-server: how it is told to reason or not,
-        "reasoning_effort" (OpenAI's way, Gemini, OpenRouter) or "enable_thinking" (Qwen on Alibaba Cloud)."""
+                 timeout: float = 3600.0, thinking: str = "reasoning_effort", effort: str = "auto"):
+        """`thinking`, for an engine other than llama-server: how it is told how much to reason
+        (reasoning_params); `effort`, how much, when the agent reasons at all (one of LEVELS)."""
         self.url = url.rstrip("/")
         self.model = model
         self.llama = llama
@@ -72,6 +88,7 @@ class ChatModel:
         self.slot = slot
         self.timeout = timeout
         self.thinking = thinking
+        self.effort = effort
         self.refused: set[str] = set()        # OPTIONAL parameters this engine said no to
 
     def chat(self, messages: list[dict], tools: list[dict] | None = None, *, max_tokens: int = 4096,
@@ -87,10 +104,8 @@ class ChatModel:
             body["id_slot"] = self.slot
             if not think:
                 body["chat_template_kwargs"] = {"enable_thinking": False}
-        elif self.thinking == "enable_thinking":
-            body["enable_thinking"] = bool(think)
-        elif not think:
-            body["reasoning_effort"] = "none"
+        else:
+            body.update(reasoning_params(self.thinking, think, self.effort))
         resp = self._post(body)
         reply = Reply()
         calls: dict[int, dict] = {}

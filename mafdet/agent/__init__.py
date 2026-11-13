@@ -122,7 +122,8 @@ def ask_in_terminal(tool, args: dict, why: str) -> str:
         return "n"
 
 
-SAVED = {"provider": "", "model": "", "approve": "ask", "mcp": [], "profile": "", "tools": "", "web": False}
+SAVED = {"provider": "", "model": "", "reasoning": "auto", "approve": "ask", "mcp": [], "profile": "", "tools": "",
+         "web": False}
 
 
 def settings(args) -> dict:
@@ -140,6 +141,9 @@ def settings(args) -> dict:
             setattr(args, key, value if type(value) is type(default) else default)
     if args.provider == "local":
         args.provider = ""
+    from .model import LEVELS
+    if args.reasoning not in LEVELS:
+        args.reasoning = "auto"
     args.search_url = str(saved.get("search_url") or "")
     auto = saved.get("auto_install")
     args.auto_install = [str(a) for a in auto] if isinstance(auto, list) else []
@@ -276,7 +280,8 @@ def remote_model(args):
         return None, ""
     args.ctx = args.ctx or engine_ctx(args.url)
     model = ChatModel(args.url, args.model or "default", llama=args.engine == "llama", api_key=args.api_key,
-                      thinking=getattr(args, "thinking", "reasoning_effort"))
+                      thinking=getattr(args, "thinking", "reasoning_effort"),
+                      effort=getattr(args, "reasoning", "auto") or "auto")
     return model, (f"{model.model} · {provider.title}" if provider else f"{model.model} at {args.url}")
 
 
@@ -322,7 +327,6 @@ def run(args) -> int:
         from .walk import run as walk
         return walk(args)
     from .loop import Agent
-    from .model import ChatModel
     from .permissions import Permissions
     from .store import Session
 
@@ -347,29 +351,23 @@ def run(args) -> int:
     if args.system:
         notes.insert(0, Path(args.system).read_text(encoding="utf-8"))
     system = system_prompt(workdir, "\n\n".join(n for n in notes if n))
-    engine = None
+    from .switch import Runtime
+    runtime = Runtime(args)
     try:
-        model, label = remote_model(args)
-        if model is None:
-            engine, alias = start_engine(args)
-            model = ChatModel(engine.url, alias)
-            label = alias
+        tui = interactive and not args.prompt and not args.plain
+        runtime.start(ahead=tui and getattr(args, "think_ahead", True))
+        label = runtime.label
 
         def make_agent(emit, ask, mode=args.approve, fresh=False):
-            return Agent(model, box, Permissions(mode, ask), Session() if fresh else session, system=system,
-                         ctx=args.ctx, max_tokens=args.max_tokens, max_steps=args.max_steps,
-                         tool_chars=args.tool_chars, temperature=args.temperature, think=args.think, emit=emit,
+            return Agent(runtime.agent_model, box, Permissions(mode, ask), Session() if fresh else session,
+                         system=system, ctx=runtime.ctx, max_tokens=args.max_tokens, max_steps=args.max_steps,
+                         tool_chars=args.tool_chars, temperature=args.temperature, think=runtime.think, emit=emit,
                          history=None if fresh else history, stop=stop, memory=memory)
 
-        if interactive and not args.prompt and not args.plain:
+        if tui:
             from .tui import AgentTUI
-            ahead = None
-            if args.think and args.engine == "llama" and getattr(args, "think_ahead", True):
-                from .ahead import Ahead, AheadModel
-                ahead = Ahead.for_engine(model.url, args.ctx)
-                if ahead is not None:
-                    model = AheadModel(model, ahead)
-            AgentTUI(make_agent, label=label, workdir=str(workdir), mode=args.approve, ahead=ahead).run()
+            AgentTUI(make_agent, label=label, workdir=str(workdir), mode=args.approve, ahead=runtime.ahead,
+                     runtime=runtime).run()
             return 0
         agent = make_agent(Printer(), ask_in_terminal if interactive else None)
         from .context import json_tokens
@@ -377,7 +375,7 @@ def run(args) -> int:
         print(f"MAFDET agent · {label} · {workdir}\n"
               f"  tools     {len(box.active)} (about {spec_tokens} tokens)"
               + (f", {len(box.hidden)} more through find_tools" if box.hidden else "") + "\n"
-              f"  context   {args.ctx} tokens\n"
+              f"  context   {runtime.ctx} tokens\n"
               f"  approval  {args.approve}" + ("" if interactive or args.approve == "all" else
                                                " (no terminal to ask in: what would ask is declined)") + "\n"
               f"  session   {session.id}" + (f" (resumed, {len(history)} messages)" if history else ""),
@@ -411,8 +409,7 @@ def run(args) -> int:
         shell.close()
         for server in servers:
             server.close()
-        if engine is not None:
-            engine.close()
+        runtime.close()
 
 
 def _turn(agent, text: str) -> bool:

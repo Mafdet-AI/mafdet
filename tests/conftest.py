@@ -26,3 +26,32 @@ def hf_home(tmp_path, monkeypatch):
     monkeypatch.delenv("HUGGING_FACE_HUB_TOKEN", raising=False)
     monkeypatch.setattr(hf, "HUGGINGFACE_HUB_CACHE", str(paths["HF_HUB_CACHE"]), raising=False)
     return home
+
+
+class MemoryKeyring:
+    """A credential store in memory, in place of the system's."""
+
+    def __init__(self):
+        self.saved = {}
+
+    def get_password(self, service, name):
+        return self.saved.get((service, name))
+
+    def set_password(self, service, name, key):
+        self.saved[(service, name)] = key
+
+    def delete_password(self, service, name):
+        self.saved.pop((service, name), None)
+
+
+@pytest.fixture(autouse=True)
+def keyring_store(monkeypatch):
+    """The agent's API keys: never the real Credential Manager, and no provider key of the real user from
+    the environment."""
+    from mafdet.agent import keys
+    store = MemoryKeyring()
+    monkeypatch.setattr(keys, "_keyring", lambda: store)
+    monkeypatch.setattr(keys, "_session", {})
+    for var in ("DASHSCOPE_API_KEY", "QWEN_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "OPENROUTER_API_KEY"):
+        monkeypatch.delenv(var, raising=False)
+    return store

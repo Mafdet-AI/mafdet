@@ -33,6 +33,7 @@ dependencies = [
     "truststore>=0.9",    # downloads trust the system's certificates (python.org's Python on a Mac has none)
     "pywebview>=5",       # the window (mafdet gui)
     "textual>=8.0",       # the terminal app (mafdet tui) and the launcher
+    "keyring>=24",        # the agent's API keys for models in the cloud, in the system's credential store
 ]
 
 [project.optional-dependencies]

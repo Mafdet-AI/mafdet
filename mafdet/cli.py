@@ -486,6 +486,11 @@ def _agent_args(p):
                         "files the model reads and the tools' outputs go to the provider. local: back to the local "
                         "model when a provider was saved with --save")
     p.add_argument("--list-models", action="store_true", help="with --provider: the models it serves, then exit")
+    p.add_argument("--reasoning", default=None, choices=["auto", "off", "low", "medium", "high"],
+                   help="how much the model reasons before each step: auto (the model's or the provider's own "
+                        "default), off, low, medium, high. A local model only has on (any level) and off; a "
+                        "provider gets the level its own way. Also /reasoning in the agent (default: auto, or "
+                        "the one last chosen)")
     p.add_argument("--llama-args", default="",
                    help='extra llama-server options, with an equals sign: --llama-args="-ub 256"')
 

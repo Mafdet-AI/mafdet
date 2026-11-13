@@ -22,6 +22,13 @@ class Cloud(BaseHTTPRequestHandler):
 
     def do_GET(self):
         type(self).paths.append(self.path)
+        if self.status != 200:
+            data = json.dumps({"error": {"message": "Incorrect API key provided."}}).encode()
+            self.send_response(self.status)
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
         data = json.dumps({"data": [{"id": "models/gemini-x-pro"}, {"id": "qwen-y-max"}]}).encode()
         self.send_response(200)
         self.send_header("Content-Length", str(len(data)))
