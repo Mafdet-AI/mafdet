@@ -34,7 +34,10 @@ what is below it (main became `validate_config_and_initialize` in where.exe, 202
      unless wrong. The book keeps the first pass's record next to the second's (`book.revise`); a
      changed name or summary is written back as in step 6. `--revise-depth`, `--revise-skip-high` and
      `--max-functions` (counted over both passes) limit it; `--revise-no-program` and
-     `--revise-no-callers` leave a piece out of its prompt, to measure what each brings.
+     `--revise-no-callers` leave a piece out of its prompt, to measure what each brings;
+     `--revise-no-draft` (an experiment) hides the first reading from it: no first name, summary or
+     confidence, and a plain request to name the function (REVISE_NODRAFT_SYSTEM), so what the callers and
+     the program bring is not hidden behind a draft kept out of inertia.
 """
 from __future__ import annotations
 
@@ -85,6 +88,23 @@ Now the functions come again from the top down, one at a time. You get what the 
 Answer only by calling record_function, once:
 - name: keep the draft's name when it is right. Change it only when it is wrong or misleading in the light of the callers and of what the program does, not for style or for a synonym. A new name is a C identifier in snake_case that says what the function does, not how; no address in it.
 - summary: one line: what it does, with what inputs, what it returns, what it changes; the draft's, corrected where it is wrong.
+- comment: optional, a few lines on what is not obvious (a constant, an algorithm, a data format).
+- confidence: high when the code says it plainly, medium for a reasonable reading, low for a guess.
+The callers say what the function is for; the code says what it does: do not invent what the code does not show."""
+
+# --revise-no-draft: the second pass without the first reading's name and summary of the function (the first
+# real numbers, 2026-11-13: shown its first name, a second pass kept it 9 times in 10 though two first readings
+# of where.exe agree on 11-18 names of 81). The same pieces otherwise; the callers and callees are still shown
+# under the names given so far: they are context, not this function's draft.
+REVISE_NODRAFT_SYSTEM = """You name the functions of a compiled program, one function at a time, for a reverse engineer, now that all of it has been read once.
+
+A first reading named every function from the bottom up, each one seeing only its own pseudo-code and the functions it calls, never what calls it or what the program is. Its names are mostly right at the bottom of the call tree and often wrong near the top, where a word read in one function (config, buffer, handle) travels up into the names of its callers.
+
+Now the functions come again from the top down, one at a time. You get what the program is and the functions that call this one, when they are known (the callers were read again already), its pseudo-code with the names given so far, and the functions it calls with what they do. The names of the other functions can be wrong too: trust the code over a name.
+
+Answer only by calling record_function, once:
+- name: a C identifier in snake_case that says what the function does (parse_config_header, xor_decrypt_buffer, send_beacon), not how; no address in it.
+- summary: one line: what it does, with what inputs, what it returns, what it changes.
 - comment: optional, a few lines on what is not obvious (a constant, an algorithm, a data format).
 - confidence: high when the code says it plainly, medium for a reasonable reading, low for a guess.
 The callers say what the function is for; the code says what it does: do not invent what the code does not show."""
@@ -251,7 +271,8 @@ class Walk:
                  stop: threading.Event | None = None, max_functions: int = 0, time_limit: float = 0.0,
                  retry_failed: bool = False, ready_timeout: float = 1800.0, model_label: str = "",
                  poll: float = 5.0, revise: bool = False, revise_depth: int | None = None,
-                 revise_skip_high: bool = False, revise_program: bool = True, revise_callers: bool = True):
+                 revise_skip_high: bool = False, revise_program: bool = True, revise_callers: bool = True,
+                 revise_draft: bool = True):
         from .permissions import Permissions
         self.book = book
         self.server = server
@@ -279,6 +300,8 @@ class Walk:
         self.revise_depth = revise_depth                # None: every function the model named
         self.revise_skip_high = revise_skip_high        # leave out what the first pass named with high confidence
         self.revise_with = {"program": revise_program, "callers": revise_callers}
+        if not revise_draft:                            # recorded only when hidden: --revise's books stay as they were
+            self.revise_with["draft"] = False
         self._callers: dict[str, list[str]] | None = None
         self._facts_counts: dict[str, int] = {}
 
@@ -788,6 +811,10 @@ class Walk:
             taken = self.book.taken() if taken is None else taken
             if old not in taken:
                 code = re.sub(rf"(?<![\w.]){re.escape(old)}(?![\w.])", fs[c]["name"], code)
+        if self.revise_with.get("draft", True) is False and f["name"] and f["orig"] and f["name"] != f["orig"]:
+            # The draft hidden: a decompiler written back to (pyghidra-mcp) says the function's first name in
+            # its own code; it goes back to the decompiler's, as the heading says it.
+            code = re.sub(rf"(?<![\w.]){re.escape(f['name'])}(?![\w.])", f["orig"], code)
         return code
 
     @staticmethod
@@ -802,8 +829,13 @@ class Walk:
         if self.revise_with["callers"]:
             head.append(self.caller_text(f))
         callee_text, draft = self.callee_text(f), self.draft_text(f)
+        # The same budget with the draft hidden (counted, not shown): the code is clipped the same way in both.
         budget = self.code_budget("\n\n".join(head) + callee_text + draft) - 600     # its system prompt is longer
         body = clip(self.revise_code(f, code).strip("\n"), max(1500, budget))
+        if self.revise_with.get("draft", True) is False:
+            return ("\n\n".join(head) + f"\n\nIts pseudo-code:\n\n```c\n{body}\n```\n\n{callee_text}\n\n"
+                    "Call record_function for this function: name it from its code, from what calls it and from "
+                    "what the program is.")
         return ("\n\n".join(head) + f"\n\nIts pseudo-code:\n\n```c\n{body}\n```\n\n{callee_text}\n\n{draft}\n\n"
                 "Call record_function for this function: keep the draft's name if it is right, change it only if "
                 "it is wrong or misleading.")
@@ -829,7 +861,8 @@ class Walk:
         code, why = self._code(f, r)
         if code is None:
             return end("failed" if r.get("backend_error") else "skipped", why)
-        messages = [{"role": "system", "content": REVISE_SYSTEM}, {"role": "user", "content": self.revise_prompt(f, code)}]
+        system = REVISE_NODRAFT_SYSTEM if self.revise_with.get("draft", True) is False else REVISE_SYSTEM
+        messages = [{"role": "system", "content": system}, {"role": "user", "content": self.revise_prompt(f, code)}]
         before = (f["name"], f["summary"], f.get("comment") or "")
         record, error, steps, status = self._ask(messages, [RECORD], check, NO_CALL, r)
         if not record:
@@ -922,11 +955,12 @@ def run(args) -> int:
                     # any --revise-* option implies --revise
                     revise=bool(getattr(args, "revise", False) or getattr(args, "revise_depth", None) is not None
                                 or any(getattr(args, k, False) for k in ("revise_skip_high", "revise_no_program",
-                                                                         "revise_no_callers"))),
+                                                                         "revise_no_callers", "revise_no_draft"))),
                     revise_depth=getattr(args, "revise_depth", None),
                     revise_skip_high=bool(getattr(args, "revise_skip_high", False)),
                     revise_program=not getattr(args, "revise_no_program", False),
-                    revise_callers=not getattr(args, "revise_no_callers", False))
+                    revise_callers=not getattr(args, "revise_no_callers", False),
+                    revise_draft=not getattr(args, "revise_no_draft", False))
         result = walk.run(binary)
         return 0 if not result.get("stopped") or result["stopped"] in ("time limit", "interrupted", "stopped") else 1
     finally:

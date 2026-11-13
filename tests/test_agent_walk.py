@@ -13,8 +13,8 @@ from mafdet.agent import backend, book as book_module, mcp
 from mafdet.agent.book import Book, book_tool
 from mafdet.agent.model import Reply, Stopped
 from mafdet.agent.permissions import Permissions
-from mafdet.agent.walk import (NO_CALL, PROGRAM_SYSTEM, RECORD, RECORD_PROGRAM, REVISE_SYSTEM, WALK_SYSTEM, Walk,
-                               bottom_up, check, check_program)
+from mafdet.agent.walk import (NO_CALL, PROGRAM_SYSTEM, RECORD, RECORD_PROGRAM, REVISE_NODRAFT_SYSTEM, REVISE_SYSTEM,
+                               WALK_SYSTEM, Walk, bottom_up, check, check_program)
 
 FAKE_RE = str(Path(__file__).with_name("agent_fake_re.py"))
 ANALYSED = 13                    # the fake graph's functions, less printf (an import)
@@ -68,9 +68,10 @@ class Namer:
         else:
             addr = re.search(r"^Function \S+ at (\S+?)(?: \(\d+ bytes\))?[:.]$", messages[1]["content"], re.M).group(1)
             self.order.append(addr)
-            if messages[0]["content"] == REVISE_SYSTEM:
+            if messages[0]["content"] in (REVISE_SYSTEM, REVISE_NODRAFT_SYSTEM):
                 self.revised.append(addr)
-                reply = (self.revise(addr, attempt, messages) if self.revise else None) or keep(messages)
+                reply = (self.revise(addr, attempt, messages) if self.revise else None) or (
+                    keep(messages) if messages[0]["content"] == REVISE_SYSTEM else good(addr))
             else:
                 reply = (self.decide(addr, attempt) if self.decide else None) or good(addr)
         reply.prompt_tokens, reply.completion_tokens = 100, 20
@@ -80,9 +81,9 @@ class Namer:
         """The first pass's prompt of a function."""
         return next(m[1]["content"] for (m, _), a in zip(self.seen, self.order) if a == addr)
 
-    def revise_prompt(self, addr):
+    def revise_prompt(self, addr, system=REVISE_SYSTEM):
         return next(m[1]["content"] for (m, _), a in zip(self.seen, self.order)
-                    if a == addr and m[0]["content"] == REVISE_SYSTEM)
+                    if a == addr and m[0]["content"] == system)
 
 
 def make_binary(tmp_path, name="target.exe"):
@@ -635,6 +636,64 @@ def test_the_second_pass_variants_and_a_program_not_summarized(tmp_path):
     assert retry[-1]["content"].startswith("You did not call record_program")
 
 
+def test_the_second_pass_without_the_draft(tmp_path):
+    """--revise-no-draft: the same requests but the first reading of the function itself nowhere in them, and a
+    plain request to name it; the same order, tool and book."""
+    model = Namer(revise=lambda addr, attempt, messages: good(addr, name="add_numbers_main") if addr == "0x1000" else None)
+    w, result, out = walk_on(tmp_path, model, revise=True, revise_draft=False)
+    fs = w.book.functions
+    assert not result["stopped"] and result["revise"] == {"depth": None, "skip_high": False, "program": True,
+                                                          "callers": True, "draft": False}
+    second = [(m, t) for m, t in model.seen if m[0]["content"] == REVISE_NODRAFT_SYSTEM]
+    assert len(second) == ANALYSED and not any(m[0]["content"] == REVISE_SYSTEM for m, _ in model.seen)
+    assert {json.dumps(t) for _, t in second} == {json.dumps([RECORD])} and all(len(m) == 2 for m, _ in second)
+    assert model.revised[:2] == ["0x4000", "0x1000"]                       # the same order as with the draft
+    for (m, _), addr in zip(second, model.revised):
+        own = f"fn_{int(addr, 16):x}"
+        text = json.dumps(m)
+        assert own not in text, (addr, m[1]["content"])                     # not its first name, anywhere
+        assert f"does {int(addr, 16):#x}" not in text                       # nor its first summary
+        assert "draft" not in m[1]["content"] and "first reading" not in m[1]["content"]
+        assert m[1]["content"].endswith("Call record_function for this function: name it from its code, from what "
+                                        "calls it and from what the program is.")
+    p = model.revise_prompt("0x2000", REVISE_NODRAFT_SYSTEM)
+    assert p.startswith(f"What the program is (from a first look at all of it): {PROGRAM}\n\nFunction FUN_00002000 "
+                        "at 0x2000.\n\nIt is called by:\n- add_numbers_main — does 0x1000\n\nIts pseudo-code:")
+    assert "int FUN_00002000(int param_1)" in p and "fn_2100(param_1)" in p and "It calls:\n- fn_2100 — does 0x2100" in p
+    f = fs["0x1000"]
+    assert f["first"]["name"] == "fn_1000" and f["name"] == "add_numbers_main" and f["revision"]["renamed"]
+    assert f["revision"]["with"] == {"program": True, "callers": True, "draft": False}
+    assert not fs["0x2000"]["revision"]["renamed"] and fs["0x2000"]["first"]["name"] == "fn_2000"
+
+    # With the other switches: no program, no callers, the high-confidence ones left out, within 1 call of a root.
+    model = Namer()
+    w, result, out = walk_on(tmp_path, model, binary=other_binary(tmp_path, "b.exe"), revise=True, revise_draft=False,
+                             revise_program=False, revise_callers=False, revise_depth=1)
+    p = model.revise_prompt("0x2000", REVISE_NODRAFT_SYSTEM)
+    assert p.startswith("Function FUN_00002000 at 0x2000.\n\nIts pseudo-code:") and "fn_2000" not in p
+    assert "program" not in model.order and sorted(model.revised) == ["0x1000", "0x2000", "0x3000", "0x4000",
+                                                                       "0x6000", "0x8000", "0x9000"]
+    assert w.book.functions["0x2000"]["revision"]["with"] == {"program": False, "callers": False, "draft": False}
+    model = Namer()
+    walk_on(tmp_path, model, binary=other_binary(tmp_path, "c.exe"), revise=True, revise_draft=False,
+            revise_skip_high=True)
+    assert model.revised == []                                             # the fake names all with high confidence
+
+
+def test_the_second_pass_without_the_draft_through_pyghidra(tmp_path):
+    """A decompiler written back to says the function's first name in its own code: hidden there too."""
+    log, project = tmp_path / "calls.jsonl", tmp_path / "project.json"
+    model = Namer()
+    env = {"FAKE_RE_LOG": str(log), "FAKE_RE_PROJECT": str(project)}
+    w, result, out = walk_on(tmp_path, model, mode="pyghidra", env=env, permissions=Permissions("all"), revise=True,
+                             revise_draft=False)
+    assert not result["stopped"] and len(model.revised) == ANALYSED
+    first = model.prompt("00002000")
+    assert "FUN_00002000(" in first                                        # the first pass: not named yet
+    p = model.revise_prompt("00002000", REVISE_NODRAFT_SYSTEM)
+    assert "fn_2000" not in p and "FUN_00002000(" in p and "fn_2100(" in p
+
+
 def test_a_book_from_before_the_second_pass_loads_and_revises(tmp_path):
     w, _, _ = walk_on(tmp_path, Namer())
     path = w.book.dir / "book.json"
@@ -864,6 +923,11 @@ def test_the_revise_options_of_the_command(tmp_path, mafdet_home, monkeypatch, c
         kw = seen[-1]
         assert (kw["revise"], kw["revise_depth"], kw["revise_skip_high"], kw["revise_program"],
                 kw["revise_callers"]) == want, extra
+        assert kw["revise_draft"] is True
+    assert agent.run(build_parser().parse_args(base + ["--revise-no-draft"])) == 0     # implies --revise
+    assert seen[-1]["revise"] is True and seen[-1]["revise_draft"] is False
+    with pytest.raises(SystemExit, match="--revise is a second pass of a walk"):
+        agent.run(build_parser().parse_args(["agent", "--revise-no-draft"]))
     with pytest.raises(SystemExit, match="--revise is a second pass of a walk"):
         agent.run(build_parser().parse_args(["agent", "--revise"]))
     with pytest.raises(SystemExit):
