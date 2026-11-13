@@ -1,6 +1,8 @@
 """The agent in the terminal (Textual): what `mafdet agent` opens.
 
-A conversation with the model at work in it: you write at the bottom; above, each tool call with
+At the top a pixel-art kitten plays with a ball of yarn, live, next to the wordmark, the version and
+the model (`banner.py`; hidden when the terminal is short). Below it the conversation with the model at
+work in it: you write at the bottom; above, each tool call with
 the start of its result, edits as a diff, the answer as Markdown. While the model reasons, its
 thoughts are not shown: a cat face blinks next to what a cat would be doing (Mafdet is a feline
 goddess), and the reasoning stays folded in a line, to open with Ctrl+O. A call that needs your
@@ -39,6 +41,7 @@ from textual.widgets import Markdown, Static, TextArea
 
 from ..identity import AMBER
 from ..tui.fx import ALARM, BLACK, DEEP, DIM, FAINT, HOT, LINE, PANEL, RAIL, SURFACE, TEXT
+from .banner import FPS, banner
 from .permissions import MODES
 
 THEME = Theme(name="mafdet-agent", primary=AMBER, secondary=TEXT, accent=HOT, foreground=TEXT, background=BLACK,
@@ -65,6 +68,7 @@ CAT_WORDS = ("Purring", "Kneading", "Making biscuits", "Stalking", "Pouncing", "
              "Chasing its tail", "Watching the fish", "Hiding under the sofa", "Climbing the curtains",
              "Batting at the yarn", "Curling up", "Meowing at the door")
 WORD_SECONDS = 5.0          # how long one of them stays
+BANNER_MIN_HEIGHT = 24      # terminal lines below which the kitten makes room for the conversation
 
 
 def call_line(name: str, args) -> str:
@@ -173,6 +177,7 @@ class _Named:
 class AgentTUI(App):
     CSS = f"""
     Screen {{ background: $background; }}
+    #banner {{ height: 7; margin: 1 2 0 2; }}
     #log {{ height: 1fr; padding: 0 1; scrollbar-size-vertical: 1; }}
     #log > Static {{ height: auto; }}
     .welcome {{ border: round {LINE}; padding: 0 1; margin: 0 0 0 0; color: {DIM}; }}
@@ -221,6 +226,7 @@ class AgentTUI(App):
         self.doing = ""                       # under the cat: "thinking", "writing", or the tool that runs
         self.pieces = 0                       # pieces written this turn, about a token each
         self.word, self.t_word, self.frame = "", 0.0, 0
+        self.kitten, self.blink_at = 0, time.monotonic() + random.uniform(2, 6)   # the banner's frame, next blink
         self.asking = False
         self.declined = False
         self._answer = ""
@@ -229,6 +235,7 @@ class AgentTUI(App):
     # ------------------------------------------------------------ layout
 
     def compose(self) -> ComposeResult:
+        yield Static(id="banner")
         yield VerticalScroll(id="log")
         yield Static(id="todo")
         yield Static(id="activity")
@@ -245,7 +252,27 @@ class AgentTUI(App):
         self.query_one(Prompt).focus()
         self.set_interval(0.5, self._status)
         self.set_interval(0.2, self._activity)
+        self.set_interval(1 / FPS, self._banner)
         self._status()
+        self._banner()
+
+    def _banner(self):
+        """The kitten's next frame, while the terminal is tall enough to show it."""
+        try:
+            top = self.query_one("#banner", Static)
+        except NoMatches:                       # the timer fired while the app is closing
+            return
+        show = self.size.height >= BANNER_MIN_HEIGHT
+        if top.display != show:
+            top.display = show
+        if not show:
+            return
+        now = time.monotonic()
+        blink = now >= self.blink_at
+        if now >= self.blink_at + 0.2:
+            self.blink_at = now + random.uniform(2.5, 7)
+        self.kitten += 1
+        top.update(banner(self.kitten, self.label, blink, width=self.size.width - 4))
 
     def on_unmount(self):
         if self.agent is not None:
@@ -263,8 +290,6 @@ class AgentTUI(App):
         box = self.agent.toolbox
         resumed = len(self.agent.messages) - 1
         t = Text()
-        t.append("MAFDET agent", style=f"bold {AMBER}")
-        t.append(f"   {self.label}\n", style=TEXT)
         t.append(f"folder    {self.workdir}\n")
         t.append(f"tools     {len(box.active)}" + (f", {len(box.hidden)} more through find_tools" if box.hidden else "")
                  + "\n")
