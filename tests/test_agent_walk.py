@@ -759,6 +759,23 @@ def test_the_second_pass_with_call_lines(tmp_path):
     assert "It is called by" not in p and "`param_1" not in p and p.startswith("Function FUN_00002000 at 0x2000")
 
 
+def test_call_lines_are_calls_once_each_and_never_the_signature(tmp_path):
+    w, _, _ = walk_on(tmp_path, Namer())
+
+    class Code:
+        def code(self, address):
+            return ("int FUN_00002000(int param_1)\n{\n  FUN_00002000(1);\n  FUN_00002000(1);\n  p = FUN_00002000;\n"
+                    "  FUN_00002000(2);\n  fn_2000 (3);\n  FUN_00002000(4);\n}")
+    w.adapter = Code()
+    w.revise_with = {"program": True, "callers": True, "draft": False, "call_lines": True}
+    # Distinct calls, the mention left out, a written-back first name shown as the decompiler's, three at most.
+    assert w.call_lines("0x1000", w.book.functions["0x2000"]) == ["FUN_00002000(1);", "FUN_00002000(2);",
+                                                                  "FUN_00002000 (3);"]
+    w.revise_with.pop("draft")
+    w._caller_code.clear()
+    assert w.call_lines("0x1000", w.book.functions["0x2000"])[0] == "fn_2000(1);"      # the draft shown: its name
+
+
 def test_call_lines_through_pyghidra_hide_the_first_name(tmp_path):
     """A decompiler written back to says the first names in the callers' code: hidden there too."""
     log, project = tmp_path / "calls.jsonl", tmp_path / "project.json"

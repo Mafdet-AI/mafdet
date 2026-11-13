@@ -874,7 +874,10 @@ class Walk:
             if line[:1] not in (" ", "\t") and line.rstrip().endswith(")"):
                 continue                                    # the caller's own signature, at column 0
             line = rx.sub(shown, self.rename_in(line.strip(), but=f["address"]))
-            out.append(line if len(line) <= CALL_LINE_CHARS else line[:CALL_LINE_CHARS - 1] + "…")
+            line = line if len(line) <= CALL_LINE_CHARS else line[:CALL_LINE_CHARS - 1] + "…"
+            if line in out:                                 # the same call again (where.exe: `SaveLastError();` x3)
+                continue
+            out.append(line)
             if len(out) >= CALL_LINES:
                 break
         return out
