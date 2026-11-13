@@ -422,11 +422,19 @@ function start(record) {
       const url = URL.createObjectURL(blob), ext = kind.includes("mp4") ? "mp4" : "webm";
       out.hidden = false; out.replaceChildren();
       const v = document.createElement("video"); v.src = url; v.controls = true; v.playsInline = true;
-      const a = document.createElement("a"); a.href = url; a.download = `mafdet-phonk.${ext}`;
-      a.textContent = `Save mafdet-phonk.${ext} (${(blob.size / 1e6).toFixed(1)} MB)`;
-      const p = document.createElement("p"); p.className = "note";
-      p.textContent = "If the save link does nothing here, right-click the video and save it, or open assets/promo/mafdet-phonk.html from the repository in Chrome and export there.";
-      out.append(v, a, p);
+      const name = `mafdet-phonk.${ext}`, save = document.createElement("button"), said = document.createElement("p");
+      save.className = "ctl"; save.textContent = `Save ${name} (${(blob.size / 1e6).toFixed(1)} MB)`; said.className = "note";
+      save.addEventListener("click", async () => {
+        // on claude.ai the viewer confirms the save; opened as a plain file, an ordinary download link does it
+        const dl = window.claude && claude.use ? await claude.use("downloads").catch(() => null) : null;
+        if (!dl) { const a = document.createElement("a"); a.href = url; a.download = name; a.click(); return; }
+        try { await dl.save({ filename: name, data: blob }); said.textContent = `Saved ${name}.`; }
+        catch (err) {
+          said.textContent = err && err.code === "declined" ? "Not saved."
+            : "Saving is not available in this view: open assets/promo/mafdet-phonk.html from the repository in Chrome and export there.";
+        }
+      });
+      out.append(v, save, said);
       document.getElementById("export").textContent = "Export video";
     };
     setTimeout(() => recorder.start(250), 120);
