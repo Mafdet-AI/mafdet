@@ -1,11 +1,13 @@
-"""The top of `mafdet agent`: a pixel-art cheetah playing with a ball of yarn, live, next to the
-wordmark, the version and the model, and under it a line about cats and code, a new one at each start.
+"""The top of `mafdet agent`: a little pixel-art cheetah playing with a ball of yarn, live, next to
+the name in a pixel font, the version and the model, and under it a line about cats and code, a new
+one at each start.
 
-The scene is a grid of pixels drawn with half blocks (two pixels a character, art.halfblocks). The
-cheetah sits on the left; the ball rolls toward it, the cheetah lifts a paw and bats it away, the
-ball rolls off to the right trailing its thread and comes back. Its eyes follow the ball, its ringed
-tail swishes, now and then it blinks. One frame is a pure function of the frame number (and of
-whether it falls on a blink), so the scene is the same in any terminal and can be tested.
+Everything is drawn in pixels with half blocks (two pixels a character, art.halfblocks), the name
+too, so the two belong together: its letters go from the cheetah's gold to the yarn's coral. The
+cheetah sits; the ball rolls in, the cheetah bats it away with a paw (shutting its eyes, pleased),
+the ball rolls off trailing its thread and comes back. Its ringed tail swishes, now and then it
+blinks. One frame is a pure function of the frame number (and of whether it falls on a blink), so
+the scene is the same in any terminal and can be tested.
 """
 from __future__ import annotations
 
@@ -14,125 +16,67 @@ import random
 from rich.text import Text
 
 from .. import __version__
-from ..identity import AMBER
-from ..tui.art import WORDMARK, halfblocks
+from ..tui.art import halfblocks
 from ..tui.fx import DIM, HOT, TEXT
 
-# The cheetah's coat, and the yarn.
-PALETTE = {"y": "#E2A548",      # golden fur
-           "d": "#B27530",      # fur in shade
-           "l": "#F4DBAE",      # cream: chest, belly, inside of the legs
-           "w": "#FFF5E4",      # white: muzzle, toes, the tip of the tail
-           "k": "#1E140B",      # spots, tear marks, rings
-           "o": "#6A4318",      # the darker edge that keeps the shapes apart
-           "n": "#3A2216",      # nose
-           "e": "#F9C94E",      # iris
-           "p": "#E89A86"}      # inside of the ears
-YARN, SHADE, LIGHT, STRAND = "#E8604A", "#B23F2C", "#FF9C80", "#7E2618"
+PALETTE = {"y": "#F2B65A",      # golden fur
+           "l": "#FFEBC8",      # cream: muzzle, chest, paws
+           "k": "#2B1B0F",      # spots, tear marks, eyes, mouth
+           "w": "#FFFFFF",      # the light in the eyes, the tip of the tail
+           "p": "#F59C9A",      # ears, cheeks, nose
+           "o": "#9A6428"}      # the rings of the tail (black would vanish on the black screen)
+YARN, SHADE, LIGHT, STRAND = "#EF6F5E", "#C04A3C", "#FFA894", "#93342A"
 
-H = 22                      # pixels: 11 lines of text
-CAT_X = 9                   # where the cheetah's sprite starts (the tail lies to its left)
+# The cheetah, sitting, big head and small body. The eyes (2x2) and the right front paw move.
+CHEETAH = ["..yy........yy..",
+           ".yppy......yppy.",
+           ".yyyyyyyyyyyyyy.",
+           "ykyyyyykkyyyyyky",
+           "yy..yyyyyyyy..yy",
+           "yy..yyyyyyyy..yy",
+           "yppkyllllllykppy",
+           "yyyykllppllkyyyy",
+           ".yyyllkllkllyyy.",
+           "..yyyllkkllyyy..",
+           "...yyyyyyyyyy...",
+           "...ykyllllyky...",
+           "...yyyllllyyy...",
+           "...lllyyyy......"]
+EYES = ((4, 2), (4, 12))
+PAW = {"rest": [(13, 10, "l"), (13, 11, "l"), (13, 12, "l")],
+       "bat":  [(11, 13, "y"), (11, 14, "y"), (11, 15, "l"), (12, 13, "y"), (12, 14, "l"), (12, 15, "l")]}
+X = 4                       # where the cheetah starts: its tail curls up on the left
+# The tail, one pixel wide from the back of the body up beside the cheek, in three positions.
+TAIL = [[(13, 2), (13, 1), (12, 0), (11, -1), (10, -1), (9, -1), (8, 0)],
+        [(13, 2), (13, 1), (12, 0), (11, -1), (10, -2), (9, -2), (8, -2)],
+        [(13, 2), (13, 1), (13, 0), (12, -1), (11, -2), (10, -3), (9, -3)]]
+
+# The ball: x yarn, s shade, h light; its strands in three turns of rolling.
+BALL = [".xxxx.",
+        "xhhxxx",
+        "xhxxxs",
+        "xxxxxs",
+        "xxxxss",
+        ".ssss."]
+STRANDS = [[(1, 3), (2, 2), (3, 1), (2, 4), (3, 3)],
+           [(1, 2), (2, 2), (3, 2), (2, 4), (4, 3)],
+           [(1, 1), (2, 2), (3, 3), (1, 4), (4, 2)]]
+
+H = 14                      # pixels: 7 lines of text
+NEAR = X + 16               # the ball's left edge where the paw reaches it
+ROLL = [0, 3, 6, 8, 9, 10, 10, 10, 10, 10, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0]   # how far it is, frame by frame
+LOOP = len(ROLL)
+W = NEAR + max(ROLL) + len(BALL[0])
 FPS = 8
 
-# The cheetah crouched to pounce, facing right, the head turned to us: the body, then the head on it.
-# Letters are PALETTE's colours, '.' is empty. The near front leg, the eyes and the tail are drawn apart.
-BODY = (11, 0, ["........ooooooo.................",
-                ".....oooyykyyyyoo...............",
-                "...ooyyyyyyyyykyyolllllllo......",
-                "..oyykyyyykyyyyyyyollllllo......",
-                ".oyyyyyyyyyyyykyyydllllldo......",
-                ".oyykyyyyykyyyyyyyydllldo.......",
-                "oyyyyyykyyyyyyykyyyydlldo.......",
-                "oyykyyddddyyykyyyyyyydldo.......",
-                "oyyyydyykyddyyyyyyyyyydko.......",
-                "odyyyydyyyydyyyyyyyyyyddo.......",
-                "oowwwwwoddddoowwwwwwooooo......."])
-HEAD = (0, 10, ["..ooo..........ooo..",
-                ".oppyo........oyppo.",
-                ".oyyyyooooooooyyyyo.",
-                "oyyyyykyykkyykyyyyyo",
-                "oyyyyyyyyyyyyyyyyyyo",
-                "oyyy...kyyyyk...yyyo",
-                "oyyy...kyyyyk...yyyo",
-                "oyyyyyykllllkyyyyyyo",
-                ".oyyyyykwnnwkyyyyyo.",
-                ".oyyyykwwwwwwkyyyyo.",
-                "..oyyykwkwwkwkyyyo..",
-                "...oyyykwwwwkyyyo..."])
-EYES = ((5, 14), (5, 23))              # the top left pixel of each eye in the sprite, 3 wide and 2 tall
-
-# The near front leg: on the floor, raised, batting forward. (row, column) of its top left in the sprite.
-LEG = {"rest": (13, 23, ["oo.....",
-                         "lyo....",
-                         "lyyo...",
-                         "lyyyo..",
-                         "yykyo..",
-                         "yyyyo..",
-                         "yykyyo.",
-                         "lyyyyo.",
-                         "wwwwwo."]),
-       "up":   (12, 23, ["ooooooo.....",
-                         "lyyyyyyoooo.",
-                         "lyykyyyyywwo",
-                         "lyyyykyyywwo",
-                         "oyyyoooooo..",
-                         ".ooo........"]),
-       "bat":  (14, 23, ["lyyo.........",
-                         "lyyyyyyoooo..",
-                         "lyykyyyyykwwo",
-                         "oyyyykyyyywwo",
-                         ".oooooooooo.."])}
-
-# The tail: a path of pixels from the rump along the floor and up, drawn two pixels thick, with black
-# rings (dark brown: black would vanish on the black screen) and a white tip; three positions of a swish.
-TAIL = [[(19, 0), (19, -1), (19, -2), (19, -3), (18, -4), (17, -5), (16, -5), (15, -5), (14, -5), (13, -4),
-         (12, -3), (12, -2)],
-        [(19, 0), (19, -1), (19, -2), (19, -3), (19, -4), (18, -5), (17, -6), (16, -6), (15, -6), (14, -6),
-         (13, -6), (12, -5)],
-        [(19, 0), (19, -1), (19, -2), (19, -3), (19, -4), (19, -5), (18, -6), (17, -7), (16, -7), (15, -8),
-         (14, -8), (13, -8)]]
-
-# The ball, 10 pixels across: x yarn, s shade, h light; and its strands in four turns of rolling.
-BALL = ["...xxxx...",
-        ".xhhxxxxx.",
-        ".hhxxxxxxs",
-        "xhxxxxxxxs",
-        "xxxxxxxxxs",
-        "xxxxxxxxss",
-        "xxxxxxxxss",
-        ".xxxxxxss.",
-        ".sxxxssss.",
-        "...ssss..."]
-STRANDS = [[(2, 3), (3, 4), (4, 5), (5, 6), (6, 7), (2, 6), (3, 6), (6, 2), (7, 3), (4, 2)],
-           [(2, 5), (3, 5), (4, 5), (5, 5), (6, 5), (3, 2), (4, 3), (5, 7), (6, 7), (7, 4)],
-           [(2, 7), (3, 6), (4, 5), (5, 4), (6, 3), (2, 3), (3, 3), (6, 7), (7, 6), (4, 7)],
-           [(4, 2), (4, 3), (4, 4), (4, 5), (4, 6), (4, 7), (2, 4), (3, 5), (6, 4), (7, 5)]]
-
-NEAR = CAT_X + 36           # the ball's left edge where the paw reaches it
-FAR = NEAR + 12             # and where it stops after the bat
-W = FAR + len(BALL[0]) + 1  # the scene's width in pixels
-LOOP = 48
-
-
-def _ball_x(f: int) -> tuple[int, int]:
-    """(left edge, hop) of the ball at frame `f` of the loop."""
-    f %= LOOP
-    if f < 8:                                   # batted: fast, slowing down, a little hop
-        t = f / 8
-        return NEAR + round((FAR - NEAR) * (1 - (1 - t) ** 2)), (2 if f in (1, 2) else 1 if f == 3 else 0)
-    if f < 18:                                  # resting far away
-        return FAR, 0
-    t = (f - 18) / (LOOP - 18)                  # rolling back to the cheetah
-    return FAR - round((FAR - NEAR) * t), 0
-
-
-def _leg(f: int) -> str:
-    f %= LOOP
-    if f >= LOOP - 4:
-        return "up"
-    if f < 3:
-        return "bat"
-    return "rest"
+# The name in a pixel font of its own, 7 pixels tall, lower case.
+FONT = {"m": [".....", ".....", "####.", "#.#.#", "#.#.#", "#.#.#", "#.#.#"],
+        "a": ["....", "....", ".###", "...#", ".###", "#..#", ".###"],
+        "f": ["..##", ".#..", "####", ".#..", ".#..", ".#..", ".#.."],
+        "d": ["...#", "...#", ".###", "#..#", "#..#", "#..#", ".###"],
+        "e": ["....", "....", ".##.", "#..#", "####", "#...", ".###"],
+        "t": [".#.", ".#.", "###", ".#.", ".#.", ".#.", ".##"]}
+NAME_FROM, NAME_TO = (0xF2, 0xB6, 0x5A), (0xEF, 0x6F, 0x5E)     # the fur's gold to the yarn's coral
 
 
 def frame(f: int, blink: bool = False) -> list[list[str | None]]:
@@ -140,47 +84,64 @@ def frame(f: int, blink: bool = False) -> list[list[str | None]]:
     grid: list[list[str | None]] = [[None] * W for _ in range(H)]
 
     def put(r: int, c: int, colour: str | None):
-        if colour and 0 <= r < H and 0 <= c < W:
+        if 0 <= r < H and 0 <= c < W:
             grid[r][c] = colour
 
-    def sprite(top: int, left: int, rows: list[str]):
-        for r, row in enumerate(rows):
-            for c, ch in enumerate(row):
-                if ch != ".":
-                    put(top + r, left + c, PALETTE[ch])
-
-    # The tail first, so the body covers its root.
-    tail = TAIL[(0, 1, 2, 1)[(f // 4) % 4]]
+    f %= LOOP
+    tail = TAIL[(0, 1, 2, 1)[(f // 3) % 4]]
     for i, (r, c) in enumerate(tail):
-        colour = PALETTE["w"] if i >= len(tail) - 2 else PALETTE["o"] if i % 3 == 2 else PALETTE["y"]
-        nr, nc = tail[min(i + 1, len(tail) - 1)]
-        across = (1, 0) if abs(nc - c) >= abs(nr - r) else (0, 1)   # thickness across the way it goes
-        put(r, CAT_X + c, colour)
-        put(r + across[0], CAT_X + c + across[1], colour)
-    for top, left, rows in (BODY, HEAD, LEG[_leg(f)]):
-        sprite(top, CAT_X + left, rows)
+        put(r, X + c, PALETTE["w"] if i == len(tail) - 1 else PALETTE["o"] if i % 2 else PALETTE["y"])
+    for r, row in enumerate(CHEETAH):
+        for c, ch in enumerate(row):
+            if ch != ".":
+                put(r, X + c, PALETTE[ch])
+    batting = f in (0, 1)
+    for r, c, ch in PAW["bat" if batting else "rest"]:
+        put(r, X + c, PALETTE[ch])
+    for r, c in EYES:                   # open with a light in them; shut, pleased, while batting or blinking
+        shut = blink or batting
+        put(r, X + c, PALETTE["y" if shut else "w"])
+        put(r, X + c + 1, PALETTE["y" if shut else "k"])
+        put(r + 1, X + c, PALETTE["k"])
+        put(r + 1, X + c + 1, PALETTE["k"])
 
-    x, hop = _ball_x(f)
-    # The eyes: amber with the pupil on the ball's side, lid and lashes for a blink.
-    pupil = 2 if x > NEAR + 3 else 1
-    for r, c in EYES:
-        for dr in (0, 1):
-            for dc in range(3):
-                colour = (PALETTE["y"] if dr == 0 else PALETTE["k"]) if blink else                     PALETTE["k"] if dc == pupil else PALETTE["e"]
-                put(r + dr, CAT_X + c + dc, colour)
-
-    # The thread: from under the paws along the floor to the ball, with some slack.
-    for c in range(CAT_X + 30, x + 1):
-        put(H - 1 if (c // 4) % 2 else H - 2, c, YARN)
-    top = H - len(BALL) - hop
+    x = NEAR + ROLL[f]
+    for c in range(X + 13, x):          # the thread, from under the paws to the ball
+        put(H - 1 if (c // 3) % 2 else H - 2, c, YARN)
+    top = H - len(BALL)
     for r, row in enumerate(BALL):
         for c, ch in enumerate(row):
             if ch != ".":
                 put(top + r, x + c, {"x": YARN, "s": SHADE, "h": LIGHT}[ch])
-    turn = (f if (f % LOOP) < 18 else -f) // 2 % len(STRANDS)
-    for r, c in STRANDS[turn]:
+    away = f < LOOP // 2
+    for r, c in STRANDS[(f // 2 if away else -f // 2) % len(STRANDS)]:
         put(top + r, x + c, STRAND)
     return grid
+
+
+def name() -> list[list[str | None]]:
+    """'mafdet' in the pixel font, 8 pixels tall (4 lines), gold to coral from left to right."""
+    rows: list[str] = [""] * 8
+    for ch in "mafdet":
+        glyph = FONT[ch]
+        width = max(len(g) for g in glyph)
+        for i in range(7):
+            rows[i] += glyph[i].ljust(width, ".") + "."
+    rows[7] = "." * len(rows[0])
+    n = len(rows[0]) - 1
+    grid = []
+    for row in rows:
+        line: list[str | None] = []
+        for c, ch in enumerate(row):
+            t = c / max(1, n - 1)
+            line.append("#%02X%02X%02X" % tuple(round(a + (b - a) * t) for a, b in zip(NAME_FROM, NAME_TO))
+                        if ch == "#" else None)
+        grid.append(line)
+    return grid
+
+
+NAME = name()
+SIDE = 4 + max(len(NAME[0]), 18)       # columns the name and the lines under it take next to the scene
 
 
 # A line under the scene, a new one at each start: cats, cheetahs and code.
@@ -259,32 +220,28 @@ def quip(language: str | None = None, rng: random.Random | None = None) -> str:
     return (rng or random).choice(QUIPS.get(language) or QUIPS["en"])
 
 
-SIDE = 26                   # columns the wordmark needs next to the scene
-
-
 def banner(f: int, label: str, blink: bool = False, width: int = 120, line: str = "") -> Text:
-    """The cheetah at frame `f`, the wordmark, the version and the model on its right (under it when
-    the terminal is narrow), and `line` below."""
+    """The cheetah at frame `f` with the name, the version and the model on its right (on a line under
+    it when the terminal is narrow), and `line` below."""
     art = halfblocks(frame(f, blink)).split("\n")
-    room = width - W - 3
-    beside = room >= SIDE
+    beside = width >= W + SIDE
+    room = width - W - 4
     side: dict[int, Text] = {}
     if beside:
-        model = label if len(label) <= room else label[:max(0, room - 1)] + "…"
-        side = {3: Text(WORDMARK[0], style=f"bold {AMBER}"),
-                4: Text(WORDMARK[1], style=f"bold {AMBER}"),
-                6: Text.assemble(("agent", HOT), ("  v" + __version__, DIM)),
-                7: Text(model, style=TEXT)}
+        for i, row in enumerate(halfblocks(NAME).split("\n")):
+            side[1 + i] = row
+        side[5] = Text.assemble(("agent", HOT), ("  v" + __version__, DIM))
+        side[6] = Text(label if len(label) <= room else label[:max(0, room - 1)] + "…", style=TEXT)
     out = Text(no_wrap=True, overflow="crop")
     for i in range(H // 2):
         row = art[i] if i < len(art) else Text()
         out.append_text(row)
         if i in side:
-            out.append(" " * (W - row.cell_len + 3))
+            out.append(" " * (W - row.cell_len + 4))
             out.append_text(side[i])
         out.append("\n")
     if not beside:
-        out.append_text(Text.assemble(("MAFDET agent", f"bold {AMBER}"), ("  v" + __version__ + "  ", DIM),
+        out.append_text(Text.assemble(("mafdet", f"bold {HOT}"), (" agent  v" + __version__ + "  ", DIM),
                                       (label, TEXT)))
         out.append("\n")
     if line:
@@ -296,7 +253,7 @@ def banner(f: int, label: str, blink: bool = False, width: int = 120, line: str 
 
 def height(width: int, line: bool = True) -> int:
     """The lines `banner` takes at this width."""
-    return H // 2 + (0 if width - W - 3 >= SIDE else 1) + (2 if line else 0)
+    return H // 2 + (0 if width >= W + SIDE else 1) + (2 if line else 0)
 
 
 __all__ = ["banner", "frame", "height", "quip", "FPS"]
