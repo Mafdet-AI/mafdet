@@ -1,11 +1,10 @@
-// S15, beats 80-88 (to the last frame): the theatrical close.
+// S15, beats 80-100 (to the last frame, about 10 s): the theatrical close, slow enough to take in.
 //   80  the hit: the cheetah, MAFDET's mascot, slams in with its eyes lit
-//   81  the wordmark uncovers under it
-//   82  letterbox bars close in, a slow push
-//   83  black: only the eyes
-//   84  AHEAD,   85  TOGETHER.
-//   86  the final card: the cheetah, the slogan, the wordmark; the cheetah blinks; all fades but the eyes,
-//       which go out last.
+//   81  the wordmark uncovers under it;  82  AGENT;  83 letterbox bars close in; a slow push to 86
+//   86  black: only the eyes, breathing
+//   88  AHEAD,   90  TOGETHER.   held with the eyes
+//   93  the final card: the cheetah, the slogan, the wordmark, held; the cheetah blinks on 96;
+//   98  all fades but the eyes, which go out last.
 import React from "react";
 import {AbsoluteFill, Easing, interpolate, useCurrentFrame} from "remotion";
 import {FlashCut, GlitchTransition, PixelCheetah, PunchText, Wordmark} from "../components";
@@ -14,7 +13,7 @@ import {MONO} from "../fonts";
 import {Shake} from "./a_shared";
 import {sceneTiming} from "./sceneTiming";
 
-const T = sceneTiming(80, 88);
+const T = sceneTiming(80, 100);
 const clamp = {extrapolateLeft: "clamp", extrapolateRight: "clamp"} as const;
 const out = {...clamp, easing: Easing.out(Easing.cubic)};
 
@@ -31,34 +30,36 @@ export const S15_Outro: React.FC = () => {
   const hero = 720;
   const heroW = (hero / 20) * 19;
   const slam = interpolate(frame, [0, 4], [1.3, 1], out);
-  const push = interpolate(frame, [b(82), b(83)], [1, 1.07], clamp);
-  const wordReveal = interpolate(frame, [b(81), b(81) + 6], [0, 1], out);
-  const bars = interpolate(frame, [b(82), b(82) + 8], [0, 230], out);
+  const push = interpolate(frame, [b(81), b(86)], [1, 1.08], clamp);
+  const wordReveal = interpolate(frame, [b(81), b(81) + 12], [0, 1], out);
+  const bars = interpolate(frame, [b(83), b(83) + 14], [0, 230], out);
 
   // 86 on: the final card
-  const card = frame >= b(86);
-  const cardIn = interpolate(frame, [b(86), b(86) + 6], [0, 1], out);
-  const fade = interpolate(frame, [end - 16, end - 5], [1, 0], clamp);          // everything but the eyes
-  const eyesOut = interpolate(frame, [end - 4, end - 1], [1, 0], clamp);        // the eyes, last
-  const blink = card && frame >= b(87) && frame < b(87) + 3;
+  const card = frame >= b(93);
+  const cardIn = interpolate(frame, [b(93), b(93) + 12], [0, 1], out);
+  const cardPush = interpolate(frame, [b(93), end], [1, 1.04], clamp);
+  const fade = interpolate(frame, [b(98), end - 10], [1, 0], clamp);            // everything but the eyes
+  const eyesOut = interpolate(frame, [end - 9, end - 1], [1, 0], clamp);        // the eyes, last
+  const blink = card && frame >= b(96) && frame < b(96) + 4;
+  const breathe = 0.8 + 0.2 * Math.sin((frame / 30) * Math.PI * 1.2);           // the eyes in the dark
 
   const slogan = (top: number, size: number, opacity = 1) => (
     <div style={{opacity}}>
-      <PunchText text="AHEAD," at={b(84)} size={size} split={22} style={{top}} />
-      {frame >= b(85) ? (
-        <PunchText text="TOGETHER." at={b(85)} size={size} split={26} color={COLORS.hot} style={{top: top + size * 1.02}} />
+      <PunchText text="AHEAD," at={b(88)} size={size} split={22} style={{top}} />
+      {frame >= b(90) ? (
+        <PunchText text="TOGETHER." at={b(90)} size={size} split={26} color={COLORS.hot} style={{top: top + size * 1.02}} />
       ) : null}
     </div>
   );
 
   return (
     <AbsoluteFill style={{backgroundColor: COLORS.black}}>
-      <Shake hits={[{at: 0, k: 2}, {at: b(81), k: 0.5}, {at: b(84), k: 1.5}, {at: b(85), k: 1.5}, {at: b(86), k: 0.5}]}>
-        {frame < b(83) ? (
+      <Shake hits={[{at: 0, k: 2}, {at: b(81), k: 0.5}, {at: b(88), k: 1.5}, {at: b(90), k: 1.5}, {at: b(93), k: 0.5}]}>
+        {frame < b(86) ? (
           <GlitchTransition at={0} frames={6} seed={80} intensity={1.8}>
             <AbsoluteFill style={{transform: `scale(${push.toFixed(4)})`, transformOrigin: "50% 45%"}}>
               <Centred top={250} width={heroW} style={{transform: `scale(${slam.toFixed(4)})`, transformOrigin: "50% 60%"}}>
-                <PixelCheetah height={hero} glow={1} tail={frame >= b(82) ? 1 : 0} />
+                <PixelCheetah height={hero} glow={1} tail={Math.floor(frame / 23) % 3 === 1 ? 1 : 0} blink={frame >= b(84) && frame < b(84) + 4} />
               </Centred>
               <Centred top={1060} width={880}>
                 <Wordmark width={880} reveal={wordReveal} />
@@ -73,17 +74,17 @@ export const S15_Outro: React.FC = () => {
               ) : null}
             </AbsoluteFill>
           </GlitchTransition>
-        ) : frame < b(86) ? (
-          // 83-86: black, the eyes; then the slogan
+        ) : frame < b(93) ? (
+          // 86-93: black, the eyes breathing; then the slogan
           <AbsoluteFill>
-            <Centred top={250} width={heroW} style={{transform: "scale(1.07)", transformOrigin: "50% 60%"}}>
-              <PixelCheetah height={hero} eyesOnly glow={1} />
+            <Centred top={250} width={heroW} style={{transform: "scale(1.08)", transformOrigin: "50% 60%"}}>
+              <PixelCheetah height={hero} eyesOnly glow={breathe} />
             </Centred>
             {slogan(560, 300)}
           </AbsoluteFill>
         ) : (
-          // 86 on: the final card
-          <AbsoluteFill>
+          // 93 on: the final card, held, a slow push
+          <AbsoluteFill style={{transform: `scale(${cardPush.toFixed(4)})`, transformOrigin: "50% 50%"}}>
             <div style={{opacity: fade}}>
               <Centred top={260 - (1 - cardIn) * 40} width={(320 / 20) * 19}>
                 <PixelCheetah height={320} glow={0.8} blink={blink} />
@@ -121,8 +122,8 @@ export const S15_Outro: React.FC = () => {
         </>
       ) : null}
       <FlashCut at={0} frames={2} color={COLORS.hot} />
-      <FlashCut at={b(84)} frames={1} />
-      <FlashCut at={b(85)} frames={1} color={COLORS.hot} />
+      <FlashCut at={b(88)} frames={1} />
+      <FlashCut at={b(90)} frames={1} color={COLORS.hot} />
     </AbsoluteFill>
   );
 };

@@ -1,6 +1,6 @@
 # The phonk edit of Mafdet Agent
 
-A vertical video (1080x1920, 30 fps, about 45 s) that shows how `mafdet agent` works, cut to a phonk
+A vertical video (1080x1920, 30 fps, about 51 s) that shows how `mafdet agent` works, cut to a phonk
 track. It is made with [Remotion](https://www.remotion.dev) (React + TypeScript) in `video/`, and every
 cut comes from the beats of the track: no frame number is written by hand.
 
@@ -51,12 +51,14 @@ To work on it with a live preview: `npx remotion studio src/index.ts`. One frame
 2. Once, the analysis environment: `python -m venv video/.venv-audio`, then
    `video/.venv-audio/Scripts/pip install librosa soundfile numpy`.
 3. `video/.venv-audio/Scripts/python video/tools/analyze_audio.py [track] [--start S] [--length L] [--phase 0-3]`.
+   This video uses `--start 24.5437 --length 51.02`: four bars before the drop, and three bars of the quiet
+   passage after the last hit, so the close has time.
    It finds tempo, beats, bars and the drop, picks an excerpt of 30 to 45 seconds around the drop, and
    writes `video/src/beats.json` and `video/public/audio/track.wav`. It also writes `out/beat_check.wav`,
    the excerpt with a click on every beat (higher on the first of a bar): listen to it, and if the high
    click is not on the "one", run again with another `--phase`.
 4. Render again. The scenes follow the new grid by themselves, but the storyboard was written for this
-   track's shape: 88 beats, the drop on beat 16, a break before beat 48, the last hit on beat 80. A track
+   track's shape: 100 beats, the drop on beat 16, a break before beat 48, the last hit on beat 80 and 20 quieter beats after it for the close. A track
    with another shape needs `video/src/storyboard.json` moved to its beats (the scenes take theirs from
    there and from `sceneTiming(fromBeat, toBeat)` at the top of each file).
 

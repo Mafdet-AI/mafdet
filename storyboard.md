@@ -11,7 +11,7 @@
 > - **S10 (52-60)**: Shift+Tab through ask, edits, all on the real status line, one a beat; then the approval
 >   prompt of a shell command, y on 58, it runs.
 > - **S14_Eyes (78-80)** replaces S14_Recap: black, the cheetah's eyes open and burn, three black frames.
-> - **S15 (80-88)**: the cheetah slams in, the identity's wordmark uncovers, letterbox and push, black but the eyes,
+> - **S15 (80-100, about 10 s: the excerpt was lengthened by 3 bars of the quiet passage)**: the cheetah slams in, the identity's wordmark uncovers, letterbox and push, black but the eyes,
 >   AHEAD, (84) TOGETHER. (85), the final card; everything fades but the eyes, which go out last.
 > The live clips are recorded from the real interface by `video/tools/capture_tui.py` with a scripted model and real
 > tools; every one says so in its caption.
