@@ -504,10 +504,22 @@ async def until(pilot, check, seconds=10.0):
 
 
 def shown(app) -> str:
+    """The conversation's text, as the terminal shows it (a command's card is a Group, not a Text)."""
+    import io
+
+    from rich.console import Console
+    from rich.text import Text
     from textual.widgets import Markdown, Static
     out = []
     for w in app.query("#log > *"):
-        out.append(w.source if isinstance(w, Markdown) else str(w.render()) if isinstance(w, Static) else "")
+        if isinstance(w, Markdown):
+            out.append(w.source)
+        elif isinstance(w, Static) and isinstance(w.content, (Text, str)):
+            out.append(str(w.content))                      # as written: tabs stay tabs
+        elif isinstance(w, Static):
+            console = Console(width=200, record=True, file=io.StringIO())
+            console.print(w.content)
+            out.append(console.export_text().rstrip())
     return "\n".join(out)
 
 

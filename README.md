@@ -183,7 +183,7 @@ It is meant for a card with 12-16 GB (the reference is an RTX 5070 Ti, where Qwe
 | Shift+Tab | what runs without asking: ask → edits → all |
 | Ctrl+O | the reasoning and the tool outputs in full, or folded |
 | Up / Down | your earlier messages |
-| `/help` `/tools` `/notes` `/compact` `/new` `/approve` `/quit` | `/notes` shows what the model wrote down, `/compact` summarizes the conversation to make room |
+| `/` | the commands, in a menu above the message box that narrows as you type: ↑↓ move, Tab completes, Enter runs, Esc closes; `/approve` and `/reasoning` show their values the same way. `/model`, `/reasoning`, `/approve`, `/tools`, `/notes` (what the model wrote down), `/compact` (summarize the conversation to make room), `/new`, `/help`, `/quit`. Their answers come as cards of their own in the conversation |
 
 A `MAFDET.md` (or `AGENTS.md`) in the working folder is read at the start as instructions for that folder: what the sample is, what has been found, how to build. `--plain` gives the same conversation as plain lines, and `-p` or a pipe one task with no interface. `--resume` (a session id, or `last`) goes on with a session of `~/.mafdet/sessions`: the full-screen conversation shows its last 60 messages again, the notes are read back, and a session that was compacted starts from its summary.
 

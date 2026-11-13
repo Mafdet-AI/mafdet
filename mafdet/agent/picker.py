@@ -1,4 +1,4 @@
-"""`/model` and `/reasoning` in the agent: choosing what the agent runs on without leaving it.
+"""`/model` in the agent: choosing what the agent runs on without leaving it.
 
 The model picker goes in up to three steps. Where: the models on this machine, or a provider in the cloud
 (each said with where its key is: an environment variable, the system's credential store, or none yet).
@@ -19,7 +19,6 @@ from textual.widgets.option_list import Option
 from ..identity import AMBER
 from ..tui.fx import ALARM, DEEP, DIM, FAINT, HOT, LINE, SURFACE, TEXT
 from . import cloud, keys
-from .model import LEVELS
 from .switch import Choice, local_models
 
 LOCAL = "local"
@@ -226,44 +225,3 @@ class ModelPicker(ModalScreen):
             self.dismiss(None)
         else:
             self._show_where()
-
-
-LEVEL_TEXT = {"auto": "the model's or the provider's own default",
-              "off": "no reasoning: the fastest, for simple steps",
-              "low": "a little",
-              "medium": "a fair amount",
-              "high": "as much as it takes: the slowest and, in the cloud, the most expensive"}
-
-
-class ReasoningPicker(ModalScreen):
-    CSS = CSS.format(name="ReasoningPicker")
-    BINDINGS = [Binding("escape", "back", show=False)]
-
-    def __init__(self, current: str, local: bool):
-        super().__init__()
-        self.current, self.local = current, local
-
-    def compose(self) -> ComposeResult:
-        with Vertical():
-            yield Static("How much should the model reason?", id="pick-title")
-            yield OptionList(id="pick-list")
-            yield Static(id="pick-hint")
-
-    def on_mount(self):
-        options = self.query_one("#pick-list", OptionList)
-        for level in LEVELS:
-            t = Text(f"{level:<8}", style=f"bold {TEXT}")
-            t.append(LEVEL_TEXT[level], style=DIM)
-            options.add_option(Option(ModelPicker._mark(t, level == self.current), id=level))
-        options.highlighted = LEVELS.index(self.current) if self.current in LEVELS else 0
-        options.focus()
-        self.query_one("#pick-hint", Static).update(Text(
-            ("A local model only reasons or not: low, medium and high all mean on. " if self.local else "")
-            + "Enter chooses · Esc closes", style=FAINT))
-
-    def on_option_list_option_selected(self, event: OptionList.OptionSelected):
-        event.stop()
-        self.dismiss(event.option.id)
-
-    def action_back(self):
-        self.dismiss(None)

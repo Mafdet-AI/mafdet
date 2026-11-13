@@ -20,9 +20,8 @@ MAFDET's catalog that is not on (`kit.suggest`): Ctrl+T installs it, asking firs
     Ctrl+T          install (or start) the tool the message being written seems to need
     Up / Down       earlier messages
     Ctrl+C          clear the message, stop the model, or leave
-    /help /tools /notes /compact /new /approve <mode> /quit
-    /model          another model, here or in the cloud (picker.py, switch.py): the conversation goes on
-    /reasoning      how much the model reasons: auto, off, low, medium, high
+    /               the commands, in a menu above the box (commands.py): /model, /reasoning, /approve,
+                    /tools, /notes, /compact, /new, /help, /quit
 """
 from __future__ import annotations
 
@@ -32,6 +31,8 @@ import random
 import threading
 import time
 
+from rich.console import Group
+from rich.table import Table
 from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -44,6 +45,7 @@ from textual.widgets import Markdown, Static, TextArea
 from ..identity import AMBER
 from ..tui.fx import ALARM, BLACK, DEEP, DIM, FAINT, HOT, LINE, PANEL, RAIL, SURFACE, TEXT
 from .banner import FPS, banner, height, quip
+from .commands import SlashMenu
 from .permissions import MODES
 
 THEME = Theme(name="mafdet-agent", primary=AMBER, secondary=TEXT, accent=HOT, foreground=TEXT, background=BLACK,
@@ -51,14 +53,6 @@ THEME = Theme(name="mafdet-agent", primary=AMBER, secondary=TEXT, accent=HOT, fo
               variables={"scrollbar": DEEP, "scrollbar-hover": LINE, "scrollbar-active": DIM,
                          "scrollbar-background": BLACK, "input-cursor-background": HOT,
                          "input-selection-background": "#D4892A55"})
-
-HELP = """Enter sends, Shift+Enter (or Ctrl+J) starts a new line, Esc stops the model.
-Shift+Tab changes what runs without asking: ask (writes and commands ask), edits (writes in the folder run), all (commands too).
-Ctrl+O shows the reasoning and the tool outputs in full. Up and Down bring back earlier messages.
-/tools  the tools the model has      /notes  what the model wrote down      /compact  summarize to make room
-/model  another model, on this machine or in the cloud (the conversation goes on with it)
-/reasoning [auto|off|low|medium|high]  how much the model reasons before each step
-/new  a new conversation      /approve ask|edits|all      /quit"""
 
 FOLDED_LINES, OPEN_LINES = 4, 40
 REPLAY = 60                 # messages of a resumed session shown again
@@ -126,7 +120,7 @@ class Prompt(TextArea):
 
     def __init__(self, **kw):
         super().__init__(show_line_numbers=False, soft_wrap=True,
-                         placeholder="Ask, or say what to do…  (Enter sends, Shift+Enter a new line)", **kw)
+                         placeholder="Ask, or say what to do…   / for commands", **kw)
         self.sent: list[str] = []
         self.at: int | None = None
 
@@ -142,17 +136,25 @@ class Prompt(TextArea):
         self.text = text
         self.move_cursor(self.document.end)
 
+    def submit(self, text: str):
+        text = text.strip()
+        if text:
+            if not self.sent or self.sent[-1] != text:
+                self.sent.append(text)
+            self.at = None
+            self.text = ""
+            self.post_message(self.Submitted(text))
+
     async def _on_key(self, event) -> None:
+        slash = getattr(self.app, "slash_key", None)
+        if event.key in ("up", "down", "tab", "enter") and slash is not None and slash(event.key):
+            event.prevent_default()                 # the command menu took it
+            event.stop()
+            return
         if event.key == "enter":
             event.prevent_default()
             event.stop()
-            text = self.text.strip()
-            if text:
-                if not self.sent or self.sent[-1] != text:
-                    self.sent.append(text)
-                self.at = None
-                self.text = ""
-                self.post_message(self.Submitted(text))
+            self.submit(self.text)
             return
         if event.key in ("shift+enter", "ctrl+j"):
             event.prevent_default()
@@ -196,6 +198,11 @@ class AgentTUI(App):
     .err {{ color: {ALARM}; margin: 1 0 0 0; }}
     #ask {{ display: none; height: auto; max-height: 60%; border: round {AMBER}; padding: 0 1; margin: 0 1; }}
     #hint {{ display: none; height: auto; max-height: 3; margin: 0 2; color: {DIM}; }}
+    #slash {{ display: none; height: auto; max-height: 12; margin: 0 1; padding: 0 1; border: round {LINE};
+              background: {SURFACE}; scrollbar-size-vertical: 1; }}
+    #slash > .option-list--option-highlighted {{ background: {DEEP}; text-style: none; }}
+    .card {{ margin: 1 0 0 0; padding: 0 1; border-left: outer {LINE}; }}
+    .ok {{ margin: 1 0 0 0; }}
     #prompt {{ height: auto; min-height: 3; max-height: 12; border: round {LINE}; margin: 0 1; background: {SURFACE}; }}
     #prompt:focus {{ border: round {AMBER}; }}
     #status {{ height: 1; padding: 0 2; color: {DIM}; background: {RAIL}; }}
@@ -248,6 +255,7 @@ class AgentTUI(App):
         yield Static(id="activity")
         yield Static(id="ask")
         yield Static(id="hint")
+        yield SlashMenu(id="slash")
         yield Prompt(id="prompt")
         yield Static(id="status")
 
@@ -301,7 +309,8 @@ class AgentTUI(App):
         t.append(f"tools     {len(box.active)}" + (f", {len(box.hidden)} more through find_tools" if box.hidden else "")
                  + "\n")
         t.append(f"session   {self.agent.session.id}" + (f" (resumed, {resumed} messages)" if resumed else "") + "\n")
-        t.append("Enter sends · Esc stops · Shift+Tab approval · Ctrl+O reasoning and details · /help", style=FAINT)
+        t.append("Enter sends · Esc stops · Shift+Tab approval · Ctrl+O reasoning and details · / commands",
+                 style=FAINT)
         self._put(t, "welcome")
         self.agent.memory.changed = self._memory_changed
         if resumed:
@@ -600,6 +609,7 @@ class AgentTUI(App):
         if getattr(event.text_area, "id", "") != "prompt":
             return
         text = event.text_area.text
+        self._show_menu(text)
         if self.ahead is not None and not self.running and not text.startswith("/"):
             self.ahead.typed(text)
         self._suggest(text)
@@ -739,65 +749,169 @@ class AgentTUI(App):
                 self._suggest(text)
         self._status()
 
+    # ------------------------------------------------------------ slash commands (commands.py)
+
+    def _card(self, title: str, body=None, sub: str = ""):
+        """A command's answer, as a block of its own: a title, then what it shows."""
+        head = Text()
+        head.append(title, style=f"bold {HOT}")
+        if sub:
+            head.append(f"   {sub}", style=FAINT)
+        self._put(Group(head, body) if body is not None else head, "card")
+
+    def _ok(self, text: str, detail: str = ""):
+        t = Text()
+        t.append("✓ ", style=f"bold {HOT}")
+        t.append(text, style=TEXT)
+        if detail:
+            t.append(f"   {detail}", style=FAINT)
+        self._put(t, "ok")
+
+    def _warn(self, text: str, detail: str = ""):
+        t = Text()
+        t.append("! ", style=f"bold {AMBER}")
+        t.append(text, style=TEXT)
+        if detail:
+            t.append(f"   {detail}", style=FAINT)
+        self._put(t, "ok")
+
+    @staticmethod
+    def _table(*widths) -> Table:
+        """Columns that cut with … instead of wrapping: the last takes what is left."""
+        table = Table(box=None, show_header=False, pad_edge=False, padding=(0, 2, 0, 0), expand=True)
+        for i, w in enumerate(widths):
+            last = i == len(widths) - 1
+            table.add_column(no_wrap=True, overflow="ellipsis", width=None if last else w, ratio=1 if last else None)
+        return table
+
     def _command(self, text: str):
-        name, _, arg = text.partition(" ")
+        from . import commands
+        word, _, arg = text[1:].partition(" ")
         arg = arg.strip()
-        if name in ("/quit", "/exit"):
-            return self.exit()
-        if name == "/help":
-            self._put(Text(HELP, style=DIM), "note")
-        elif name == "/tools":
-            t = Text(style=DIM)
-            for tool in self.agent.toolbox.active.values():
-                t.append(f"  {tool.name:<24}", style=TEXT)
-                t.append(f"{tool.risk:<6}{tool.source:<8}{tool.description[:90]}\n")
-            hidden = len(self.agent.toolbox.hidden)
-            t.append(f"  {hidden} more through find_tools" if hidden else "")
-            t.rstrip()
-            self._put(t, "note")
-        elif name == "/notes":
-            notes = self.agent.memory.notes
-            self._put(Text("\n".join(f"  - {n}" for n in notes) if notes else "  no notes yet", style=DIM), "note")
-        elif name == "/compact":
-            if self.running:
-                self._put(Text("  stop the model first (Esc)", style=DIM), "note")
-            else:
-                self.running, self.stopping, self.t_turn = True, False, time.monotonic()
-                self.pieces, self.doing, self.word = 0, "summarizing", ""
-                self.run_worker(self._compact, thread=True)
-        elif name == "/approve":
-            if arg in MODES:
-                self._set_mode(arg)
-            else:
-                self._put(Text(f"  /approve {' | '.join(MODES)}", style=DIM), "note")
-        elif name == "/model":
-            if self.runtime is None:
-                self._put(Text("  /model is not available here", style=DIM), "note")
-            elif self.running:
-                self._put(Text("  stop the model first (Esc)", style=DIM), "note")
-            else:
-                from .picker import ModelPicker
-                self.push_screen(ModelPicker(self.runtime.choice), self._picked)
-        elif name == "/reasoning":
-            from .model import LEVELS
-            if arg in LEVELS:
-                self._set_reasoning(arg)
-            elif arg:
-                self._put(Text(f"  /reasoning {' | '.join(LEVELS)}", style=DIM), "note")
-            else:
-                from .picker import ReasoningPicker
-                self.push_screen(ReasoningPicker(self._reasoning(), self.runtime is None or self.runtime.local),
-                                 lambda level: level and self._set_reasoning(level))
-        elif name == "/new":
-            if self.running:
-                self._put(Text("  stop the model first (Esc)", style=DIM), "note")
-            else:
-                self.folds.clear()
-                self.log_view.remove_children()
-                self._new_agent(fresh=True)
-        else:
-            self._put(Text(f"  no command {name}: /help", style=DIM), "note")
+        command = commands.find(word)
+        if command is None:
+            close = commands.suggest(word)
+            return self._warn(f"There is no /{word}.", f"Did you mean /{close}?" if close else "Type / to see them.")
+        if command.choices and arg and arg not in (v for v, _ in command.choices):
+            return self._warn(f"/{command.name} takes {', '.join(v for v, _ in command.choices)}.")
+        if command.choices and not arg:                 # the values, in the menu, to pick one
+            prompt = self.query_one(Prompt)
+            prompt.text = f"/{command.name} "
+            prompt.move_cursor(prompt.document.end)
+            return
+        getattr(self, f"_cmd_{command.name}")(arg)
         self._status()
+
+    def _busy(self) -> bool:
+        if self.running:
+            self._warn("The model is working.", "Stop it first with Esc.")
+        return self.running
+
+    def _cmd_quit(self, arg: str):
+        self.exit()
+
+    def _cmd_help(self, arg: str):
+        from . import commands
+        cmds = self._table(13, 0)
+        for c in commands.COMMANDS:
+            about = Text(c.about, style=DIM)
+            if c.choices:
+                about.append(f"   {' · '.join(v for v, _ in c.choices)}", style=FAINT)
+            cmds.add_row(Text(f"/{c.name}", style=TEXT), about)
+        keys = self._table(13, 0)
+        for key, what in commands.KEYS:
+            keys.add_row(Text(key, style=TEXT), Text(what, style=DIM))
+        self._card("Commands", Group(cmds, Text(""), Text("Keys", style=f"bold {HOT}"), keys),
+                   "type / to pick one from the menu")
+
+    def _cmd_tools(self, arg: str):
+        box = self.agent.toolbox
+        table = self._table(22, 6, 8, 0)
+        risk = {"read": FAINT, "write": AMBER, "exec": ALARM}
+        for tool in box.active.values():
+            table.add_row(Text(tool.name, style=TEXT), Text(tool.risk, style=risk.get(tool.risk, DIM)),
+                          Text(tool.source, style=DIM), Text(" ".join(tool.description.split()), style=DIM))
+        hidden = len(box.hidden)
+        self._card("Tools", table, f"{len(box.active)} on" + (f" · {hidden} more through find_tools" if hidden else ""))
+
+    def _cmd_notes(self, arg: str):
+        notes = self.agent.memory.notes
+        if not notes:
+            return self._ok("No notes yet.", "The model writes them down with its note tool as it works.")
+        body = Text()
+        for n in notes:
+            body.append("• ", style=AMBER)
+            body.append(f"{n}\n", style=TEXT)
+        body.rstrip()
+        self._card("Notes", body, f"{len(notes)}")
+
+    def _cmd_compact(self, arg: str):
+        if self._busy():
+            return
+        self.running, self.stopping, self.t_turn = True, False, time.monotonic()
+        self.pieces, self.doing, self.word = 0, "summarizing", ""
+        self.run_worker(self._compact, thread=True)
+
+    def _cmd_approve(self, arg: str):
+        from .commands import APPROVE
+        self._set_mode(arg)
+        self._ok(f"Approval: {arg}", dict(APPROVE)[arg])
+
+    def _cmd_model(self, arg: str):
+        if self.runtime is None:
+            return self._warn("/model is not available here.")
+        if self._busy():
+            return
+        from .picker import ModelPicker
+        self.push_screen(ModelPicker(self.runtime.choice), self._picked)
+
+    def _cmd_reasoning(self, arg: str):
+        self._set_reasoning(arg)
+
+    def _cmd_new(self, arg: str):
+        if self._busy():
+            return
+        self.folds.clear()
+        self.log_view.remove_children()
+        self._new_agent(fresh=True)
+
+    # ------------------------------------------------------------ the menu above the message box
+
+    def _menu(self) -> SlashMenu:
+        return self.query_one("#slash", SlashMenu)
+
+    def slash_key(self, key: str) -> bool:
+        """A key in the message box while the menu is open: True when the menu took it."""
+        menu = self._menu()
+        if not menu.display:
+            return False
+        if key in ("up", "down"):
+            menu.move(-1 if key == "up" else 1)
+            return True
+        if key in ("tab", "enter"):
+            chosen = menu.chosen()
+            if chosen is None:
+                return False
+            kind, name, value = chosen
+            from .commands import BY_NAME
+            prompt = self.query_one(Prompt)
+            if kind == "cmd" and (key == "tab" or BY_NAME[name].choices):
+                prompt.text = f"/{name} "               # completed: its values show, or Enter runs it
+                prompt.move_cursor(prompt.document.end)
+                return True
+            if key == "tab":
+                prompt.text = f"/{name} {value}"
+                prompt.move_cursor(prompt.document.end)
+                return True
+            prompt.submit(f"/{name} {value}".strip() if kind == "arg" else f"/{name}")
+            return True
+        return False
+
+    def _show_menu(self, text: str):
+        try:
+            self._menu().show(text)
+        except NoMatches:
+            pass
 
     # ------------------------------------------------------------ the model and its reasoning
 
@@ -807,16 +921,14 @@ class AgentTUI(App):
         return "auto" if self.agent.think else "off"
 
     def _set_reasoning(self, level: str):
+        from .commands import REASONING
         if self.runtime is not None:
             self.runtime.set_effort(level)
         self.agent.think = level != "off"
         local = self.runtime is None or self.runtime.local
-        said = {"off": "off", "auto": "on, as much as the model decides"}.get(
-            level, "on" + ("" if local else f", {level}"))
-        self._put(Text(f"  reasoning {said}" + (" (a local model only reasons or not)"
-                                                 if local and level in ("low", "medium", "high") else ""),
-                       style=DIM), "note")
-        self._status()
+        if local and level in ("low", "medium", "high"):
+            return self._ok("Reasoning: on", "a local model reasons or not: every level is on")
+        self._ok(f"Reasoning: {level}", dict(REASONING)[level])
 
     def _picked(self, choice):
         if choice is None:
@@ -882,6 +994,8 @@ class AgentTUI(App):
     def action_stop(self):
         if self._picker():
             return self.screen.action_back()
+        if self._menu().display:
+            return self._menu().hide()
         if self.asking:
             self._reply("n")
         elif self.running:

@@ -410,7 +410,7 @@ def test_tui_shows_a_resumed_session_and_the_todo_list(tmp_path):
             assert panel.display and "To do  1/2" in str(panel.render()) and "[ ] explain it" in str(panel.render())
             await pilot.press(*"/notes", "enter")
             await pilot.pause(0.2)
-            assert "- a.txt says hello" in shown(app)
+            assert "• a.txt says hello" in shown(app)
             await pilot.press(*"/new", "enter")
             await pilot.pause(0.3)
             assert not app.query_one("#todo").display and "what is in a.txt?" not in shown(app)

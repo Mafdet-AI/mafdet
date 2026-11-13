@@ -190,9 +190,10 @@ def test_reasoning_command_sets_the_level(tmp_path):
             await pilot.pause(0.1)
             assert rt.effort == "high" and rt.model.effort == "high" and app.agent.think
             assert "reasoning high" in str(app.query_one("#status").render())
-            await pilot.press(*"/reasoning", "enter")
+            await pilot.press(*"/reasoning", "enter")                                # completed: the levels show
             await pilot.pause(0.2)
-            await pilot.press("home", "down", "enter")                               # auto, off
+            assert app.query_one("#prompt").text == "/reasoning "
+            await pilot.press("down", "enter")                                       # auto, off
             await pilot.pause(0.1)
             assert rt.effort == "off" and not app.agent.think
     asyncio.run(go())

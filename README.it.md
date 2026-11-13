@@ -183,7 +183,7 @@ mafdet agent --mcp rea --book C:\samples\crackme.exe                            
 | Maiusc+Tab | cosa parte senza chiedere: ask → edits → all |
 | Ctrl+O | ragionamento e output degli strumenti per intero, o ridotti |
 | Su / Giù | i tuoi messaggi precedenti |
-| `/help` `/tools` `/notes` `/compact` `/new` `/approve` `/quit` | `/notes` mostra cosa si è annotato il modello, `/compact` riassume la conversazione per fare spazio |
+| `/` | i comandi, in un menu sopra la casella del messaggio che si restringe mentre scrivi: ↑↓ per muoversi, Tab completa, Invio esegue, Esc chiude; `/approve` e `/reasoning` mostrano i loro valori allo stesso modo. `/model`, `/reasoning`, `/approve`, `/tools`, `/notes` (cosa si è annotato il modello), `/compact` (riassume la conversazione per fare spazio), `/new`, `/help`, `/quit`. Le risposte arrivano come riquadri a sé nella conversazione |
 
 Un `MAFDET.md` (o `AGENTS.md`) nella cartella di lavoro viene letto all'avvio come istruzioni per quella cartella: cos'è il campione, cosa è stato trovato, come si compila. `--plain` dà la stessa conversazione come righe semplici, e `-p` o una pipe un solo compito senza interfaccia. `--resume` (l'id di una sessione, o `last`) riprende una sessione di `~/.mafdet/sessions`: la conversazione a schermo intero mostra di nuovo i suoi ultimi 60 messaggi, le note vengono rilette, e una sessione che era stata compattata riparte dal suo riassunto.
 
