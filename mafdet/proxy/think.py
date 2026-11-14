@@ -81,7 +81,15 @@ SENT_REDERIVE = ("\n\nThe user has now sent the complete message. The material a
                  "question was complete, so any conclusion in it may be wrong. Let me reread the whole message, "
                  "work out exactly what it asks, and solve it step by step, using the numbers above only where "
                  "they fit.\n\n")
-DROP_CONCLUSIONS = False     # on Enter, take out of the notes the lines that state an answer
+# Notes written on a question still being typed commit to a reading of it ("the tip is separate", 24; "add the
+# tip", 33) that survives Enter, while the model alone, sampled at 0.6, was right 16 of 16 (2026-11-14). With
+# QUESTION_STOP the reasoning ahead covers the setup and stops where the question begins after it: the
+# question is read whole after Enter, with the material ready.
+QUESTION_STOP = False
+QUESTION_WORDS = frozenset("what how which who whom whose when where why quanto quanti quante quanta quale quali "
+                           "cosa come chi dove quando perché perche".split())
+SENTENCE_RX = re.compile(r"(?<=[.!?])\s+")
+DROP_CONCLUSIONS = False    # on Enter, take out of the notes the lines that state an answer
 CONCLUSION_RX = re.compile(r"(?i)(the (final )?answer is|final answer|so the answer|\\boxed|"
                            r"(so|therefore|thus),? (each|the total|the result)[^.]* (is|pays|are|=) ?\d)")
 LANG_WAIT_WORDS = 8         # the reasoning waits for the message's language up to this many words
@@ -147,6 +155,18 @@ def language(text: str) -> str | None:
     words = [w.strip(".,;:?!\"'()").lower() for w in text.split()]
     en, it = sum(w in EN_WORDS for w in words), sum(w in IT_WORDS for w in words)
     return "en" if en > it else "it" if it > en else None
+
+
+def question_started(text: str) -> bool:
+    """Has the question begun after some setup? True when the last sentence (maybe unfinished) opens with a
+    question word, or the text ends with "?", and at least one sentence came before it. A message that opens
+    with its question is reasoned on as before."""
+    parts = [p for p in SENTENCE_RX.split(text.strip()) if p.strip()]
+    if len(parts) < 2:
+        return False
+    last = parts[-1].strip().lower()
+    first = last.split()[0].strip(",;:") if last.split() else ""
+    return first in QUESTION_WORDS or text.rstrip().endswith("?")
 
 
 def english(text: str) -> bool:
@@ -261,6 +281,8 @@ class Thinker:
                     self.fresh, self.finished = 0, False
             if self.looped:
                 return False                   # going round in circles: no more reasoning this turn
+            if QUESTION_STOP and question_started(text):
+                return False                   # the question is being typed: it is read whole after Enter
             if self.finished and text == self.notes_text:
                 return False                   # done reasoning on this text: wait for more typing
             if self.reasoned >= THINK_CAP:
