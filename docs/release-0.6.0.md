@@ -1,4 +1,4 @@
-<!-- Draft of the GitHub release notes for v0.6.0 (title below). Not published: the owner decides.
+<!-- The GitHub release notes of v0.6.0 (published 2026-11-14).
      Every number comes from README.md, PROXY.md or research/LOG.md. -->
 
 # MAFDET 0.6.0 — thinking ahead, set up in a minute
@@ -49,6 +49,7 @@ Thanks to [dariodd](https://github.com/dariodd) for the exact reuse on Ollama (#
 - **Thinking ahead is experimental**: Qwen3 only (each model family needs its own frame, measured).
 - **vLLM, SGLang and LM Studio** are written against their documented APIs and checked on fakes, not yet run for real: if you run one, the `engine` line the proxy prints and `/proxy/stats` in an issue fill its row ([PROXY.md](https://github.com/Mafdet-AI/mafdet/blob/main/PROXY.md), "More engines").
 - **Docker**: the compose file has not been run in Docker yet.
+- **The one-click install** of the user script is checked over HTTP and in the tests; it has not yet been done by a person in a browser: if Tampermonkey does not offer to install it, open an issue (copying the file into a new script still works).
 - **Memory**: Open WebUI takes a few GB of RAM on top of llama-server; on a 16 GB PC close the heavy apps first.
 - **Not read ahead:** files and knowledge attached in Open WebUI (its RAG template changes the prompt), and long pastes when Open WebUI's "Paste Large Text as File" is on.
 - Answers can differ in wording, rarely in substance, from a run without the proxy: llama.cpp computes a prefix read ahead in other batches. `--exact` avoids it.
