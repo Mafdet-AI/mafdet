@@ -54,6 +54,10 @@ costs 2.4 decoding steps. To speed up the 14B, take work away from the CPU.
 
 ## Next
 
+**Since 2026-11-14 the order of work is `research/PLAN.md`** (binding, agreed with the owner): thinking ahead
+first (track A), the agent only through thinking ahead (track B). Items below that the plan lists as paused
+wait; they stay here as the record of where each one stopped.
+
 0. **IQ4_XS where the 14B does not fit, and the estimate fixed: done (2026-10-30, below).** Left from it:
    - **Problem 19 on the 2060's 14B** (below): wrong with reasoning ahead in 2 of 2 runs (one per quantization),
      right without it in 2 of 2, right with it on the 4070 SUPER and the M2 Pro. Rows keep only the answer's tail:
