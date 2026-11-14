@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import threading
 import time
 import uuid
@@ -80,7 +81,10 @@ SENT_REDERIVE = ("\n\nThe user has now sent the complete message. The material a
                  "question was complete, so any conclusion in it may be wrong. Let me reread the whole message, "
                  "work out exactly what it asks, and solve it step by step, using the numbers above only where "
                  "they fit.\n\n")
-LANG_WAIT_WORDS = 8          # the reasoning waits for the message's language up to this many words
+DROP_CONCLUSIONS = False     # on Enter, take out of the notes the lines that state an answer
+CONCLUSION_RX = re.compile(r"(?i)(the (final )?answer is|final answer|so the answer|\\boxed|"
+                           r"(so|therefore|thus),? (each|the total|the result)[^.]* (is|pays|are|=) ?\d)")
+LANG_WAIT_WORDS = 8         # the reasoning waits for the message's language up to this many words
 LOOP_REPEATS = 3
 LOOP_MIN_CHARS = 8
 SAMPLING_KEYS = ("temperature", "top_p", "top_k", "min_p", "presence_penalty", "frequency_penalty",
@@ -175,6 +179,7 @@ class Thinker:
         self.wake = threading.Event()
         self.stopped = False
         self.dropped = 0                       # turns whose notes were dropped for looping
+        self.conclusions_dropped = 0           # lines stating an answer taken out on Enter (DROP_CONCLUSIONS)
         self._clear()
         threading.Thread(target=self._loop, daemon=True).start()
 
@@ -310,11 +315,29 @@ class Thinker:
                 self.dropped += 1
                 return None                    # the request goes through as it is, from scratch
             notes = list(self.notes)
+            if DROP_CONCLUSIONS:
+                notes = self._without_conclusions(notes)
             if final_text.rstrip() != self.notes_text.rstrip():
                 saved = self.bridge_text
                 notes += self._bridge(final_text + " ", force=True)
                 self.bridge_text = saved
             return notes + self.frame.sent
+
+    def _without_conclusions(self, notes: list[int]) -> list[int]:
+        """The notes with every line that states an answer taken out (written before the question was
+        complete, such a line was kept after Enter in 3 of the 4 answers lost): the material stays, the
+        verdict goes. The notes are tokenized again from the first line removed (a prefill on Enter)."""
+        start = self.frame.seed_len(notes)
+        detok = getattr(self.session.engine, "detokenize", None)
+        if detok is None:
+            return notes
+        text = detok(notes[start:])
+        lines = text.split("\n")
+        kept = [ln for ln in lines if not CONCLUSION_RX.search(ln)]
+        if len(kept) == len(lines):
+            return notes
+        self.conclusions_dropped += len(lines) - len(kept)
+        return notes[:start] + list(self.frame.tokenize("\n".join(kept)) or [])
 
 
 def _sampling(body: dict) -> dict:
