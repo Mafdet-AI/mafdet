@@ -569,6 +569,40 @@ wait; they stay here as the record of where each one stopped.
 
 ## Done and measured
 
+- **2026-11-14 (evening) · Tuning thinking ahead's accuracy in the proxy: prompt-level fixes do not converge;
+  the next step is validation.** Asked by the owner: thinking ahead must lose no answers. Data in
+  `research/data/think_tuning/` (one JSON per run, `mafdet/proxy/bench.py` rows); Qwen3-4B, RTX 2060.
+  - The bench now measures rates: `--only`, `--repeat`, `--skip-off`, `--skip-on`, `--temperature` (OFF and
+    ON sampled as a chat), `--problems-file` (a held-out set of 40, `research/data/think_ahead_heldout.json`,
+    20 of them decided by their last words, built and checked with Python by a fork), `--set-think NAME=JSON`
+    (any constant of think.py for one run).
+  - Baseline on the three problems lost before, 8 times each, ON only: 4: 8/8, 6 (the tip): 4/7, 23: 8/8.
+    **The model alone, sampled at 0.6: 6: 8/8, 23: 8/8 (`off_t06`): the notes cause the losses.**
+  - A fork read every ON text of the six runs (`proxy_think_answers_*`): in 31% of the notes an answer was
+    stated before the question was complete; 3 of the 4 losses were such a conclusion kept after Enter; the
+    model also wrote bridge lines of its own ("- New words \"eac\"") and, under a ban on `</think>`, the chat
+    template's markers and a made-up next turn. The app (`watch.py`) and the proxy share frame and sampling;
+    the app samples the answer at 0.6, the bench's ON answer is greedy.
+  - Switches built (think.py, all off, each measured): `END_BAN` (no `</think>` ahead), `ANSWER_BIAS` on
+    answer words, `STOP_BRIDGES` (stop at a bridge of the model's own and at template markers),
+    `FORCE_BRIDGE=false`, `SENT_MODE="rederive"`, cold notes (THINK_SAMPLING 0.2), `DROP_CONCLUSIONS`,
+    `QUESTION_STOP` (no reasoning once the question begins after the setup; it begins at 77% of the text, median).
+    Ported to the app's watch.py by a fork (`mafdet strike --ahead-switches ...`), off.
+  - Rates on problems 4, 6, 23 (8 each, ON right): base 20/23; END_BAN+STOP 19/23; +ANSWER_BIAS -4 21/23;
+    +-8, FORCE_BRIDGE off ("v3") 22/23 (tip 8/8, 23: 6/7); v3+rederive 22/24; rederive alone 21/24; cold 23/24
+    (but notes used 12/24); cold+v3 21/24; QUESTION_STOP 23/24; **QUESTION_STOP+v3 ("v9") 24/24, notes 24/24,
+    answer's first word 1.62 s median (base 2.53)**; v9+DROP_CONCLUSIONS 22/24.
+  - **v9 did not hold up when repeated** (`v9_hard16`, `v9_full`): the tip 9/15 (23: 16/16); the full 24 ON
+    20/22 (lost the train's arrival time and the tip) against OFF 22/22; the wait still 1.86 against 4.14 s.
+    The 8/8 runs were luck: at these rates 8 samples cannot tell 50% from 90%. The held-out run was cut by a
+    hard reset of the PC (15:34, Kernel-Power 41 without bugcheck under sustained GPU load; 9 such resets since
+    2026-11-10, 2 of them BSOD 0xD1 on 11-10: a machine problem the long runs bring out, owner to check).
+  - **So: no prompt-level switch makes notes on a half-typed question safe; the notes commit to a reading of
+    the problem ("the tip is separate") that survives Enter.** Next (being built by forks, no GPU): validate
+    the speculation and recompute when it fails, as speculative execution does: k independent notes on
+    parallel slots with agreement else from scratch, and a one-token verifier probe (P(yes)) after Enter;
+    offline analysis of the saved texts first, statistics with Wilson/Bayesian intervals, GPU only to confirm.
+
 - **2026-11-14 · The proxy's frame with its example line in the message's language: the same accuracy (64/66
   each way), less copying of the example; thinking ahead in the proxy measured to the answer's first word:
   median 4.2 → 1.7 s.** (Plan A1, follow-up; asked by the owner after the release of 0.6.0.)
