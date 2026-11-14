@@ -234,8 +234,11 @@ right with thinking ahead, 22 of 22 without, in each of two runs.** In the first
 notes that went round in circles on half the message ("So the answer is: 18" nine times, then 18 for 120);
 since then a line repeated three times stops the reasoning and Enter drops the notes (it happened in 4 of 24
 messages of the second run, which then went without thinking ahead). In the second run the lost answer was a
-misreading (the whole tip added to each friend's share: 33 for 27). The notes also copy the frame's Italian
-example line ("mass of the Moon") into English problems.
+misreading (the whole tip added to each friend's share: 33 for 27). The notes also copied the frame's Italian
+example line ("mass of the Moon") into English problems; with the example line in the message's language
+(since 2026-11-14) that mostly stops, and the answers are the same: over six runs, 64 of 66 right with either
+line, 66 of 66 without thinking ahead. Timed to the answer's first word (the wait a person has), the last two
+runs gave **a median of 4.2 s without and 1.7 s with `--think-ahead`**, faster in 22 and 23 of 24 messages.
 
 ### 4.2 Ollama
 
@@ -298,9 +301,9 @@ of 26 each). Two passes of the same code differ about as much as the effect: a d
 - **Single runs and small sets.** Two runs of the same 24 problems on the same machine differed by about 1 s
   in mean wait (3.2 s and 4.17 s on the 2060's 4B); the 14B runs use 6 problems. The tables give orders of
   magnitude, not precise effects.
-- **Answers in the proxy.** With `--think-ahead` the 4B lost one answer in 22 on English problems in each of
-  two runs (section 4.1), where the app's Italian runs lost none; the frame's example line is Italian and is
-  copied into English notes. A frame per language is the next thing to try.
+- **Answers in the proxy.** With `--think-ahead` the 4B lost about one answer in 33 on English problems (4 of
+  132 over six runs, section 4.1), where the app's Italian runs lost none; the example line's language made no
+  difference to it.
 - **The agent.** On short requests (6-9 s of typing) thinking ahead brings the first tool call earlier more
   often than not, but not the answer; with one sample at temperature 0.6 the spread is as large as the effect.
 - **Exactness.** Reading ahead can change a greedy answer's wording, and rarely a number, through llama.cpp's

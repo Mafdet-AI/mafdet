@@ -150,6 +150,8 @@ Open WebUI 0.13 su una RTX 2060, Qwen3-4B, 8 conversazioni di 2-3 messaggi per l
 | prima parola della risposta, ragionamento acceso: `mafdet proxy` | 7,6 s | 6,3 s | 21,0 s |
 | prima parola della risposta, ragionamento acceso: `mafdet proxy --think-ahead` | **4,3 s** | **4,1 s** | 10,4 s |
 
+Con `--think-ahead` sono state controllate anche le risposte (`mafdet/proxy/bench.py --think-ahead`, 24 problemi in inglese scritti a 12 caratteri al secondo, Qwen3-4B, RTX 2060, sei passate): la prima parola della risposta è arrivata dopo una mediana di **1,7 s invece di 4,2 s**, e 128 risposte su 132 erano giuste contro 132 su 132 senza ragionamento in anticipo. Un ragionamento in anticipo che gira in tondo viene scartato all'invio.
+
 Senza, il tuo messaggio aspetta in coda dietro il titolo, i tag e i suggerimenti che Open WebUI chiede al modello, e i suoi 30 strumenti integrati (~5,8k token) vengono riletti; il proxy dà a quelle richieste uno slot tutto loro e legge il messaggio mentre scrivi. Come configurarlo, passo per passo: [Open WebUI + MAFDET in 5 minuti](mafdet/proxy/clients/README.md), oppure tutto in Docker: [`docker/`](docker/README.md) (in inglese). `http://127.0.0.1:8077/proxy` dice se funziona. Anche altre interfacce possono mandare le bozze (`mafdet/proxy/README.md`); cosa viene dopo, e come aiutare: [PROXY.md](PROXY.md) (in inglese).
 
 ## Un agente con gli strumenti: `mafdet agent` (sperimentale)

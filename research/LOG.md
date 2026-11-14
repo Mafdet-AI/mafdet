@@ -569,6 +569,30 @@ wait; they stay here as the record of where each one stopped.
 
 ## Done and measured
 
+- **2026-11-14 · The proxy's frame with its example line in the message's language: the same accuracy (64/66
+  each way), less copying of the example; thinking ahead in the proxy measured to the answer's first word:
+  median 4.2 → 1.7 s.** (Plan A1, follow-up; asked by the owner after the release of 0.6.0.)
+  - Built: `think.SEED_EN` (the example line "How much does the Moon weigh compared to" → "- Moon: mass ...")
+    for a message `think.language()` calls English (more English than Italian function words; a tie keeps the
+    Italian line measured in the app); the reasoning waits for a word that tells the language, up to 8 words
+    (`LANG_WAIT_WORDS`); the agent's own frame untouched (`seed_en = []`). The bench now times the answer's
+    first word (`off_answer_s`, `on_answer_s`), says whether the answer started from notes (`on_notes`), and
+    `--frame-lang it` keeps the Italian line for a comparison.
+  - Six runs of 24 (22 judged), Qwen3-4B, RTX 2060, as A1: Italian line (A1's two runs and `_frame_it`) ON
+    21, 21, 22; English line (`_en1`, `_en2`, `_frame_en`) ON 22, 22, 20; OFF 22 in all six. **64/66 each way:
+    the language of the example line does not change the answers.** Lost with notes, over the six: problems 4
+    (the loop, before the guard), 6 twice (the tip: 33 for 27), 23. The example copied into the notes ("Moon"
+    or "Luna" in the reasoning): 5, 6, 3 runs-rows with the Italian line, 2, 1, 1 with the English one. Kept
+    for that: the notes are streamed to the front end as `reasoning_content`, and "mass of the Moon" in an
+    English answer's reasoning looks broken.
+  - The wait, last pair of runs (same day, same engine): Enter → the answer's first word, median **4.26 → 1.69
+    s** (Italian line) and **4.18 → 1.65 s** (English), mean 5.34 → 2.07 and 5.36 → 2.31 s, faster in 22 and 23
+    of 24; answers from notes in 20 and 19 of 24 (median 1.50 and 1.60 s), the others (notes dropped by the loop
+    guard, or none) 4.20 and 4.47 s, as without. An earlier count of "9-12 of 24 without notes" was read off the
+    text and was wrong; `on_notes` replaces it.
+  - **So, thinking ahead in the proxy, Qwen3-4B on the 2060: the answer's first word 2.5 times sooner, about one
+    answer in 33 lost (4 of 132) against none without.**
+
 - **2026-11-14 · Problem 19 on the 2060's 14B again: 3/3 right with reasoning ahead, 3/3 without (plan A1
   closed).** `research/problem19.py` (keeps the notes as they stand on Enter and the whole reasoning, unlike
   thinking_ahead.py's tail), Qwen3-14B IQ4_XS (unsloth), RTX 2060, the app's defaults, `--max-tokens 1800`, a
