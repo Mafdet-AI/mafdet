@@ -28,6 +28,7 @@ def test_with_both_off_no_probe_and_no_branch_slot():
         assert status == 200 and _content(raw).strip() == "The answer is 42"
         assert not hasattr(engine, "probe_prompts")                      # never asked
         assert state.counts["thought_ahead"] == 1
+        assert wait_until(lambda: len(state.recent) > 0)        # recorded just after the answer
         row = state.recent[-1]
         assert not ({"verify_p_yes", "branches_agreed", "fallback"} & set(row))
         assert "verified_dropped" not in state.stats()["sessions"][0]["thinking"]
@@ -48,6 +49,7 @@ def test_a_low_p_yes_drops_the_notes(monkeypatch):
         assert state.counts["thought_ahead"] == 0 and engine.chats == 1       # from scratch
         assert sess.thinker.verified_dropped == 1
         assert abs(sess.thinker.last_verify - 0.1) < 1e-9                    # yes / (yes + no)
+        assert wait_until(lambda: len(state.recent) > 0)        # recorded just after the answer
         assert abs(state.recent[-1]["verify_p_yes"] - 0.1) < 1e-9
         assert state.last_turn.get("verified_dropped") is True
     finally:
@@ -115,6 +117,7 @@ def test_two_branches_that_agree_answer_from_their_notes(monkeypatch):
         assert state.last_turn["branches_agreed"] is True
         assert state.last_turn["branch_answers"] == ["42", "42"]
         assert "fact" in state.last_turn["notes_text"] and len(state.last_turn["branch_notes"]) == 1
+        assert wait_until(lambda: len(state.recent) > 0)        # recorded just after the answer
         assert state.recent[-1]["branches_agreed"] is True
         assert wait_until(lambda: thinker.notes == [])                       # a new turn: all branches reset
     finally:
@@ -135,6 +138,7 @@ def test_two_branches_that_disagree_answer_from_scratch(monkeypatch):
         assert _content(raw).startswith("echo: ")
         assert state.last_turn["branch_answers"] == ["42", "7"]
         assert state.last_turn["fallback"] == "the branches disagree"
+        assert wait_until(lambda: len(state.recent) > 0)        # recorded just after the answer
         assert state.recent[-1]["branches_agreed"] is False
     finally:
         server.shutdown()

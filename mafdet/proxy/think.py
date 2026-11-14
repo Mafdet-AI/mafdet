@@ -140,13 +140,16 @@ class Frame:
                 answer.add(ids[0])
         self.answer_ids = sorted(answer)
         self.tokenize = tok
+        # a frame of its own may turn these on for itself (the comprehension branch), whatever the globals say
+        self.end_ban = False
+        self.stop_bridges = False
 
     def bias(self) -> list:
         """The logit bias of a chunk written ahead, with the switches above as they are now."""
         out = list(self.meta_bias)
         if ANSWER_BIAS:
             out += [[t, ANSWER_BIAS] for t in self.answer_ids]
-        if END_BAN and self.think_end is not None:
+        if (END_BAN or self.end_ban) and self.think_end is not None:
             out.append([self.think_end, -100.0])
         return out
 
@@ -311,7 +314,8 @@ class Thinker:
         try:
             if s.cache.generating or self.stopped:
                 return False
-            sampling = dict(THINK_SAMPLING, stop=list(BRIDGE_STOPS)) if STOP_BRIDGES else THINK_SAMPLING
+            stops = STOP_BRIDGES or self.frame.stop_bridges
+            sampling = dict(THINK_SAMPLING, stop=list(BRIDGE_STOPS)) if stops else THINK_SAMPLING
             if BRANCHES > 1:                   # branches must not write the same notes: a seed of their own
                 sampling = dict(sampling, seed=random.randrange(1, 2 ** 31))
             res = s.engine.generate(ids, n_predict=THINK_CHUNK, sampling=sampling,
@@ -320,7 +324,7 @@ class Thinker:
         finally:
             s.cache.warm_lock.release()
         tokens = list(res.get("tokens") or [])
-        if STOP_BRIDGES and res.get("stop_type") == "word":
+        if (STOP_BRIDGES or self.frame.stop_bridges) and res.get("stop_type") == "word":
             # stopped at a bridge line of the model's own, or at the template's markers: keep the text before
             # it, as tokens, and wait for more typing as when the reasoning ends
             kept = str(res.get("text") or "")
@@ -488,6 +492,10 @@ def comprehend_frame(engine) -> Frame:
     f.seed = engine.tokenize(COMPREHEND_SEED) or f.seed
     f.seed_en = []
     f.sent = engine.tokenize(COMPREHEND_SENT) or f.sent
+    # told that solving comes later, the 4B closed its reasoning at once and the branch had no notes in 13
+    # of 36 turns (2026-11-14): it may not close it, and stops at a bridge or a template marker of its own
+    f.end_ban = True
+    f.stop_bridges = True
     return f
 
 
