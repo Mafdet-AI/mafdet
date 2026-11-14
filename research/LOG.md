@@ -569,6 +569,33 @@ wait; they stay here as the record of where each one stopped.
 
 ## Done and measured
 
+- **2026-11-14 · Plan B1: thinking ahead in the agent, measured on 13 requests; a steady typist was never
+  read ahead (fixed).** `research/agent_ahead.py` (built by a fork, tested on fakes): 13 agent requests that
+  need a tool first (read a file and answer, sum a CSV, search logs...) on a work folder it writes itself, each
+  typed twice, "ahead" (every key to `Ahead.typed`, as `tui.py` does) and "plain" (the same seconds waited,
+  `--no-think-ahead`), a fresh agent each, which config goes first alternating; Qwen3-4B Q4_K_M, RTX 2060, 16k,
+  one slot, temperature 0.6 (the agent's default). Found on the way:
+  - typed at 12 characters a second without pauses, "ahead" reasoned **0 tokens** before Enter: `Ahead`
+    rendered the draft only after 0.15 s of quiet (`DEBOUNCE`), and a steady typist is never quiet; the first
+    chunk comes ~1.5 s after a render (the agent's ~1,300-token prompt read, then 32 tokens). The typist now
+    pauses as `thinking_ahead.py`'s (0.6-1.2 s after punctuation, 0.4-1.0 s after one space in ten, seeded by
+    the text, the same for both configs) at 8 characters a second, and **`Ahead` renders at least every 0.6 s
+    while the typing goes on** (`MAX_WAIT`, as the proxy's user script), a test pins it (fails without the fix).
+  - Before the fix (`agent_ahead_4b_2060_debounce.json`, one pass): first tool call median **2.83 s ahead /
+    4.61 s plain**, answer 6.68 / 8.62 s, right 12 / 11 of 13, faster first tool in 10 of 13; reasoned ahead
+    median 98 tokens.
+  - After the fix, two passes (`agent_ahead_4b_2060_r1.json`, `_r2.json`): reasoned ahead median 281 and 298
+    tokens. Pass 1: first tool 5.03 / 3.64 s, answer 8.49 / 7.59 s, right 10 / 12, faster first tool 6 of 13.
+    Pass 2: first tool 2.88 / 5.20 s, answer 8.89 / 8.31 s, right 13 / 11, faster 12 of 13. Both passes
+    pooled (26 each): first tool median 3.5 / 4.24 s, answer 8.58 / 7.92 s, right 23 / 23.
+  - **So: the first tool call tends to come earlier with notes (3 passes: 10, 6, 12 of 13 faster), the final
+    answer does not, and two passes of the same code differ as much as the effect.** At temperature 0.6 with
+    one sample per request the noise is the plain run's own spread (a plain run went to `shell` and took 21-43
+    s where read_file took 3). Three times more notes after the fix did not make the first step faster (no
+    relation between notes and first-tool time across the 26 runs). Not established; B2 (thinking while a tool
+    runs) was conditioned on a gain here, so it waits for the owner. To sharpen it: `--temperature 0` (the
+    same request gives the same plain run), more passes, longer requests (the 13 are typed in 6-9 s).
+
 - **2026-11-14 · Plan A1: the answers of `mafdet proxy --think-ahead` checked; a loop guard; the proxy ready
   for 0.6.0 (A3).** `mafdet/proxy/bench.py --think-ahead` (new: the ON run through a proxy that reasons ahead,
   thinking on, every answer checked against `EXPECTED`; `--first` splits a run), Qwen3-4B Q4_K_M, RTX 2060,

@@ -33,7 +33,8 @@ is new, and it is what we finish, show and get used. Everything else either serv
 
 The agent is kept only as the place where thinking ahead goes next. No feature that does not serve that.
 
-- **B1. Measure thinking ahead in the agent** (built 2026-11-12, LOG "Next" 8, phase 3): 10-15 agent requests
+- **B1. Measure thinking ahead in the agent** *(2026-11-14, on the 2060: first tool earlier in 10, 6, 12 of
+  13, answer not; noisy; a render fix found on the way. The 5070 Ti run is left; B2 waits for the owner.)* (built 2026-11-12, LOG "Next" 8, phase 3): 10-15 agent requests
   (read a file and answer, find a function in a binary, search a folder) typed by `research/thinking_ahead.py`'s
   typist; Enter → first tool call and → answer, with and without; whether the notes change the first tool.
   RTX 5070 Ti with the 14B (the reference machine), then the 2060 with the 4B.

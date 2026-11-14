@@ -267,7 +267,15 @@ turn ended in 4.0-5.1 s; without, 3.5-5.5 s and 6.3-8.3 s; every answer right. S
 direction, not a result. The agent needs its own frame: the chat's frame made the 4B list decades of history
 from "read notes.txt and"; a frame about preparing the work ("what the words point to among files,
 programs, addresses, tools; what to find out; the first step") gave on-task notes ("I will call
-read_file"). Measuring it on a set of agent requests is the next step (plan item B1).
+read_file").
+
+**Thirteen requests (plan item B1, 2026-11-14).** `research/agent_ahead.py`: 13 requests that need a tool
+first, each typed twice at 8 characters a second with a person's pauses, with and without thinking ahead,
+Qwen3-4B on the RTX 2060, temperature 0.6. A first run showed that a steady typist got no notes at all (the
+draft was rendered only after 0.15 s of quiet; now at least every 0.6 s). Then, in three passes, the first
+tool call came earlier with notes in 10, 6 and 12 of 13 requests (pooled medians of the two passes after the
+fix: 3.5 s against 4.2 s), the final answer did not (8.6 s against 7.9 s), and right answers were equal (23
+of 26 each). Two passes of the same code differ about as much as the effect: a direction, not a result.
 
 ## 6. Limits
 
@@ -294,6 +302,8 @@ read_file"). Measuring it on a set of agent requests is the next step (plan item
 - **Answers in the proxy.** With `--think-ahead` the 4B lost one answer in 22 on English problems in each of
   two runs (section 4.1), where the app's Italian runs lost none; the frame's example line is Italian and is
   copied into English notes. A frame per language is the next thing to try.
+- **The agent.** On short requests (6-9 s of typing) thinking ahead brings the first tool call earlier more
+  often than not, but not the answer; with one sample at temperature 0.6 the spread is as large as the effect.
 - **Exactness.** Reading ahead can change a greedy answer's wording, and rarely a number, through llama.cpp's
   batching (`--exact` avoids it); thinking ahead is not exact by design.
 

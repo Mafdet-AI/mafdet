@@ -1,0 +1,621 @@
+{
+ "rows": [
+  {
+   "request": "read notes.txt and tell me who owns the installer",
+   "config": "ahead",
+   "first_tool_s": 3.103,
+   "answer_s": 5.171,
+   "first_tool": "read_file",
+   "first_tool_expected": true,
+   "tools": [
+    "read_file"
+   ],
+   "steps": 2,
+   "completion_tokens": 381,
+   "first_step_s": 3.102,
+   "reasoned_ahead": 198,
+   "notes_used": false,
+   "answer": "The owner of the installer is **Giulia Rossi**, as stated in the notes.txt file (line 2). \n\nRemaining task: Verify no other entries conflict with this information.",
+   "right": true,
+   "errors": [],
+   "index": 0,
+   "when": "2026-11-14 11:47:33"
+  },
+  {
+   "request": "read notes.txt and tell me who owns the installer",
+   "config": "plain",
+   "first_tool_s": 3.024,
+   "answer_s": 5.958,
+   "first_tool": "read_file",
+   "first_tool_expected": true,
+   "tools": [
+    "read_file"
+   ],
+   "steps": 2,
+   "completion_tokens": 419,
+   "first_step_s": 3.023,
+   "reasoned_ahead": 0,
+   "notes_used": false,
+   "answer": "The owner of the installer is **Giulia Rossi**, as stated in the notes.txt file. \n\n**Note:** This information is directly extracted from the second line of the `notes.txt` file.  \n**Location:** `C:\\Users\\simo_\\AppData\\Local\\Temp\\agent-ahead-work-hah1uqdi\\project\\notes.txt`  \n**Remaining task:** None.",
+   "right": true,
+   "errors": [],
+   "index": 0,
+   "when": "2026-11-14 11:47:47"
+  },
+  {
+   "request": "read notes.txt and tell me how many euros of the budget are left",
+   "config": "plain",
+   "first_tool_s": 3.563,
+   "answer_s": 7.163,
+   "first_tool": "read_file",
+   "first_tool_expected": true,
+   "tools": [
+    "read_file"
+   ],
+   "steps": 2,
+   "completion_tokens": 512,
+   "first_step_s": 3.562,
+   "reasoned_ahead": 0,
+   "notes_used": false,
+   "answer": "The file `notes.txt` does not exist in the specified path. Check the filename or location. If this is unrelated to the budget, clarify what needs to be found. \n\n`note` was not used, so no finding is recorded.",
+   "right": false,
+   "errors": [],
+   "index": 1,
+   "when": "2026-11-14 11:48:04"
+  },
+  {
+   "request": "read notes.txt and tell me how many euros of the budget are left",
+   "config": "ahead",
+   "first_tool_s": 3.771,
+   "answer_s": 8.156,
+   "first_tool": "read_file",
+   "first_tool_expected": true,
+   "tools": [
+    "read_file"
+   ],
+   "steps": 2,
+   "completion_tokens": 602,
+   "first_step_s": 3.77,
+   "reasoned_ahead": 281,
+   "notes_used": false,
+   "answer": "The file `notes.txt` does not exist in the specified path. I cannot retrieve the budget information.  \n**Note:** Verify the file path or check if the file was intended to be created earlier.",
+   "right": false,
+   "errors": [],
+   "index": 1,
+   "when": "2026-11-14 11:48:21"
+  },
+  {
+   "request": "read sales.csv and tell me the total number of units sold",
+   "config": "ahead",
+   "first_tool_s": 11.123,
+   "answer_s": 93.302,
+   "first_tool": "read_file",
+   "first_tool_expected": true,
+   "tools": [
+    "read_file",
+    "shell"
+   ],
+   "steps": 3,
+   "completion_tokens": 6104,
+   "first_step_s": 11.122,
+   "reasoned_ahead": 329,
+   "notes_used": false,
+   "answer": "",
+   "right": false,
+   "errors": [
+    "cut at 4096 tokens (--max-tokens), before any answer"
+   ],
+   "index": 2,
+   "when": "2026-11-14 11:50:05"
+  },
+  {
+   "request": "read sales.csv and tell me the total number of units sold",
+   "config": "plain",
+   "first_tool_s": 4.043,
+   "answer_s": 21.334,
+   "first_tool": "read_file",
+   "first_tool_expected": true,
+   "tools": [
+    "read_file"
+   ],
+   "steps": 2,
+   "completion_tokens": 1487,
+   "first_step_s": 4.042,
+   "reasoned_ahead": 0,
+   "notes_used": false,
+   "answer": "The total number of units sold in the provided data is 577. This is calculated by summing the units from the first five entries: 120 (January) + 95 (February) + 143 (March) + 88 (April) + 131 (May) = 577. Note that the file may contain more data beyond the 200-line limit shown, but the provided snippet only includes these five entries.",
+   "right": true,
+   "errors": [],
+   "index": 2,
+   "when": "2026-11-14 11:50:36"
+  },
+  {
+   "request": "in sales.csv, which month sold the most units?",
+   "config": "plain",
+   "first_tool_s": 4.236,
+   "answer_s": 10.988,
+   "first_tool": "read_file",
+   "first_tool_expected": true,
+   "tools": [
+    "read_file"
+   ],
+   "steps": 2,
+   "completion_tokens": 773,
+   "first_step_s": 4.235,
+   "reasoned_ahead": 0,
+   "notes_used": false,
+   "answer": "March sold the most units with 143 units. The data shown includes March (line 4) as the highest, but confirm if full dataset has more entries. Note: Sample data only shows up to May (line 6). \n\ntodo: Check if full dataset has more months beyond May.",
+   "right": true,
+   "errors": [],
+   "index": 3,
+   "when": "2026-11-14 11:50:56"
+  },
+  {
+   "request": "in sales.csv, which month sold the most units?",
+   "config": "ahead",
+   "first_tool_s": 11.784,
+   "answer_s": 19.737,
+   "first_tool": "read_file",
+   "first_tool_expected": true,
+   "tools": [
+    "read_file"
+   ],
+   "steps": 2,
+   "completion_tokens": 1396,
+   "first_step_s": 11.783,
+   "reasoned_ahead": 100,
+   "notes_used": false,
+   "answer": "March sold the most units with 143 units. The data shows March as the highest in the provided sample. \n\ntodo: Verify if other months in the full dataset have higher units.  \nnote: Sample data shows March with 143 units. Full dataset may have more entries.",
+   "right": true,
+   "errors": [],
+   "index": 3,
+   "when": "2026-11-14 11:51:24"
+  },
+  {
+   "request": "search the logs folder for ERROR and tell me which log file has it",
+   "config": "ahead",
+   "first_tool_s": 2.412,
+   "answer_s": 5.385,
+   "first_tool": "search",
+   "first_tool_expected": true,
+   "tools": [
+    "search"
+   ],
+   "steps": 2,
+   "completion_tokens": 352,
+   "first_step_s": 2.411,
+   "reasoned_ahead": 356,
+   "notes_used": true,
+   "answer": "The log file containing \"ERROR\" is **logs\\server-b.log** (line 2).",
+   "right": true,
+   "errors": [],
+   "index": 4,
+   "when": "2026-11-14 11:51:44"
+  },
+  {
+   "request": "search the logs folder for ERROR and tell me which log file has it",
+   "config": "plain",
+   "first_tool_s": 3.639,
+   "answer_s": 7.591,
+   "first_tool": "search",
+   "first_tool_expected": true,
+   "tools": [
+    "search"
+   ],
+   "steps": 2,
+   "completion_tokens": 540,
+   "first_step_s": 3.638,
+   "reasoned_ahead": 0,
+   "notes_used": false,
+   "answer": "The log file containing \"ERROR\" is **logs\\server-b.log** (line 2: \"10:03 ERROR 4711 disk full on /var\").",
+   "right": true,
+   "errors": [],
+   "index": 4,
+   "when": "2026-11-14 11:52:01"
+  },
+  {
+   "request": "look in the logs folder and tell me the error code written after ERROR",
+   "config": "plain",
+   "first_tool_s": 2.788,
+   "answer_s": 5.812,
+   "first_tool": "search",
+   "first_tool_expected": true,
+   "tools": [
+    "search"
+   ],
+   "steps": 2,
+   "completion_tokens": 399,
+   "first_step_s": 2.787,
+   "reasoned_ahead": 0,
+   "notes_used": false,
+   "answer": "The error code after \"ERROR\" in the logs is **4711**.  \nnote: Error code found in logs\\server-b.log:2: 10:03 ERROR 4711 disk full on /var.  \ntodo: []",
+   "right": true,
+   "errors": [],
+   "index": 5,
+   "when": "2026-11-14 11:52:17"
+  },
+  {
+   "request": "look in the logs folder and tell me the error code written after ERROR",
+   "config": "ahead",
+   "first_tool_s": 5.662,
+   "answer_s": 8.494,
+   "first_tool": "search",
+   "first_tool_expected": true,
+   "tools": [
+    "search"
+   ],
+   "steps": 2,
+   "completion_tokens": 605,
+   "first_step_s": 5.661,
+   "reasoned_ahead": 278,
+   "notes_used": false,
+   "answer": "The error code written after ERROR in the logs folder is **4711**.  \n**Location**: `logs\\server-b.log:2`  \n**Note**: This corresponds to the error message \"disk full on /var\".  \n\nNo further steps required.",
+   "right": true,
+   "errors": [],
+   "index": 5,
+   "when": "2026-11-14 11:52:35"
+  },
+  {
+   "request": "read config.ini and tell me the port the server listens on",
+   "config": "ahead",
+   "first_tool_s": 3.238,
+   "answer_s": 6.217,
+   "first_tool": "read_file",
+   "first_tool_expected": true,
+   "tools": [
+    "read_file"
+   ],
+   "steps": 2,
+   "completion_tokens": 434,
+   "first_step_s": 3.237,
+   "reasoned_ahead": 248,
+   "notes_used": false,
+   "answer": "The server listens on port 8443.  \n**Note:** The port is specified in `config.ini` under the `[server]` section.  \n**Location:** `C:\\Users\\simo_\\AppData\\Local\\Temp\\agent-ahead-work-hm51lgbh\\project\\config.ini` line 3.",
+   "right": true,
+   "errors": [],
+   "index": 6,
+   "when": "2026-11-14 11:52:51"
+  },
+  {
+   "request": "read config.ini and tell me the port the server listens on",
+   "config": "plain",
+   "first_tool_s": 4.248,
+   "answer_s": 6.75,
+   "first_tool": "read_file",
+   "first_tool_expected": true,
+   "tools": [
+    "read_file"
+   ],
+   "steps": 2,
+   "completion_tokens": 477,
+   "first_step_s": 4.247,
+   "reasoned_ahead": 0,
+   "notes_used": false,
+   "answer": "The server listens on port `8443`.  \n**Location**: `config.ini` under the `[server]` section.  \n**Remaining**: Verify no other configuration files specify a different port.",
+   "right": true,
+   "errors": [],
+   "index": 6,
+   "when": "2026-11-14 11:53:08"
+  },
+  {
+   "request": "read todo.md and tell me how many tasks are still open",
+   "config": "plain",
+   "first_tool_s": 9.898,
+   "answer_s": 12.524,
+   "first_tool": "read_file",
+   "first_tool_expected": true,
+   "tools": [
+    "read_file"
+   ],
+   "steps": 2,
+   "completion_tokens": 889,
+   "first_step_s": 9.897,
+   "reasoned_ahead": 0,
+   "notes_used": false,
+   "answer": "3",
+   "right": true,
+   "errors": [],
+   "index": 7,
+   "when": "2026-11-14 11:53:29"
+  },
+  {
+   "request": "read todo.md and tell me how many tasks are still open",
+   "config": "ahead",
+   "first_tool_s": 6.127,
+   "answer_s": 10.088,
+   "first_tool": "search",
+   "first_tool_expected": false,
+   "tools": [
+    "search"
+   ],
+   "steps": 2,
+   "completion_tokens": 728,
+   "first_step_s": 6.126,
+   "reasoned_ahead": 306,
+   "notes_used": false,
+   "answer": "The file `todo.md` was not found in the specified path. Therefore, there are **0 tasks open**.",
+   "right": false,
+   "errors": [],
+   "index": 7,
+   "when": "2026-11-14 11:53:47"
+  },
+  {
+   "request": "how many lines does poem.txt have? read it and tell me",
+   "config": "ahead",
+   "first_tool_s": 5.158,
+   "answer_s": 7.358,
+   "first_tool": "read_file",
+   "first_tool_expected": true,
+   "tools": [
+    "read_file"
+   ],
+   "steps": 2,
+   "completion_tokens": 475,
+   "first_step_s": 5.157,
+   "reasoned_ahead": 424,
+   "notes_used": true,
+   "answer": "The poem has 7 lines.",
+   "right": true,
+   "errors": [],
+   "index": 8,
+   "when": "2026-11-14 11:54:11"
+  },
+  {
+   "request": "how many lines does poem.txt have? read it and tell me",
+   "config": "plain",
+   "first_tool_s": 33.919,
+   "answer_s": 40.886,
+   "first_tool": "read_file",
+   "first_tool_expected": true,
+   "tools": [
+    "read_file"
+   ],
+   "steps": 2,
+   "completion_tokens": 2785,
+   "first_step_s": 33.918,
+   "reasoned_ahead": 0,
+   "notes_used": false,
+   "answer": "The poem has 6 lines. Here's the content:\n\n1\tThe river keeps its counsel  \n2\tunder the winter bridge,  \n3\tthe gulls write on the water  \n4\twhat the wind forgot,  \n5\tand the town, half asleep,  \n6\tlistens.  \n7\tNobody answers.  \n\n(Note: The output shows 6 lines of text, with line numbers 1–6. Line 7 is not part of the initial 200-line limit in the tool's response.)",
+   "right": true,
+   "errors": [],
+   "index": 8,
+   "when": "2026-11-14 11:55:01"
+  },
+  {
+   "request": "which file in the docs folder mentions Falcon? search and tell me its name",
+   "config": "plain",
+   "first_tool_s": 3.562,
+   "answer_s": 8.105,
+   "first_tool": "search",
+   "first_tool_expected": true,
+   "tools": [
+    "search"
+   ],
+   "steps": 2,
+   "completion_tokens": 572,
+   "first_step_s": 3.561,
+   "reasoned_ahead": 0,
+   "notes_used": false,
+   "answer": "The file is `brief.txt` in the `docs` folder. \n\n**Note:** The line in the file reads: \"Brief: Falcon replaces the old installer by spring.\" \n\nNo further action needed.",
+   "right": true,
+   "errors": [],
+   "index": 9,
+   "when": "2026-11-14 11:55:21"
+  },
+  {
+   "request": "which file in the docs folder mentions Falcon? search and tell me its name",
+   "config": "ahead",
+   "first_tool_s": 5.392,
+   "answer_s": 9.602,
+   "first_tool": "search",
+   "first_tool_expected": true,
+   "tools": [
+    "search"
+   ],
+   "steps": 2,
+   "completion_tokens": 675,
+   "first_step_s": 5.391,
+   "reasoned_ahead": 265,
+   "notes_used": false,
+   "answer": "The file `docs\\brief.txt` mentions \"Falcon\" on line 1. \n\n**Answer:** `docs\\brief.txt`",
+   "right": true,
+   "errors": [],
+   "index": 9,
+   "when": "2026-11-14 11:55:42"
+  },
+  {
+   "request": "read inventory.csv and tell me the total value of the items, quantity times price",
+   "config": "ahead",
+   "first_tool_s": 3.911,
+   "answer_s": 11.092,
+   "first_tool": "read_file",
+   "first_tool_expected": true,
+   "tools": [
+    "read_file"
+   ],
+   "steps": 2,
+   "completion_tokens": 743,
+   "first_step_s": 3.91,
+   "reasoned_ahead": 462,
+   "notes_used": true,
+   "answer": "The total value of the items is calculated by multiplying quantity by price for each item and summing the results. From the provided data:\n\n- cable: 12 * 4 = 48  \n- switch: 3 * 35 = 105  \n- router: 2 * 80 = 160  \n- adapter: 10 * 6 = 60  \n\n**Total = 48 + 105 + 160 + 60 = 373**  \n\nThe final answer is **373**.",
+   "right": true,
+   "errors": [],
+   "index": 10,
+   "when": "2026-11-14 11:56:07"
+  },
+  {
+   "request": "read inventory.csv and tell me the total value of the items, quantity times price",
+   "config": "plain",
+   "first_tool_s": 4.418,
+   "answer_s": 17.033,
+   "first_tool": "read_file",
+   "first_tool_expected": true,
+   "tools": [
+    "read_file"
+   ],
+   "steps": 2,
+   "completion_tokens": 1204,
+   "first_step_s": 4.417,
+   "reasoned_ahead": 0,
+   "notes_used": false,
+   "answer": "The total value of the items in the inventory is calculated by multiplying the quantity by the price for each item and summing the results. Based on the provided data:\n\n- Cable: 12 * 4 = 48  \n- Switch: 3 * 35 = 105  \n- Router: 2 * 80 = 160  \n- Adapter: 10 * 6 = 60  \n\n**Total = 48 + 105 + 160 + 60 = 373**  \n\nThe sum is **373**.  \n**Note:** This calculation is based on the visible entries in the provided CSV. If additional items exist in the full file, they would need to be included for an accurate total.",
+   "right": true,
+   "errors": [],
+   "index": 10,
+   "when": "2026-11-14 11:56:37"
+  },
+  {
+   "request": "read CHANGELOG.md and tell me the date of version 2.1",
+   "config": "plain",
+   "first_tool_s": 3.277,
+   "answer_s": 5.867,
+   "first_tool": "read_file",
+   "first_tool_expected": true,
+   "tools": [
+    "read_file"
+   ],
+   "steps": 2,
+   "completion_tokens": 405,
+   "first_step_s": 3.276,
+   "reasoned_ahead": 0,
+   "notes_used": false,
+   "answer": "The date for version 2.1 is listed as `2026-03-14` in the CHANGELOG.md file. \n\n<note>Version 2.1 was released on 2026-03-14.</note>",
+   "right": true,
+   "errors": [],
+   "index": 11,
+   "when": "2026-11-14 11:56:52"
+  },
+  {
+   "request": "read CHANGELOG.md and tell me the date of version 2.1",
+   "config": "ahead",
+   "first_tool_s": 1.3,
+   "answer_s": 4.906,
+   "first_tool": "read_file",
+   "first_tool_expected": true,
+   "tools": [
+    "read_file"
+   ],
+   "steps": 2,
+   "completion_tokens": 343,
+   "first_step_s": 1.299,
+   "reasoned_ahead": 220,
+   "notes_used": true,
+   "answer": "The date for version 2.1 is listed as `2026-03-14` in the CHANGELOG.md file. \n\nNote: The date is directly under the `## 2.1 - 2026-03-14` heading.  \nNo further steps needed.",
+   "right": true,
+   "errors": [],
+   "index": 11,
+   "when": "2026-11-14 11:57:05"
+  },
+  {
+   "request": "list the files in the docs folder and tell me the newest yearly report",
+   "config": "ahead",
+   "first_tool_s": 5.029,
+   "answer_s": 8.673,
+   "first_tool": "search",
+   "first_tool_expected": true,
+   "tools": [
+    "search"
+   ],
+   "steps": 2,
+   "completion_tokens": 569,
+   "first_step_s": 5.028,
+   "reasoned_ahead": 470,
+   "notes_used": true,
+   "answer": "The newest yearly report in the docs folder is **report_2026.txt**.  \n**Location**: `docs\\report_2026.txt`  \n**Remaining task**: Verify if this is the intended report (no further action needed).",
+   "right": true,
+   "errors": [],
+   "index": 12,
+   "when": "2026-11-14 11:57:25"
+  },
+  {
+   "request": "list the files in the docs folder and tell me the newest yearly report",
+   "config": "plain",
+   "first_tool_s": 3.232,
+   "answer_s": 6.735,
+   "first_tool": "search",
+   "first_tool_expected": true,
+   "tools": [
+    "search"
+   ],
+   "steps": 2,
+   "completion_tokens": 473,
+   "first_step_s": 3.231,
+   "reasoned_ahead": 0,
+   "notes_used": false,
+   "answer": "The newest yearly report is `report_2026.txt` in the `docs` folder.  \n**Note:** The latest year listed is 2026, indicating this file is the most recent report.",
+   "right": true,
+   "errors": [],
+   "index": 12,
+   "when": "2026-11-14 11:57:43"
+  }
+ ],
+ "setup": {
+  "model": "qwen3-4b:Q4_K_M",
+  "url": "own llama-server",
+  "ctx": 16384,
+  "cps": 8.0,
+  "settle": 0.35,
+  "temperature": 0.6,
+  "max_tokens": 4096,
+  "requests": 13
+ },
+ "summary": {
+  "ahead": {
+   "runs": 13,
+   "right": 10,
+   "first_tool_s": {
+    "n": 13,
+    "mean": 5.232,
+    "median": 5.029
+   },
+   "answer_s": {
+    "n": 13,
+    "mean": 15.245,
+    "median": 8.494
+   },
+   "first_tool_expected": 12,
+   "no_tool": 0,
+   "notes_used": 5,
+   "reasoned_ahead": {
+    "n": 13,
+    "mean": 302.846,
+    "median": 281
+   }
+  },
+  "plain": {
+   "runs": 13,
+   "right": 12,
+   "first_tool_s": {
+    "n": 13,
+    "mean": 6.45,
+    "median": 3.639
+   },
+   "answer_s": {
+    "n": 13,
+    "mean": 12.057,
+    "median": 7.591
+   },
+   "first_tool_expected": 13,
+   "no_tool": 0
+  },
+  "paired": {
+   "requests": 13,
+   "first_tool_s_diff": {
+    "n": 13,
+    "mean": -1.218,
+    "median": 0.079
+   },
+   "answer_s_diff": {
+    "n": 13,
+    "mean": 3.187,
+    "median": -0.533
+   },
+   "ahead_faster_first_tool": 6,
+   "first_tool_changed": 1,
+   "right_both": 10,
+   "right_only_ahead": 0,
+   "right_only_plain": 2
+  }
+ }
+}
