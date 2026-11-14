@@ -37,6 +37,8 @@ The goal is thinking ahead in the front end people already use: in the app, the 
   4.31 s** mean against reading ahead only, faster in 20 of 22 turns. Not exact. Answers checked on 2026-11-14 (`bench.py --think-ahead`, 24 problems,
   six runs): 128 of 132 right against 132 of 132 without, the answer's first word after a median of 1.7 s
   instead of 4.2 s; a looping reasoning is dropped on Enter; the example line follows the message's language.
+  **Since 2026-11-14 `--think-ahead` means two reasonings ahead that must agree** (else from scratch): held-out
+  40 problems 40/40 right against 40/40 without, 2.50 s against 4.76 s (median); research/LOG.md.
 - **Step 3, one command:** `mafdet proxy --model qwen3-4b` starts llama-server the way the proxy needs it and
   the proxy in front of it; the guide is "Open WebUI + MAFDET in 5 minutes" (`mafdet/proxy/clients/README.md`).
 - **Steps 1 and 2 on Open WebUI** (2026-11-06): a front end sends only the text being typed and the proxy

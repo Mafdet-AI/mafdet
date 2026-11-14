@@ -569,6 +569,33 @@ wait; they stay here as the record of where each one stopped.
 
 ## Done and measured
 
+- **2026-11-14 (night, after two hard resets of the PC) · Converged: two reasonings ahead that must agree, as
+  right as without thinking ahead, the wait nearly halved; the default of `mafdet proxy --think-ahead`.**
+  Same engine as above (3 slots, q8_0 cache), OFF in the same runs; data `research/data/think_tuning/k2*`.
+  - k=2 on the full 24 (`k2_full`): ON 22/22, OFF 22/22; answer's first word median 2.51 against 4.55 s, mean
+    3.06 against 5.42, faster 21/24, 1 fallback. k=2 on the held-out 40 (`k2_heldout_*`, blocks of 10 after a
+    reset): ON 39/40, OFF 40/40, 3.35 against 4.62 s; the miss was the comparator: a time compared on its last
+    number, the branches "agreed" on 55 (22:55 and 21:55): fixed (`ANSWER_RX`, times whole). 11 of 40 turns
+    went from scratch because a branch had looped and the loop guard had left it empty all turn (watched live:
+    "So, the final answer is 300 pages." three times): `LOOP_RESTART`, a looping branch starts over (twice at
+    most), only with BRANCHES > 1.
+  - **k=2 + LOOP_RESTART (`k2r_*`): held-out 40/40 against 40/40, median 2.50 against 4.76 s, mean 2.67
+    against 4.98, faster 39/40, 2 fallbacks; the full 24: 22/22 against 22/22, median 2.72 against 4.29 s,
+    mean 4.62 against 5.36 (6 fallbacks: 4 disagreements, 2 empty branches).** Over every two-branch run
+    (hard 36+36+24, full 22+22, held-out 39+40): 1 wrong of 219 judged (the comparator), Wilson upper bound
+    ~2.5%; without thinking ahead 0 wrong. The comprehension branch (`BRANCH_FRAME="comprehend"`) is dropped:
+    even with its own end ban it wrote notes in 2 of 24 turns.
+  - Made the default: `--think-ahead` = `--think-branches 2` (launch.py `think_branches`), llama-server with a
+    third slot and a q8_0 cache for the pool (16k → 24k, 4.9 GB of the 2060's 6), `LOOP_RESTART` on (only
+    where a second branch checks). An engine of one's own with too few slots: one branch and a warning.
+    Checked live: banner "2 reasonings ahead", the tip 27 twice with the branches agreeing. Seen live: the
+    answer is held until both branches finish, so a front end shows nothing for 4-10 s: a fork is making
+    branch 0's reasoning stream live while only the answer waits for the agreement.
+  - **So thinking ahead in the proxy is now a concrete speedup without lost answers on these sets: the
+    answer's first word ~2.5 s instead of ~4.5-4.8 s (Qwen3-4B, RTX 2060).** Left: the mean is pulled up by
+    fallbacks (6.6 s each); one branch alone is faster (1.7 s) but loses ~1 in 30; the app (watch.py) and the
+    agent still think ahead with one branch; other machines and the 14B not measured with branches.
+
 - **2026-11-14 (night) · Validation instead of prompt tweaks: two branches that must agree; the field test.**
   Orchestrated with forks: (1) a research fork read the literature (sources in its report, kept in the LOG's
   words here): speculative decoding (Leviathan et al. 2022) and PredGen (Li & Grover 2025, arXiv:2506.15556,

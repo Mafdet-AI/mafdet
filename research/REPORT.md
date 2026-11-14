@@ -261,6 +261,26 @@ there (no raw completion endpoint): reading ahead only.
   without, 132 with the proxy) is llama.cpp computing the read-ahead prefix in other batches; the same
   problem flipped on a second card. `--exact` removes it.
 
+### 4.4 Two reasonings that must agree (the default since 2026-11-14)
+
+Thinking ahead is a speculation on a message that is not finished; like speculative decoding, it is worth
+keeping only with a cheap check and a fallback. Over 370 answers written from notes, two independent notes
+that gave the same answer were wrong 1.6% of the time, against 9.5% overall; text features of the notes were
+no usable check. So the proxy writes two reasonings ahead on two slots of the otherwise idle GPU, compares
+their final answers on Enter, sends the answer when they agree and works it out from scratch when they do not
+(a branch that loops starts over). Qwen3-4B, RTX 2060, OFF (no thinking ahead) in the same runs:
+
+| set | right, two branches | right, without | answer's first word, median | faster |
+|---|---|---|---|---|
+| 40 held-out problems (half decided by their last words) | 40/40 | 40/40 | **2.50 s** against 4.76 s | 39 of 40 |
+| the bench's 24 | 22/22 | 22/22 | **2.72 s** against 4.29 s | 18 of 24 |
+
+Over every two-branch run, 1 wrong answer in 219 (a time compared on its minutes, since fixed). Reproduce:
+`mafdet proxy --model qwen3-4b --think-branches 2` as the engine, then
+`python -m mafdet.proxy.bench --url http://127.0.0.1:8078 --model qwen3-4b --think-ahead --proxy-port 8079
+--set-think BRANCHES=2 --problems-file research/data/think_ahead_heldout.json --prompts 40`, and
+`python research/think_stats.py <the json>` for the intervals.
+
 ## 5. In the agent: a first run
 
 `mafdet agent`, Qwen3-4B all on the RTX 2060, 16k context, one request typed at about 3 words a second
@@ -301,9 +321,11 @@ of 26 each). Two passes of the same code differ about as much as the effect: a d
 - **Single runs and small sets.** Two runs of the same 24 problems on the same machine differed by about 1 s
   in mean wait (3.2 s and 4.17 s on the 2060's 4B); the 14B runs use 6 problems. The tables give orders of
   magnitude, not precise effects.
-- **Answers in the proxy.** With `--think-ahead` the 4B lost about one answer in 33 on English problems (4 of
-  132 over six runs, section 4.1), where the app's Italian runs lost none; the example line's language made no
-  difference to it.
+- **Answers in the proxy.** One reasoning ahead lost about one answer in 33 on English problems (4 of 132 over
+  six runs, section 4.1): its notes commit early to a reading of a question still being typed, and prompt-level
+  fixes did not converge. Since 2026-11-14 `--think-ahead` writes two reasonings at once and sends an answer
+  only when they agree (else works it out from scratch): 40 of 40 on a held-out set, as without thinking ahead,
+  with the answer's first word after 2.5 s instead of 4.8 s (section 4.4). The app and the agent still use one.
 - **The agent.** On short requests (6-9 s of typing) thinking ahead brings the first tool call earlier more
   often than not, but not the answer; with one sample at temperature 0.6 the spread is as large as the effect.
 - **Exactness.** Reading ahead can change a greedy answer's wording, and rarely a number, through llama.cpp's

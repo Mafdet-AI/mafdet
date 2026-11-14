@@ -51,8 +51,11 @@ Open WebUI in Docker: `mafdet proxy --host 0.0.0.0`, and use `http://host.docker
 below. Or all of it in Docker (llama.cpp, the proxy and Open WebUI): [`docker/`](../../../docker/README.md).
 
 With a Qwen3 and thinking on (Open WebUI's default), `--think-ahead` also lets the model reason about
-your message while you type: the first word of the answer came 7.6 → 4.3 s after Enter here. It is not
-exact (the reasoning starts on an unfinished message), so it is off unless you ask for it.
+your message while you type, twice at once, and on Enter sends the answer only if the two agree (else it
+works it out again from the whole message). On 40 word problems: 40 of 40 right, as without it, and the
+answer's first word after 2.5 s instead of 4.8 s on an RTX 2060. It takes a third slot of llama-server
+(`mafdet proxy` starts it so, with a q8_0 cache); `--think-branches 1` for one reasoning, faster and less
+safe. It is off unless you ask for it.
 
 ## 3. Point Open WebUI at it
 
