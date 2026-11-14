@@ -163,11 +163,12 @@ class ProxyState:
                 if self.exact:
                     sess.tier = "T-1"
                 elif self.frame is not None:
-                    sess.thinker = think.Thinker(sess, self.frame, enabled=self.thinking)
+                    k = 1 + len(self.branch_slots)      # the real count (the global may ask for more than fit)
+                    sess.thinker = think.Thinker(sess, self.frame, enabled=self.thinking, branches=k)
                     for slot in self.branch_slots:
                         eng = think.branch_engine(self.engine, slot)
                         sess.branches.append((think.Thinker(think.BranchView(sess, eng), self.branch_frame,
-                                                            enabled=self.thinking), eng))
+                                                            enabled=self.thinking, branches=k), eng))
                 if conversation_id != "new" and self.unclaimed is not None:
                     # The first draft from a chat the proxy has not seen, right after a
                     # new chat was answered: that chat's id, now that the front end has one.
@@ -227,7 +228,10 @@ class ProxyState:
             sessions = list(self.sessions.values())
         for sess in sessions:
             sess.drop_pending()
-        self.cache.begin_generation()
+        # the branches' chunks in flight stop too (they share the abort, not the lock): waited out before the
+        # branches answer on their slots
+        others = [t.session.cache.warm_lock for sess in sessions for t, _ in sess.branches]
+        self.cache.begin_generation(others=others)
 
     def end_generation(self, body: dict | None = None) -> None:
         if body is not None and not self.exact and self.profile.tier != "T-1" and not self.profile.caps.by_chat:
@@ -564,20 +568,21 @@ class Handler(BaseHTTPRequestHandler):
                         state.last_turn = turn
                     return notes, None, jobs
                 results = think.run_branches(jobs, state.frame, body)
-                answers = [think.final_answer(think.answer_text(r)) for r in results]
-                agreed = all(results) and len(set(answers)) == 1
+                agreed, answers, why = think.compare_branches(results)
                 turn["branch_answers"], turn["branches_agreed"] = answers, agreed
-                if agreed:
+                if agreed is None:
+                    turn["comparable"] = False         # prose: branch 0 answers as one reasoning would
+                if agreed is not False:
                     chosen = results[0]
                 else:
-                    turn["fallback"] = "the branches disagree"
+                    turn["fallback"] = why
                     notes = None
         if thinker is not None:
             state.last_turn = turn
         return notes, chosen, None
 
     def _send_event(self, ev: dict, seen: list, first: list) -> None:
-        data = b"data: " + json.dumps(ev).encode() + SSE_END
+        data = b"data: " + json.dumps(think.public(ev)).encode() + SSE_END
         seen.append(data)
         self.wfile.write(_chunked(data))
         if not first and _has_text(data):
@@ -590,13 +595,15 @@ class Handler(BaseHTTPRequestHandler):
         the held answer is sent; if not, a line says so in the reasoning and the answer worked out from
         scratch is streamed after it, under the same id. True when they agreed."""
         state = self.state
-        others: list[list[dict]] = [[] for _ in jobs[1:]]
+        others: list[list[dict] | None] = [None for _ in jobs[1:]]
+        aborts = [threading.Event() for _ in jobs[1:]]
 
         def one(i, engine, prompt, notes, fr=None):
             try:
-                others[i] = list(think.answer(engine, prompt, notes, fr or state.frame, body))
+                others[i] = list(think.answer(engine, prompt, notes, fr or state.frame, body, abort=aborts[i]))
             except Exception:
-                others[i] = []
+                others[i] = None
+        started = time.perf_counter()
         threads = [threading.Thread(target=one, args=(i, *job), daemon=True) for i, job in enumerate(jobs[1:])]
         for t in threads:
             t.start()
@@ -604,31 +611,45 @@ class Handler(BaseHTTPRequestHandler):
         mine: list[dict] = []
         held: list[dict] = []
         meta: dict = {}
+        sent_role = failed0 = False
         try:
-            for ev in think.answer(engine0, prompt0, notes0, state.frame, body):
+            gen = think.answer(engine0, prompt0, notes0, state.frame, body)
+            while True:
+                try:
+                    ev = next(gen)                # only the engine's errors are caught here, not the client's
+                except StopIteration:
+                    break
+                except Exception:
+                    failed0 = True
+                    break
                 mine.append(ev)
                 if not meta:
                     meta = {k: ev.get(k) for k in ("id", "created", "model")}
                 if not held and think.is_reasoning_chunk(ev):
                     self._send_event(ev, seen, first)
+                    sent_role = sent_role or "role" in ((ev.get("choices") or [{}])[0].get("delta") or {})
                 else:
                     held.append(ev)               # from the first answer chunk on, in order
-        except Exception:
-            mine = []
-        for t in threads:
-            t.join()
-        results = [mine] + others
-        answers = [think.final_answer(think.answer_text(r)) for r in results]
-        agreed = all(results) and len(set(answers)) == 1
+            wait_others = think.wait_others
+            wait_others(threads, aborts, started, time.perf_counter())
+        except BaseException:
+            for ab in aborts:                     # the client went away (or worse): stop the other branches
+                ab.set()
+            raise
+        results = [None if failed0 else mine] + [r if not t.is_alive() else None for r, t in zip(others, threads)]
+        agreed, answers, why = think.compare_branches(results)
         turn["branch_answers"], turn["branches_agreed"] = answers, agreed
-        if agreed:
+        if agreed is None:
+            turn["comparable"] = False            # prose: branch 0 answers as one reasoning would
+        if agreed is not False:
+            state.counts["thought_ahead"] += 1    # before the answer goes out: a client reading it sees the count
             for ev in held:
                 self._send_event(ev, seen, first)
             return True
-        turn["fallback"] = "the branches disagree"
+        turn["fallback"] = why
         meta = meta or {"id": "chatcmpl-" + uuid.uuid4().hex[:24], "created": int(time.time()),
                         "model": body.get("model", "")}
-        if not mine:
+        if not sent_role:
             self._send_event({**meta, "object": "chat.completion.chunk",
                               "choices": [{"index": 0, "delta": {"role": "assistant", "content": None},
                                            "finish_reason": None}]}, seen, first)
@@ -729,10 +750,9 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Cache-Control", "no-cache")
                 self.send_header("Transfer-Encoding", "chunked")
                 self.end_headers()
-                if self._stream_branches(live_jobs, body, forward, turn, seen, first):
-                    state.counts["thought_ahead"] += 1
-                else:
-                    notes = None                      # answered from scratch: recorded as such
+                if not self._stream_branches(live_jobs, body, forward, turn, seen, first):
+                    notes = None                      # answered from scratch: recorded as such (the count of
+                    #                                   answers from notes is kept by _stream_branches)
                 done = b"data: [DONE]" + SSE_END
                 self.wfile.write(_chunked(done) + _chunked(b""))
                 return
@@ -756,7 +776,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Transfer-Encoding", "chunked")
                 self.end_headers()
                 for event in events:
-                    data = b"data: " + json.dumps(event).encode() + SSE_END
+                    data = b"data: " + json.dumps(think.public(event)).encode() + SSE_END
                     seen.append(data)
                     self.wfile.write(_chunked(data))
                     if not first and _has_text(data):
@@ -801,7 +821,8 @@ class Handler(BaseHTTPRequestHandler):
                     first.append(time.perf_counter())   # a whole answer: its first text is all of it
                 kind = "side" if side else ("thought ahead" if notes else ("matched" if sess else "unmatched"))
                 state.record(kind, (first[0] - t0) * 1000 if first else None, _timings_of(seen, stream),
-                             {k: turn[k] for k in ("verify_p_yes", "branches_agreed", "fallback") if k in turn})
+                             {k: turn[k] for k in ("verify_p_yes", "branches_agreed", "comparable", "fallback")
+                              if k in turn})
             if not side:
                 if ok and not state.exact and sess is not None:
                     state.remember(sess, messages, _answer_of(seen, stream))

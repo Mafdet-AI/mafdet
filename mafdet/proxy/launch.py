@@ -58,7 +58,8 @@ def start_engine(args):
     # think.BRANCHES > 1 (--think-branches): one more slot per extra branch, after the conversation's and the
     # side slot, and the shared pool grown by half a --ctx each (a branch holds the prompt and its notes)
     branches = think_branches(args)
-    if branches > 1 and "-ctk" not in extra and "--cache-type-k" not in extra:
+    if branches > 1 and not {"-ctk", "-ctv", "--cache-type-k", "--cache-type-v"} & set(extra):
+        # (a cache type of the user's own, K or V, leaves both as given)
         # the branches' pool in a q8_0 cache, as measured (2026-11-14: 3 slots, 18k, 4.8 GB of the 2060's 6)
         extra += ("-ctk", "q8_0", "-ctv", "q8_0")
     n_slots = 2 + branches - 1
@@ -173,10 +174,10 @@ def think_branches(args) -> int:
     """How many reasonings ahead: --think-branches, or 2 with --think-ahead (two that must agree, else the
     answer is worked out from scratch: as right as without thinking ahead in 2026-11-14's runs, 123 of 124
     against 124 of 124, the one miss a comparison since fixed), 1 without."""
+    if not getattr(args, "think_ahead", False) or getattr(args, "exact", False):
+        return 1                               # nothing reasons ahead: no extra slots, pool or q8_0 cache
     k = getattr(args, "think_branches", 0) or 0
-    if k:
-        return max(1, k)
-    return 2 if getattr(args, "think_ahead", False) and not getattr(args, "exact", False) else 1
+    return max(1, k) if k else 2
 
 
 def run(args) -> int:

@@ -138,13 +138,21 @@ class FakeEngine:
     stream_delay_by_slot: dict = {}       # seconds per piece on a slot (a slower branch)
     stream_done: dict = {}                # slot -> when its last answer stream ended (set by the test)
 
+    error_by_slot: dict = {}              # slot -> True: the engine answers that slot's stream with an error
+    raise_after_by_slot: dict = {}        # slot -> n: the stream raises after n pieces (a dropped connection)
+
     def stream(self, ids, *, n_predict, sampling=None):
         self.streamed = list(ids)
         slot = getattr(self, "slot", 0)
+        if self.error_by_slot.get(slot):
+            yield {"error": "the context is full", "stop": True}
+            return
         final = self.final_by_slot.get(slot, self.final_text)
         delay = self.stream_delay_by_slot.get(slot, 0.0)
         pieces = final.replace("</think>", " </think> ").split()
         for i, word in enumerate(pieces):
+            if slot in self.raise_after_by_slot and i >= self.raise_after_by_slot[slot]:
+                raise ConnectionResetError("the engine went away")
             if delay:
                 time.sleep(delay)
             yield {"text": word + " ", "tokens": self.tokenize(word), "stop": False}

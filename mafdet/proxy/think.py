@@ -107,9 +107,6 @@ VERIFY_N_PROBS = 20          # top tokens asked for; yes/no mass is read among t
 # otherwise the request goes through from scratch. 1 = off.
 BRANCHES = 1
 RECORD_TURNS = False         # keep the notes' text and the checks of the last turn in ProxyState.last_turn (bench)
-NUMBER_RX = re.compile(r"-?\d+(?:[.,]\d+)?")
-# A time is compared whole: two branches at 21:55 and 22:55 "agreed" on 55 (2026-11-14, held-out problem 27)
-ANSWER_RX = re.compile(r"\d{1,2}:\d{2}|-?\d+(?:[.,]\d+)?")
 LANG_WAIT_WORDS = 8         # the reasoning waits for the message's language up to this many words
 # A branch that looped stayed without notes for the rest of the turn, and the turn went from scratch (11 of 40
 # held-out turns with BRANCHES=2, 2026-11-14): with LOOP_RESTART it starts over instead, LOOP_RESTARTS_MAX times.
@@ -218,7 +215,7 @@ def thinking_on(template_kwargs: dict | None) -> bool:
 class Thinker:
     """One conversation's reasoning ahead: the notes after the draft, grown chunk by chunk."""
 
-    def __init__(self, session, frame: Frame, enabled=lambda: True):
+    def __init__(self, session, frame: Frame, enabled=lambda: True, branches: int = 1):
         self.session, self.frame, self.enabled = session, frame, enabled
         self.lock = threading.Lock()
         self.wake = threading.Event()
@@ -228,10 +225,15 @@ class Thinker:
         self.restarts = 0                      # this turn's restarts after a loop (LOOP_RESTART)
         self.verified_dropped = 0              # turns whose notes the check on Enter dropped (VERIFY_PROBE)
         self.last_verify: float | None = None  # P(yes) of the last check
+        # how many reasonings this session really has (the server sets it: the global BRANCHES says what was
+        # asked, an engine with too few slots gives one): the seeds and the loop restart follow this
+        self.branches = max(1, branches)
+        self.gen = 0                          # bumped by every _clear: a chunk from before cannot land after
         self._clear()
         threading.Thread(target=self._loop, daemon=True).start()
 
     def _clear(self):
+        self.gen += 1
         self.notes: list[int] = []             # SEED, reasoning and bridges, after the draft's prompt
         self.notes_text = ""                   # the draft the notes last followed
         self.bridge_text = ""                  # up to where the bridges named the new words
@@ -317,6 +319,7 @@ class Thinker:
             if self.reasoned >= THINK_CAP:
                 return False
             ids = prompt + self.notes
+            gen = self.gen
         if not s.cache.warm_lock.acquire(timeout=0.05):
             return False
         try:
@@ -324,7 +327,7 @@ class Thinker:
                 return False
             stops = STOP_BRIDGES or self.frame.stop_bridges
             sampling = dict(THINK_SAMPLING, stop=list(BRIDGE_STOPS)) if stops else THINK_SAMPLING
-            if BRANCHES > 1:                   # branches must not write the same notes: a seed of their own
+            if self.branches > 1:              # branches must not write the same notes: a seed of their own
                 sampling = dict(sampling, seed=random.randrange(1, 2 ** 31))
             res = s.engine.generate(ids, n_predict=THINK_CHUNK, sampling=sampling,
                                     logit_bias=self.frame.bias(), abort=s.cache.abort)
@@ -332,18 +335,19 @@ class Thinker:
         finally:
             s.cache.warm_lock.release()
         tokens = list(res.get("tokens") or [])
-        if (STOP_BRIDGES or self.frame.stop_bridges) and res.get("stop_type") == "word":
+        stopped_at_word = (STOP_BRIDGES or self.frame.stop_bridges) and res.get("stop_type") == "word"
+        if stopped_at_word:
             # stopped at a bridge line of the model's own, or at the template's markers: keep the text before
             # it, as tokens, and wait for more typing as when the reasoning ends
             kept = str(res.get("text") or "")
             tokens = list(self.frame.tokenize(kept) or []) if kept.strip() else []
-            with self.lock:
-                self.finished = True
-        if not tokens:
-            return False
         with self.lock:
-            if self.notes_text and ids[len(prompt):] != self.notes:
-                return False                   # reset or bridged meanwhile: the chunk is stale
+            if gen != self.gen or ids[len(prompt):] != self.notes:
+                return False                   # reset, restarted or bridged meanwhile: the chunk is stale
+            if stopped_at_word:
+                self.finished = True
+            if not tokens:
+                return False
             end = self.frame.think_end
             words = str(res.get("text") or "")
             if end in tokens:
@@ -353,7 +357,7 @@ class Thinker:
             self.notes += tokens
             self.written += words
             if looping(self.written):
-                if LOOP_RESTART and BRANCHES > 1 and self.restarts < LOOP_RESTARTS_MAX:
+                if LOOP_RESTART and self.branches > 1 and self.restarts < LOOP_RESTARTS_MAX:
                     self.restarts += 1         # start over on the text as it is now, instead of staying dead
                     self._clear()
                     return True
@@ -423,18 +427,144 @@ def verify(engine, prompt: list[int], notes: list[int], frame: Frame) -> float |
     return yes / (yes + no) if yes + no > 0 else None
 
 
-def final_answer(text: str) -> str:
-    """What two answers are compared on: the last number (commas and a trailing .0 left out), else the
-    whole answer, lowercased, spaces collapsed."""
-    found = ANSWER_RX.findall(text or "")
-    if found:
-        n = found[-1].replace(",", "")
-        return n[:-2] if n.endswith(".0") else n
-    return " ".join((text or "").lower().split())
+# ---- comparing the branches' answers -------------------------------------------------------
+# A value is compared only when the answer states one clearly (an independent review, 2026-11-14: the last
+# number of any text made "1,234,567" and "9,999,567" agree on 567, "3/4" and "1/4" on 4, "9:05 AM" and
+# "9:05 PM" on 9:05, two prose answers on a stray year, and "12.5" and "12.50" disagree).
+_VALUE = (r"(?:\d{1,2}:\d{2}(?:\s*[ap]\.?\s?m\b\.?)?"                       # a time, with am/pm kept
+          r"|[-+\u2212]?\d+\s*/\s*\d+"                                       # a fraction
+          r"|[-+\u2212]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:[eE][-+]?\d+)?"  # a number, thousands whole
+          r"|[-+\u2212]?\.\d+)")
+VALUE_RX = re.compile(_VALUE, re.I)
+BOXED_RX = re.compile(r"\\boxed\{([^{}]*)\}")
+_LABEL = r"(?:the\s+)?(?:final\s+answer|answer|result|risposta(?:\s+finale)?|risultato)"
+ANSWER_IS_RX = re.compile(_LABEL + r"\s*(?:is|was|will be|:|=|è|e)\s*[*$\\(\s]*(" + _VALUE + r")", re.I)
+BOLD_RX = re.compile(r"\*\*\s*\$?\s*(" + _VALUE + r")\s*\$?[^*\n]{0,30}\*\*", re.I)
+ONLY_VALUE_RX = re.compile(r"(?:" + _LABEL + r"\s*[:=]?\s*)?\$?\s*(" + _VALUE + r")\s*\$?"
+                           r"(?:\s*[A-Za-z\u20ac$%\u00b0]+(?:\s+[A-Za-z\u20ac$%\u00b0]+){0,3})?\s*[.!]?", re.I)
+# A short answer whose last line states a result with one value in it ("Each friend pays 27 euros.") is read
+# too; a line without such a word ("Founded 987") is prose.
+RESULT_WORDS = frozenset("is are was were pays pay costs cost equals equal total totals left remain remains "
+                         "arrives arrive ends end takes take gets get needs need has have sold made makes "
+                         "each per altogether all".split())
+SHORT_ANSWER_CHARS = 240
+
+
+def _norm_value(v: str) -> str | None:
+    v = v.strip().replace("\u2212", "-")
+    m = re.fullmatch(r"(\d{1,2}):(\d{2})(?:\s*([ap])\.?\s?m\b\.?)?", v, re.I)
+    if m:
+        return f"{int(m.group(1))}:{m.group(2)}" + (f" {m.group(3).lower()}m" if m.group(3) else "")
+    m = re.fullmatch(r"([-+]?\d+)\s*/\s*(\d+)", v)
+    if m:
+        a, b = int(m.group(1)), int(m.group(2))
+        if b == 0:
+            return None
+        import math
+        g = math.gcd(a, b) or 1
+        a, b = a // g, b // g
+        return str(a) if b == 1 else f"{a}/{b}"
+    from decimal import Decimal, InvalidOperation
+    try:
+        d = Decimal(v.replace(",", "")).normalize()
+    except (InvalidOperation, ValueError):
+        return None
+    s = format(d, "f")
+    return "0" if s in ("-0", "+0") else s.lstrip("+")
+
+
+def final_answer(text: str) -> str | None:
+    """The answer's final value, normalized, when it states one clearly: a \\boxed{} value, a final-answer line
+    ("the answer is X", "Answer: X"), a bold value on the last line, a last line that is only a value (with a
+    unit), or a short answer's last line stating a result with one value; else None (prose)."""
+    text = (text or "").strip()
+    if not text:
+        return None
+    boxed = BOXED_RX.findall(text)
+    if boxed:
+        m = VALUE_RX.search(boxed[-1])
+        return _norm_value(m.group(0)) if m else " ".join(boxed[-1].lower().split()) or None
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    tail = lines[-3:]
+    for line in reversed(tail):
+        found = ANSWER_IS_RX.findall(line)
+        if found:
+            return _norm_value(found[-1])
+    last = lines[-1]
+    bold = BOLD_RX.findall(last)
+    if bold:
+        return _norm_value(bold[-1])
+    bare = re.sub(r"^[#>*\-\s]+|[*\s]+$", "", last).replace("**", "").strip()
+    m = ONLY_VALUE_RX.fullmatch(bare)
+    if m:
+        return _norm_value(m.group(1))
+    if len(text) <= SHORT_ANSWER_CHARS:
+        values = VALUE_RX.findall(last)
+        words = {w.strip(".,;:!?*").lower() for w in last.split()}
+        if len(values) == 1 and words & RESULT_WORDS:
+            return _norm_value(values[0])
+    return None
 
 
 def answer_text(chunks: list[dict]) -> str:
     return "".join((c["choices"][0]["delta"].get("content") or "") for c in chunks if c.get("choices"))
+
+
+def _flag(chunks: list[dict], key: str) -> bool:
+    return any((c.get("x_mafdet") or {}).get(key) for c in chunks)
+
+
+def branch_outcome(chunks: list[dict] | None) -> tuple[str, str | None]:
+    """("failed", None) for a branch with no answer, an engine error, a cut-off (cancelled) answer or an empty
+    one; ("value", v) for a clear final value, or its tool calls; ("prose", None) otherwise."""
+    if not chunks or _flag(chunks, "error") or _flag(chunks, "cancelled"):
+        return "failed", None
+    calls = [tc for c in chunks if c.get("choices") for tc in (c["choices"][0]["delta"].get("tool_calls") or [])]
+    if calls:
+        return "value", json.dumps(sorted((tc["function"].get("name", ""), tc["function"].get("arguments", ""))
+                                          for tc in calls))
+    text = answer_text(chunks)
+    if not text.strip():
+        return "failed", None
+    v = final_answer(text)
+    return ("value", v) if v is not None else ("prose", None)
+
+
+def compare_branches(results: list) -> tuple[bool | None, list, str]:
+    """(agreed, the values, why not): True when every branch states the same value; None when none states a
+    clear value (prose: not comparable, branch 0 answers as a single reasoning would); False when one failed,
+    when only some state a value, or when the values differ."""
+    outcomes = [branch_outcome(r) for r in results]
+    values = [v for _, v in outcomes]
+    kinds = {k for k, _ in outcomes}
+    if "failed" in kinds:
+        return False, values, "a branch failed"
+    if kinds == {"prose"}:
+        return None, values, ""
+    if "prose" in kinds or len(set(values)) != 1:
+        return False, values, "the branches disagree"
+    return True, values, ""
+
+
+def public(ev: dict) -> dict:
+    """A chunk as the client gets it: without the proxy's own markers."""
+    return {k: v for k, v in ev.items() if k != "x_mafdet"} if "x_mafdet" in ev else ev
+
+
+# The other branches, once branch 0 has answered, get BRANCH_SLACK times its time, and at least
+# BRANCH_MIN_EXTRA_S more; a branch still writing then is cut off and counts as a disagreement.
+BRANCH_SLACK = 1.5
+BRANCH_MIN_EXTRA_S = 3.0
+
+
+def wait_others(threads: list, aborts: list, started: float, first_done: float) -> None:
+    took = max(0.0, first_done - started)
+    deadline = started + max(BRANCH_SLACK * took, took + BRANCH_MIN_EXTRA_S)
+    for t, ab in zip(threads, aborts):
+        t.join(max(0.0, deadline - time.perf_counter()))
+        if t.is_alive():
+            ab.set()                           # it stops at its next token and is marked cancelled
+            t.join(5.0)
 
 
 class _BranchCache:
@@ -528,22 +658,25 @@ def is_reasoning_chunk(ev: dict) -> bool:
     return d.get("content") is None and not d.get("tool_calls")
 
 
-def run_branches(jobs: list[tuple], frame: Frame, body: dict) -> list[list[dict]]:
+def run_branches(jobs: list[tuple], frame: Frame, body: dict) -> list[list[dict] | None]:
     """Each (engine, prompt, notes[, frame]) answered at once on its own slot; the chunks of each, in order.
-    Buffered: the caller compares the answers before any is sent."""
-    out: list[list[dict]] = [[] for _ in jobs]
+    Buffered: the caller compares the answers before any is sent. Once branch 0 is done the others have
+    a budget (wait_others); a branch cut off, or one that never ended, comes back marked or None."""
+    out: list[list[dict] | None] = [None for _ in jobs]
+    aborts = [threading.Event() for _ in jobs]
 
     def one(i, engine, prompt, notes, fr=None):
         try:
-            out[i] = list(answer(engine, prompt, notes, fr or frame, body))
+            out[i] = list(answer(engine, prompt, notes, fr or frame, body, abort=aborts[i]))
         except Exception:
-            out[i] = []
+            out[i] = None
+    started = time.perf_counter()
     threads = [threading.Thread(target=one, args=(i, *job), daemon=True) for i, job in enumerate(jobs)]
     for t in threads:
         t.start()
-    for t in threads:
-        t.join()
-    return out
+    threads[0].join()
+    wait_others(threads[1:], aborts[1:], started, time.perf_counter())
+    return [r if not t.is_alive() else None for r, t in zip(out, threads)]
 
 
 def _sampling(body: dict) -> dict:
@@ -596,9 +729,12 @@ class ToolCalls:
         return out
 
 
-def answer(engine, prompt: list[int], notes: list[int], frame: Frame, body: dict) -> Iterable[dict]:
+def answer(engine, prompt: list[int], notes: list[int], frame: Frame, body: dict,
+           abort: threading.Event | None = None) -> Iterable[dict]:
     """The answer after the notes, as OpenAI chat-completion chunks (dicts), the last with
-    finish_reason, usage and llama-server's timings.  The notes are shown first as reasoning."""
+    finish_reason, usage and llama-server's timings.  The notes are shown first as reasoning.
+    An engine error, or `abort` set (a branch past its budget), ends it early; the last chunk then carries
+    "x_mafdet": {"error" or "cancelled": True} (taken off before a client sees it, `public`)."""
     cid = "chatcmpl-" + uuid.uuid4().hex[:24]
     created = int(time.time())
     model = body.get("model", "")
@@ -614,43 +750,56 @@ def answer(engine, prompt: list[int], notes: list[int], frame: Frame, body: dict
     limit = body.get("max_completion_tokens") or body.get("max_tokens") or -1
     thinking, tools, produced, final = True, ToolCalls(), 0, {}
     pending = ""
-    for ev in engine.stream(prompt + notes, n_predict=limit, sampling=_sampling(body)):
-        if ev.get("error"):
-            final = {"stop_type": "error"}
-            break
-        produced += len(ev.get("tokens") or [])
-        text = ev.get("text", "")
-        if thinking:
-            pending += text
-            if "</think>" in pending:
-                before, after = pending.split("</think>", 1)
-                if before:
-                    yield chunk({"reasoning_content": before})
-                thinking, pending = False, ""
-                text = after.lstrip("\n")
-            else:
-                safe = len(pending) - max((k for k in range(1, 8) if pending.endswith("</think>"[:k])), default=0)
-                if safe > 0:
-                    yield chunk({"reasoning_content": pending[:safe]})
-                    pending = pending[safe:]
-                text = ""
-        if not thinking and text:
-            content, calls = tools.feed(text)
-            if content:
-                yield chunk({"content": content})
-            for call in calls:
-                yield chunk({"tool_calls": [call]})
-        if ev.get("stop"):
-            final = ev
-            break
+    events = engine.stream(prompt + notes, n_predict=limit, sampling=_sampling(body))
+    try:
+        for ev in events:
+            if ev.get("error"):
+                final = {"stop_type": "error"}
+                break
+            if abort is not None and abort.is_set():
+                final = {"stop_type": "cancelled"}
+                break
+            produced += len(ev.get("tokens") or [])
+            text = ev.get("text", "")
+            if thinking:
+                pending += text
+                if "</think>" in pending:
+                    before, after = pending.split("</think>", 1)
+                    if before:
+                        yield chunk({"reasoning_content": before})
+                    thinking, pending = False, ""
+                    text = after.lstrip("\n")
+                else:
+                    safe = len(pending) - max((k for k in range(1, 8) if pending.endswith("</think>"[:k])), default=0)
+                    if safe > 0:
+                        yield chunk({"reasoning_content": pending[:safe]})
+                        pending = pending[safe:]
+                    text = ""
+            if not thinking and text:
+                content, calls = tools.feed(text)
+                if content:
+                    yield chunk({"content": content})
+                for call in calls:
+                    yield chunk({"tool_calls": [call]})
+            if ev.get("stop"):
+                final = ev
+                break
+        else:
+            final = {"stop_type": "error"}     # the stream ended without its last event
+    finally:
+        close = getattr(events, "close", None)
+        if close is not None:
+            close()                            # closing the connection stops llama-server's task
     rest = tools.flush() if not thinking else pending
     if rest:
         yield chunk({"content": rest} if not thinking else {"reasoning_content": rest})
     finish = "tool_calls" if tools.calls else ("length" if final.get("stop_type") == "limit" else "stop")
     t = final.get("timings") or {}
+    marks = ({"x_mafdet": {"error": True}} if final.get("stop_type") == "error" else
+             {"x_mafdet": {"cancelled": True}} if final.get("stop_type") == "cancelled" else {})
     yield chunk({}, finish, usage={"prompt_tokens": len(prompt) + len(notes), "completion_tokens": produced,
                                    "total_tokens": len(prompt) + len(notes) + produced},
-                timings=t)
+                timings=t, **marks)
 
 
 def collect(chunks: Iterable[dict]) -> dict:

@@ -90,14 +90,17 @@ class SharedCache:
         with self.lock:
             return self._generating > 0
 
-    def begin_generation(self, wait_for_warm: float = 5.0) -> None:
+    def begin_generation(self, wait_for_warm: float = 5.0, others=()) -> None:
         """An answer takes the slot: no new warm or chunk from now on, the chunk of reasoning in
-        flight stops at its next token, a warm in flight is waited out (bounded)."""
+        flight stops at its next token, a warm in flight is waited out (bounded). `others`: the branches'
+        chunk locks (their own slots, the same abort), waited out the same way before abort is cleared."""
         with self.lock:
             self._generating += 1
         self.abort.set()
-        if self.warm_lock.acquire(timeout=wait_for_warm):
-            self.warm_lock.release()
+        deadline = time.monotonic() + wait_for_warm
+        for lock in (self.warm_lock, *others):
+            if lock.acquire(timeout=max(0.0, deadline - time.monotonic())):
+                lock.release()
         self.abort.clear()
 
     def end_generation(self) -> None:

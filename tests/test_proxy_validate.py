@@ -1,6 +1,7 @@
 """Validation of the notes on Enter (2026-11-14), both off by default: the model's one-token check
 (think.VERIFY_PROBE) and k independent reasonings ahead compared on their answers (think.BRANCHES)."""
 import json
+import time
 
 from mafdet.proxy import think
 from mafdet.proxy.server import ProxyState
@@ -183,12 +184,44 @@ def test_branch_seeds_differ_only_with_branches(monkeypatch):
             server.shutdown()
 
 
-def test_final_answer_compares_numbers_then_text():
-    assert think.final_answer("So each pays 27.") == "27"
-    assert think.final_answer("Total: 1,800 metres") == "1800"
-    assert think.final_answer("It is 51.0") == "51"
-    assert think.final_answer("  Paris  is the Capital ") == "paris is the capital"
-    assert json.dumps(think.final_answer("")) == '""'
+def test_final_answer_reads_a_clear_final_value_only():
+    """The independent review's examples (2026-11-14): numbers whole, fractions, am/pm, scientific notation,
+    trailing zeros; prose with a stray number, and an empty answer, have no final value."""
+    f = think.final_answer
+    assert f("1,234,567") != f("9,999,567") and f("1,234,567") == "1234567"
+    assert f("3/4") != f("1/4") and f("6/8") == "3/4"
+    assert f("9:05 AM") != f("9:05 PM") and f("09:05") == f("9:05")
+    assert f("7.35e22") != f("1e22")
+    assert f("12.5") == f("12.50") == "12.5" and f("It is 51.0") == "51"
+    assert f("**42** (step 3)") == f("42") == "42"
+    assert f("...since 987") is None and f("Founded 987") is None
+    assert f("") is None and f("  Paris  is the Capital ") is None
+    assert f("So each pays 27.") == "27" and f("Answer: 1,800 metres") == "1800"
+    assert f("The final value is \\boxed{27} euros.") == "27"
+    assert f("Each friend pays **27** euros.") == "27" and f("The answer is 42 ") == "42"
+    assert f("The film ends at 21:55.") == "21:55"
+
+
+def test_compare_branches_prose_mixed_failed_and_tool_calls():
+    def chunks(text=None, calls=None, mark=None):
+        out = [{"choices": [{"delta": {"role": "assistant", "content": None}, "finish_reason": None}]}]
+        if text is not None:
+            out.append({"choices": [{"delta": {"content": text}, "finish_reason": None}]})
+        if calls:
+            out.append({"choices": [{"delta": {"tool_calls": calls}, "finish_reason": None}]})
+        out.append({"choices": [{"delta": {}, "finish_reason": "stop"}], **({"x_mafdet": mark} if mark else {})})
+        return out
+    agree = think.compare_branches
+    assert agree([chunks("The answer is 27"), chunks("**27** euros")])[0] is True
+    assert agree([chunks("The answer is 27"), chunks("The answer is 24")])[0] is False
+    assert agree([chunks("Rome was founded long ago."), chunks("It is an old city.")])[0] is None    # prose
+    assert agree([chunks("The answer is 27"), chunks("It depends on the tip.")]) [0] is False       # mixed
+    assert agree([chunks("The answer is 27"), chunks("")])[2] == "a branch failed"                  # empty
+    assert agree([chunks("The answer is 27"), None])[0] is False                                     # no answer
+    assert agree([chunks("The answer is 27"), chunks("The answer is 27", mark={"error": True})])[0] is False
+    assert agree([chunks("The answer is 27"), chunks("The answer is 27", mark={"cancelled": True})])[0] is False
+    call = [{"index": 0, "id": "c", "type": "function", "function": {"name": "read_file", "arguments": "{}"}}]
+    assert agree([chunks(calls=call), chunks(calls=call)])[0] is True
 
 
 def test_a_comprehension_branch_reads_with_its_own_frame(monkeypatch):
@@ -215,7 +248,7 @@ def test_a_comprehension_branch_reads_with_its_own_frame(monkeypatch):
 def test_times_are_compared_whole():
     """Two branches at 22:55 and 21:55 "agreed" on 55 (held-out problem 27, 2026-11-14)."""
     assert think.final_answer("So the answer is 22:55.") == "22:55"
-    assert think.final_answer("ends at 21:55") != think.final_answer("ends at 22:55")
+    assert think.final_answer("It ends at 21:55") != think.final_answer("It ends at 22:55")
     assert think.final_answer("each pays 27 euros") == "27"
 
 
@@ -225,7 +258,7 @@ def test_a_looping_thinker_starts_over_with_loop_restart(monkeypatch):
     monkeypatch.setattr(think, "LOOP_RESTART", True)
     monkeypatch.setattr(think, "BRANCHES", 2)                              # restarts only where branches check
     monkeypatch.setattr(think, "looping", lambda text: True)              # every chunk "loops"
-    server, port, state, engine = start()
+    server, port, state, engine = start(n_slots=3)                        # a second branch really there
     try:
         post(port, "/v1/drafts", {"conversation_id": "c1", "text": TEXT})
         sess = state.session("c1")
@@ -345,3 +378,217 @@ def test_unstreamed_branches_are_unchanged(monkeypatch):
         assert "streamed_reasoning" not in state.last_turn and state.last_turn["branches_agreed"] is True
     finally:
         server.shutdown()
+
+
+# ---- the independent review's findings (2026-11-14) ----------------------------------------------------------
+
+def test_an_errored_branch_counts_as_a_disagreement(monkeypatch):
+    """An engine error on a branch's stream (a full context) is not an agreed empty answer: from scratch,
+    streamed and not."""
+    monkeypatch.setattr(think, "BRANCHES", 2)
+    for stream in (False, True):
+        server, port, state, engine = start(think_after=6, n_slots=3)
+        monkeypatch.setattr(engine, "error_by_slot", {2: True})
+        try:
+            post(port, "/v1/drafts", {"conversation_id": "c1", "text": TEXT})
+            sess, ready = _branches_ready(state)
+            assert ready
+            status, raw = post(port, "/v1/chat/completions", dict(REQUEST, stream=stream))
+            assert status == 200 and engine.chats == 1                       # worked out from scratch
+            assert state.last_turn["branches_agreed"] is False
+            assert state.last_turn["fallback"] == "a branch failed" and state.counts["thought_ahead"] == 0
+            assert b"x_mafdet" not in raw                                     # no marker reaches the client
+        finally:
+            server.shutdown()
+
+
+def test_branch_seeds_and_restarts_follow_the_real_branch_count(monkeypatch):
+    """The global asks for 2 branches, the engine has room for 1: no seeds, no restart (nothing would check a
+    restarted reasoning)."""
+    seen = []
+
+    class Recording(FakeEngine):
+        def generate(self, ids, *, n_predict, sampling=None, logit_bias=None, abort=None):
+            seen.append(dict(sampling or {}))
+            return super().generate(ids, n_predict=n_predict, sampling=sampling, logit_bias=logit_bias, abort=abort)
+    from mafdet.proxy.probe import probe
+    from mafdet.proxy.server import make_server
+    import threading
+    monkeypatch.setattr(think, "BRANCHES", 2)
+    monkeypatch.setattr(think, "looping", lambda text: True)
+    engine = Recording()
+    engine.n_slots = 2                                                    # conversation + side: no branch slot
+    state = ProxyState(engine, probe(engine, url="http://127.0.0.1:1", model="m"), "m", debounce_ms=20,
+                       min_new=4, think_ahead=True)
+    server = make_server(state, "127.0.0.1", 0)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        assert state.branch_slots == [] and state.no_branch_reason
+        post(server.server_address[1], "/v1/drafts", {"conversation_id": "c1", "text": TEXT})
+        th = state.session("c1").thinker
+        assert th.branches == 1
+        assert wait_until(lambda: th.looped, timeout=5.0) and th.restarts == 0
+        assert seen and all("seed" not in s for s in seen)
+    finally:
+        server.shutdown()
+
+
+def test_enter_waits_for_the_branch_chunks_with_abort_set():
+    """Enter sets abort, waits for every branch's chunk lock (their own slots), then clears abort."""
+    import threading
+    from mafdet.proxy.session import SharedCache
+    cache = SharedCache()
+    other = threading.Lock()
+    other.acquire()
+    saw_abort = []
+
+    def branch_chunk():                       # a chunk in flight on a branch: stops at its next token
+        cache.abort.wait(2.0)
+        saw_abort.append(cache.abort.is_set())
+        other.release()
+    threading.Thread(target=branch_chunk, daemon=True).start()
+    cache.begin_generation(wait_for_warm=2.0, others=[other])
+    assert saw_abort == [True] and not cache.abort.is_set() and other.acquire(timeout=0.1)
+
+
+def test_a_chunk_from_before_a_reset_never_lands_in_the_next_turn(monkeypatch):
+    """The turn is reset while a chunk is being written: the chunk is stale and dropped, even though the new
+    turn's notes are empty then (the old check was skipped when they were)."""
+    server, port, state, engine = start()
+    orig = engine.generate
+    calls = []
+
+    def resetting(ids, **kw):
+        calls.append(1)
+        if len(calls) == 1:
+            state.session("c1").thinker.reset()                            # Enter answered meanwhile
+            return {"tokens": engine.tokenize("staleword"), "text": "staleword", "stop_type": "limit",
+                    "timings": {}}
+        return orig(ids, **kw)
+    monkeypatch.setattr(engine, "generate", resetting)
+    try:
+        post(port, "/v1/drafts", {"conversation_id": "c1", "text": TEXT})
+        th = state.session("c1").thinker
+        assert wait_until(lambda: len(calls) >= 3)                         # later chunks on the fresh notes
+        assert "staleword" not in engine.detokenize(th.notes)
+    finally:
+        server.shutdown()
+
+
+def test_a_slow_branch_is_cut_off_and_counts_as_a_disagreement(monkeypatch):
+    """Once branch 0 has answered, the other gets BRANCH_SLACK times its time (at least BRANCH_MIN_EXTRA_S
+    more); past it, it is cancelled and the answer is worked out from scratch."""
+    monkeypatch.setattr(think, "BRANCHES", 2)
+    monkeypatch.setattr(think, "BRANCH_MIN_EXTRA_S", 0.2)
+    server, port, state, engine = start(think_after=6, n_slots=3)
+    monkeypatch.setattr(engine, "stream_delay_by_slot", {2: 0.5})           # ~3 s for its answer
+    monkeypatch.setattr(engine, "stream_done", {})
+    try:
+        post(port, "/v1/drafts", {"conversation_id": "c1", "text": TEXT})
+        sess, ready = _branches_ready(state)
+        assert ready
+        t0 = time.perf_counter()
+        status, raw = post(port, "/v1/chat/completions", dict(REQUEST, stream=False))
+        assert time.perf_counter() - t0 < 2.0
+        assert state.last_turn["fallback"] == "a branch failed" and engine.chats == 1
+    finally:
+        server.shutdown()
+
+
+def test_branch_0_failing_mid_stream_sends_one_role_and_the_answer_from_scratch(monkeypatch):
+    monkeypatch.setattr(think, "BRANCHES", 2)
+    server, port, state, engine = start(think_after=6, n_slots=3)
+    monkeypatch.setattr(engine, "raise_after_by_slot", {0: 2})              # the conversation's slot drops
+    try:
+        post(port, "/v1/drafts", {"conversation_id": "c1", "text": TEXT})
+        sess, ready = _branches_ready(state)
+        assert ready
+        events = [e for _, e in _stream_timed(port, REQUEST)]
+        deltas = [e["choices"][0]["delta"] for e in events]
+        assert sum(1 for d in deltas if "role" in d) == 1
+        assert sum(1 for e in events if e["choices"][0]["finish_reason"]) == 1
+        assert "".join(d.get("content") or "" for d in deltas).startswith("echo: ")
+        assert state.last_turn["fallback"] == "a branch failed"
+    finally:
+        server.shutdown()
+
+
+def test_the_count_of_answers_from_notes_is_up_before_the_answer_goes_out(monkeypatch):
+    """The bench reads counts["thought_ahead"] as soon as the stream ends: it must already be counted."""
+    import http.client
+    monkeypatch.setattr(think, "BRANCHES", 2)
+    server, port, state, engine = start(think_after=6, n_slots=3)
+    try:
+        post(port, "/v1/drafts", {"conversation_id": "c1", "text": TEXT})
+        sess, ready = _branches_ready(state)
+        assert ready
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+        conn.request("POST", "/v1/chat/completions", body=json.dumps(REQUEST).encode(),
+                     headers={"Content-Type": "application/json"})
+        resp = conn.getresponse()
+        counted_at_content = None
+        while True:
+            line = resp.readline()
+            if not line:
+                break
+            if line.startswith(b"data: ") and b"[DONE]" not in line:
+                d = json.loads(line[6:])["choices"][0]["delta"]
+                if d.get("content") and counted_at_content is None:
+                    counted_at_content = state.counts["thought_ahead"]
+        conn.close()
+        assert counted_at_content == 1
+    finally:
+        server.shutdown()
+
+
+def test_think_branches_needs_think_ahead_and_a_users_cache_type_is_kept(monkeypatch):
+    from mafdet.cli import build_parser
+    from mafdet.proxy import launch
+    parse = build_parser().parse_args
+    assert launch.think_branches(parse(["proxy", "--think-branches", "2"])) == 1          # no --think-ahead
+    assert launch.think_branches(parse(["proxy", "--think-ahead", "--exact", "--think-branches", "3"])) == 1
+    assert launch.think_branches(parse(["proxy", "--think-ahead", "--think-branches", "3"])) == 3
+    made = []
+
+    class FakeServer:
+        def __init__(self, path, device, *, ctx, n_slots, port, extra_args, log_name, pool):
+            made.append(tuple(extra_args))
+    import mafdet.llama_backend as lb
+    monkeypatch.setattr(lb, "LlamaServer", FakeServer)
+    monkeypatch.setattr(lb, "pick_device", lambda d: "cuda")
+    monkeypatch.setattr(launch, "resolve_model", lambda spec: ("m.gguf", "m", ()))
+    for llama_args, q8 in (("", True), ("-ctv f16", False), ("--cache-type-k f16", False), ("-ctk q4_0", False)):
+        launch.start_engine(parse(["proxy", "--think-ahead", "--llama-args=" + llama_args] if llama_args
+                                  else ["proxy", "--think-ahead"]))
+        extra = made[-1]
+        assert (extra.count("q8_0") == 2) is q8, (llama_args, extra)
+
+
+def test_the_bench_checks_only_and_counts_a_skipped_side():
+    import argparse
+    from mafdet.proxy import bench
+    ns = argparse.Namespace(problems_file="", first=0, prompts=24, only="6,99", repeat=1)
+    try:
+        bench.pick_problems(ns)
+        raise AssertionError("no error for problem 99")
+    except SystemExit as e:
+        assert "99" in str(e)
+    ns.only = "6,23"
+    ns.repeat = 2
+    assert bench.pick_problems(ns)[2] == [6, 6, 23, 23]
+    nan = float("nan")
+    row = {"off_ttft": nan, "on_ttft": 0.1, "identical": False, "same_answer": False, "off_right": None,
+           "on_finish": "stop", "off_finish": "skipped"}
+    rows = [dict(row, on_right=True), dict(row, on_right=False), dict(row, on_right=None)]
+    out = bench.summarise(rows)
+    assert out["judged"] == 2 and out["on_right"] == 1 and out["off_mean_ms"] is None
+    assert out["on_mean_ms"] == 100
+
+
+def test_cmh_continuity_correction_is_floored_at_zero():
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "research"))
+    import think_stats
+    orr, chi, p = think_stats.cmh([(1, 9, 1, 9)])
+    assert chi == 0.0 and p == 1.0

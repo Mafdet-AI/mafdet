@@ -205,6 +205,63 @@ def _type(proxy_host: str, proxy_port: int, conversation_id: str, model: str, te
     return time.perf_counter() - t0
 
 
+def summarise(rows: list[dict]) -> dict:
+    if not rows:
+        return {}
+    # a side skipped (--skip-off / --skip-on) has no times: its means are left out, not NaN
+    off = [r["off_ttft"] * 1000 for r in rows if r["off_ttft"] == r["off_ttft"]]
+    on = [r["on_ttft"] * 1000 for r in rows if r["on_ttft"] == r["on_ttft"]]
+
+    def stat(f, xs):
+        return round(f(xs), 0) if xs else None
+    paired = any(r.get("off_right") is not None for r in rows) and any(r.get("on_right") is not None for r in rows)
+    if paired:
+        # right answers, over the rows where both runs finished and the problem has one answer
+        judged = [r for r in rows if r.get("off_right") is not None and r.get("on_right") is not None]
+        judged_on = judged_off = judged
+    else:
+        # one side only: count it alone
+        judged_on = [r for r in rows if r.get("on_right") is not None]
+        judged_off = [r for r in rows if r.get("off_right") is not None]
+        judged = judged_on or judged_off
+    return {"n": len(rows),
+            "off_mean_ms": stat(statistics.mean, off),
+            "on_mean_ms": stat(statistics.mean, on),
+            "off_median_ms": stat(statistics.median, off),
+            "on_median_ms": stat(statistics.median, on),
+            "identical": sum(1 for r in rows if r["identical"]),
+            "same_answer": sum(1 for r in rows if r["same_answer"]),
+            "on_slower": sum(1 for r in rows if r["on_ttft"] > r["off_ttft"]),
+            "judged": len(judged),
+            "off_right": sum(1 for r in judged_off if r.get("off_right")),
+            "on_right": sum(1 for r in judged_on if r.get("on_right")),
+            "cut": sum(1 for r in rows if "length" in (r.get("off_finish"), r.get("on_finish")))}
+
+
+def pick_problems(args) -> tuple[list[str], list, list[int]]:
+    """The problems of the run (the built-in 24 or --problems-file), their expected answers, and the indices
+    to type in order (--first/--prompts or --only, each --repeat times). Checked before any engine is asked."""
+    problems, expected_of = PROBLEMS, EXPECTED
+    if args.problems_file:
+        with open(args.problems_file, encoding="utf-8") as f:
+            pairs = json.load(f)
+        problems, expected_of = [p for p, _ in pairs], [e for _, e in pairs]
+    first = max(0, min(args.first, len(problems) - 1))
+    if args.only:
+        try:
+            picked = [int(x) for x in args.only.split(",") if x.strip()]
+        except ValueError:
+            raise SystemExit(f"--only: comma-separated problem numbers, not {args.only!r}")
+        bad = [k for k in picked if not 0 <= k < len(problems)]
+        if bad:
+            raise SystemExit(f"--only: no problem {', '.join(map(str, bad))} in a set of {len(problems)} (0-"
+                             f"{len(problems) - 1})")
+    else:
+        picked = list(range(first, first + max(1, min(args.prompts, len(problems) - first))))
+    picked = [k for k in picked for _ in range(max(1, args.repeat))]
+    return problems, expected_of, picked
+
+
 # --------------------------------------------------------------------------------------
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="mafdet.proxy.bench", description=__doc__)
@@ -259,6 +316,9 @@ def main(argv: list[str] | None = None) -> int:
     if not args.max_tokens:
         args.max_tokens = 3072 if args.thinking else 96
 
+    problems, expected_of, picked = pick_problems(args)     # a wrong --only stops here
+    first = max(0, min(args.first, len(problems) - 1))
+
     host, _, port_s = args.url.replace("http://", "").partition(":")
     engine_host, engine_port = host, int(port_s or 8080)
     engine = make(args.engine, args.url, model=args.model)
@@ -306,17 +366,6 @@ def main(argv: list[str] | None = None) -> int:
     def tag(text: str) -> str:
         return f"[note {uuid.uuid4().hex[:6]}] {text}" if tagging else text
 
-    problems, expected_of = PROBLEMS, EXPECTED
-    if args.problems_file:
-        with open(args.problems_file, encoding="utf-8") as f:
-            pairs = json.load(f)
-        problems, expected_of = [p for p, _ in pairs], [e for _, e in pairs]
-    first = max(0, min(args.first, len(problems) - 1))
-    if args.only:
-        picked = [int(x) for x in args.only.split(",") if x.strip()]
-    else:
-        picked = list(range(first, first + max(1, min(args.prompts, len(problems) - first))))
-    picked = [k for k in picked for _ in range(max(1, args.repeat))]
     typed = [problems[k] for k in picked]
     results = {"typed": [], "long": [], "exactness": []}
 
@@ -385,7 +434,7 @@ def main(argv: list[str] | None = None) -> int:
         # What the proxy saw on Enter (think.RECORD_TURNS): the notes' text, the check, the branches
         turn = {k: v for k, v in (state.last_turn or {}).items()
                 if k in ("notes_text", "verify_p_yes", "verified_dropped", "branch_answers", "branches_agreed",
-                         "fallback", "branch_notes")}
+                         "comparable", "fallback", "branch_notes")}
         return {**turn, "off_ttft": off_ttft, "on_ttft": on_ttft,
                 "off_answer_s": off_t.get("answer"), "on_answer_s": on_t.get("answer"),
                 "on_notes": state.counts["thought_ahead"] > noted,    # the answer started from notes
@@ -416,24 +465,6 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[long {i+1}/{args.long}] OFF {row['off_ttft']*1000:.0f} ms  "
               f"ON {row['on_ttft']*1000:.0f} ms  identical={row['identical']}", file=sys.stderr)
 
-    def summarise(rows: list[dict]) -> dict:
-        if not rows:
-            return {}
-        off = [r["off_ttft"] * 1000 for r in rows]
-        on = [r["on_ttft"] * 1000 for r in rows]
-        return {"n": len(rows),
-                "off_mean_ms": round(statistics.mean(off), 0),
-                "on_mean_ms": round(statistics.mean(on), 0),
-                "off_median_ms": round(statistics.median(off), 0),
-                "on_median_ms": round(statistics.median(on), 0),
-                "identical": sum(1 for r in rows if r["identical"]),
-                "same_answer": sum(1 for r in rows if r["same_answer"]),
-                "on_slower": sum(1 for r in rows if r["on_ttft"] > r["off_ttft"]),
-                # right answers, over the rows where both runs finished and the problem has one answer
-                "judged": sum(1 for r in rows if r.get("off_right") is not None and r.get("on_right") is not None),
-                "off_right": sum(1 for r in rows if r.get("off_right") and r.get("on_right") is not None),
-                "on_right": sum(1 for r in rows if r.get("on_right") and r.get("off_right") is not None),
-                "cut": sum(1 for r in rows if "length" in (r.get("off_finish"), r.get("on_finish")))}
 
     # Control: is the ENGINE itself bit-stable between a cold and a warm prefill?  If it
     # is not, a text difference with the proxy is the engine's chunking, not the proxy.

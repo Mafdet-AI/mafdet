@@ -58,7 +58,7 @@ def cmh(tables: list[tuple[int, int, int, int]]) -> tuple[float, float, float]:
         s += a - (a + b) * (a + c) / n
         v += (a + b) * (c + d) * (a + c) * (b + d) / (n * n * (n - 1))
     orr = num / den if den else float("inf") if num else float("nan")
-    chi = (abs(s) - 0.5) ** 2 / v if v else 0.0
+    chi = max(0.0, abs(s) - 0.5) ** 2 / v if v else 0.0     # the continuity correction never below 0
     return orr, chi, math.erfc(math.sqrt(chi / 2))      # the chi-square tail with 1 degree of freedom
 
 
