@@ -210,6 +210,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--prompts", type=int, default=24, help="typed prompts (max 24)")
     ap.add_argument("--first", type=int, default=0,
                     help="start at this problem (0-23), to split a long run into parts")
+    ap.add_argument("--set-think", action="append", default=[], metavar="NAME=JSON",
+                    help="with --think-ahead: override a constant of mafdet/proxy/think.py for this run, e.g. "
+                         "'THINK_SAMPLING={\"temperature\": 0.3}' or 'SENT=\"...\"' (tuning without editing the code)")
+    ap.add_argument("--only", default="", help="these problems only, e.g. 6,23 (indices of the set)")
+    ap.add_argument("--repeat", type=int, default=1, help="each problem this many times (a rate, not one sample)")
+    ap.add_argument("--skip-off", action="store_true",
+                    help="no OFF run (greedy straight at the engine: the same answer every time), ON only")
+    ap.add_argument("--problems-file", default="",
+                    help="a JSON list of [problem, expected answer or null] instead of the built-in 24")
     ap.add_argument("--frame-lang", default="auto", choices=["auto", "it"],
                     help="with --think-ahead: the example line by the message's language (auto), or always the "
                          "Italian one measured in the app (it), to compare the two")
@@ -253,6 +262,14 @@ def main(argv: list[str] | None = None) -> int:
     profile = EngineProfile.load(args.url, args.model) or probe(
         engine, url=args.url, model=args.model, version=str(getattr(engine, "version", "") or ""))
     profile.save()
+    if args.set_think:
+        from . import think as think_mod
+        for item in args.set_think:
+            name, _, value = item.partition("=")
+            if not hasattr(think_mod, name):
+                raise SystemExit(f"--set-think: think.py has no {name}")
+            setattr(think_mod, name, json.loads(value))
+            print(f"think.{name} = {value[:120]}", file=sys.stderr)
     state = ProxyState(engine, profile, args.model, think_ahead=args.think_ahead)
     if args.think_ahead and state.frame is None:
         print(f"--think-ahead: {state.no_think_reason}", file=sys.stderr)
@@ -274,8 +291,18 @@ def main(argv: list[str] | None = None) -> int:
     def tag(text: str) -> str:
         return f"[note {uuid.uuid4().hex[:6]}] {text}" if tagging else text
 
-    first = max(0, min(args.first, len(PROBLEMS) - 1))
-    typed = PROBLEMS[first: first + max(1, min(args.prompts, len(PROBLEMS) - first))]
+    problems, expected_of = PROBLEMS, EXPECTED
+    if args.problems_file:
+        with open(args.problems_file, encoding="utf-8") as f:
+            pairs = json.load(f)
+        problems, expected_of = [p for p, _ in pairs], [e for _, e in pairs]
+    first = max(0, min(args.first, len(problems) - 1))
+    if args.only:
+        picked = [int(x) for x in args.only.split(",") if x.strip()]
+    else:
+        picked = list(range(first, first + max(1, min(args.prompts, len(problems) - first))))
+    picked = [k for k in picked for _ in range(max(1, args.repeat))]
+    typed = [problems[k] for k in picked]
     results = {"typed": [], "long": [], "exactness": []}
 
     def reset() -> None:
@@ -310,12 +337,15 @@ def main(argv: list[str] | None = None) -> int:
         if typed_mode:
             posts = -(-len(on_body["messages"][-1]["content"]) // 4)   # one draft per 4 characters, as _type
             typing = max(0, posts - 1) * 4 / max(args.typing_cps, 0.1)
-        time.sleep(typing + args.settle)
-        # OFF: straight at the engine.
         off_t: dict = {}
-        off_ttft, off_text, off_finish = _chat_ttft(engine_host, engine_port, off_body,
-                                                   max_tokens=args.max_tokens, cache_prompt=cache_on, timing=off_t)
-        reset()
+        if args.skip_off:
+            off_ttft, off_text, off_finish = float("nan"), "", "skipped"
+        else:
+            time.sleep(typing + args.settle)
+            # OFF: straight at the engine.
+            off_ttft, off_text, off_finish = _chat_ttft(engine_host, engine_port, off_body, max_tokens=args.max_tokens,
+                                                       cache_prompt=cache_on, timing=off_t)
+            reset()
         # ON: drafts first (typed, or one paste), then commit through the proxy.
         typed_text = on_body["messages"][-1]["content"]
         if typed_mode:
@@ -336,16 +366,16 @@ def main(argv: list[str] | None = None) -> int:
                 "identical": off_text == on_text,
                 "same_answer": _answer(off_text) == _answer(on_text),
                 "off_finish": off_finish, "on_finish": on_finish,
-                "off_right": _right(off_text, expected) if off_finish != "length" else None,
+                "off_right": _right(off_text, expected) if off_finish not in ("length", "skipped") else None,
                 "on_right": _right(on_text, expected) if on_finish != "length" else None,
                 "expected": expected, "off_text": off_text, "on_text": on_text}
 
     for i, prompt in enumerate(typed):
-        row = run_one(prompt, f"typed-{first + i}-{time.time():.0f}", typed_mode=True,
-                      expected=EXPECTED[first + i])
-        row["problem"] = first + i
+        k = picked[i]
+        row = run_one(prompt, f"typed-{k}-{i}-{time.time():.0f}", typed_mode=True, expected=expected_of[k])
+        row["problem"] = k
         results["typed"].append(row)
-        print(f"[typed {i+1}/{len(typed)}, problem {first + i}] OFF {row['off_ttft']*1000:.0f} ms  "
+        print(f"[typed {i+1}/{len(typed)}, problem {k}] OFF {row['off_ttft']*1000:.0f} ms  "
               f"ON {row['on_ttft']*1000:.0f} ms  identical={row['identical']}  "
               f"right OFF {row['off_right']} ON {row['on_right']}  answer after "
               f"{row['off_answer_s'] or float('nan'):.1f} / {row['on_answer_s'] or float('nan'):.1f} s", file=sys.stderr)
@@ -409,7 +439,7 @@ def main(argv: list[str] | None = None) -> int:
                "engine": f"{profile.name} {profile.version}".strip(),
                "profile": profile.to_dict(), "typing_cps": args.typing_cps,
                "thinking": args.thinking, "think_ahead": args.think_ahead, "first": first,
-               "frame_lang": args.frame_lang,
+               "frame_lang": args.frame_lang, "set_think": args.set_think,
                "max_tokens": args.max_tokens, "model": args.model, "url": args.url,
                "when": time.strftime("%Y-%m-%d %H:%M:%S")}
 
