@@ -70,9 +70,21 @@ def test_the_typist_sends_every_prefix_on_the_clock():
     def sleep(s):
         slept.append(s)
         now[0] += s
-    aa.Typist(cps=10.0, sleep=sleep, clock=lambda: now[0]).type("read it", seen.append)
+    aa.Typist(cps=10.0, sleep=sleep, clock=lambda: now[0], pauses=False).type("read it", seen.append)
     assert seen == ["r", "re", "rea", "read", "read ", "read i", "read it"]
-    assert 0.5 < sum(slept) <= 0.7 + 1e-6 and aa.Typist(cps=10.0).seconds("read it") == 0.7
+    assert 0.5 < sum(slept) <= 0.7 + 1e-6 and abs(aa.Typist(cps=10.0, pauses=False).seconds("read it") - 0.7) < 1e-9
+
+
+def test_the_typist_pauses_as_a_person_and_the_same_for_both_configs():
+    """A pause after punctuation, longer than ahead.DEBOUNCE, so the draft is rendered while typing; the
+    schedule depends only on the text, so the plain run waits exactly as long."""
+    from mafdet.agent.ahead import DEBOUNCE
+    text = "read notes.txt, then tell me the owner. And the budget?"
+    t = aa.Typist(cps=12.0)
+    times = t.schedule(text)
+    gaps = [b - a for a, b in zip(times, times[1:])]
+    assert max(gaps) > DEBOUNCE + 0.4 and t.seconds(text) == times[-1] == aa.Typist(cps=12.0).seconds(text)
+    assert t.seconds(text) > len(text) / 12.0
 
 
 def test_both_configs_measured_and_the_notes_used_only_ahead(tmp_path):

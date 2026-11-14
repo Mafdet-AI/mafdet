@@ -44,7 +44,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-CPS = 12.0          # characters a second: a fast typist (thinking_ahead.py's typist does 8)
+CPS = 8.0           # characters a second, with a person's pauses: as thinking_ahead.py types. At 12/s without
+                    # pauses the short requests were over before the first chunk of notes (1.5 s after the
+                    # first render: the agent's ~1,300-token prompt read, then 32 tokens; 2026-11-14)
 SETTLE = 0.35       # the pause between the last key and Enter
 SPLIT = re.compile(r"(?<=\d)[,.' ](?=\d{3}\b)")      # a thousands separator between digits
 
@@ -119,24 +121,45 @@ def right(answer: str, accepted: list[str]) -> bool:
 
 
 class Typist:
-    """Types `text` at `cps`, calling `on_change(prefix)` at every key, as the message box does."""
+    """Types `text` at `cps`, calling `on_change(prefix)` at every key, as the message box does, with a
+    person's pauses (`pauses=True`, as research/thinking_ahead.py types): 0.6-1.2 s after punctuation, and
+    0.4-1.0 s after one space in ten, drawn from a generator seeded by the text, so "ahead" and "plain" wait
+    exactly as long. Without pauses (a key every 83 ms at 12/s) the agent's draft is never rendered while
+    typing: it waits for 0.15 s of quiet (ahead.DEBOUNCE), and the first run of this bench reasoned 0 tokens."""
 
-    def __init__(self, cps: float = CPS, sleep=time.sleep, clock=time.perf_counter):
+    def __init__(self, cps: float = CPS, sleep=time.sleep, clock=time.perf_counter, pauses: bool = True):
         self.cps = cps
         self.sleep = sleep
         self.clock = clock
+        self.pauses = pauses
+
+    def schedule(self, text: str) -> list[float]:
+        """Seconds from the start of typing at which each key falls."""
+        import random
+        import zlib
+        rng = random.Random(zlib.crc32(text.encode("utf-8")))
+        step, t, out = 1.0 / max(self.cps, 0.1), 0.0, []
+        for i, ch in enumerate(text):
+            t += step
+            out.append(t)
+            if self.pauses and i < len(text) - 1:
+                if ch in ",.?;:":
+                    t += rng.uniform(0.6, 1.2)
+                elif ch == " " and rng.random() < 0.1:
+                    t += rng.uniform(0.4, 1.0)
+        return out
 
     def seconds(self, text: str) -> float:
-        return len(text) / max(self.cps, 0.1)
+        times = self.schedule(text)
+        return times[-1] if times else 0.0
 
     def type(self, text: str, on_change=None):
-        step = 1.0 / max(self.cps, 0.1)
         t0 = self.clock()
-        for i in range(1, len(text) + 1):
+        for i, at in enumerate(self.schedule(text), start=1):
             if on_change is not None:
                 on_change(text[:i])
             # keep to the clock: a slow on_change does not slow the typing down
-            ahead_by = t0 + i * step - self.clock()
+            ahead_by = t0 + at - self.clock()
             if ahead_by > 0:
                 self.sleep(ahead_by)
 

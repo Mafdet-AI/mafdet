@@ -76,6 +76,25 @@ def test_the_first_step_starts_from_the_notes_written_while_typing():
         ahead.close()
 
 
+def test_a_steady_typist_is_rendered_while_typing():
+    """No pause of DEBOUNCE between keys: the draft is still rendered at least every MAX_WAIT, so the notes
+    start before Enter (with the quiet alone, B1's first runs reasoned 0 tokens before Enter)."""
+    from mafdet.agent.ahead import MAX_WAIT
+    ahead, engine = ahead_on()
+    try:
+        text = DRAFT + " what it says about the budget and the owner"
+        t_end = time.time() + 3 * MAX_WAIT
+        i, rendered_while_typing = len(DRAFT), False
+        while time.time() < t_end:
+            i = min(i + 1, len(text))
+            ahead.typed(text[:i])
+            rendered_while_typing = rendered_while_typing or bool(ahead.latest)
+            time.sleep(0.05)                                   # a key every 50 ms: never quiet for 150 ms
+        assert rendered_while_typing
+    finally:
+        ahead.close()
+
+
 def test_a_tool_call_written_after_the_notes_is_a_tool_call():
     engine = FakeEngine()
     engine.final_text = ('ok </think> <tool_call> {"name": "read_file", "arguments": {"path": "notes.txt"}} '

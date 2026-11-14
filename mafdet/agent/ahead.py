@@ -21,7 +21,10 @@ import time
 
 from .model import ModelError, Reply, Stopped
 
-DEBOUNCE = 0.15                 # seconds of quiet typing before the draft is rendered again
+DEBOUNCE = 0.15                 # seconds of quiet typing before the draft is rendered again...
+MAX_WAIT = 0.6                  # ...and at least this often while the typing goes on (the proxy's user script:
+                                # 250/600 ms). With the quiet alone a steady typist was never rendered until
+                                # the end, and the notes started after Enter (B1, 2026-11-14)
 
 # The agent's own frame. The chat's SEED gathers facts about each key term, which suits a question
 # ("Quanto pesa la Luna..."); on an agent's request it made the 4B list decades of history from "read
@@ -120,12 +123,16 @@ class Ahead:
         return json.dumps(messages, sort_keys=True, ensure_ascii=False)
 
     def _render_loop(self):
+        last = time.monotonic()                                 # the last render
         while not self._stopped:
             self._wake.wait()
             self._wake.clear()
             time.sleep(DEBOUNCE)
-            if self._wake.is_set() or self._stopped:            # still typing: the next round renders
+            if self._stopped:
                 continue
+            if self._wake.is_set() and time.monotonic() - last < MAX_WAIT:
+                continue                                        # still typing: the next round renders
+            last = time.monotonic()
             text, agent = self._pending, self.agent
             if text is None or agent is None or self.paused:
                 continue
