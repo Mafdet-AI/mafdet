@@ -286,6 +286,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.think_ahead and state.frame is None:
         print(f"--think-ahead: {state.no_think_reason}", file=sys.stderr)
         return 2
+    if args.think_ahead:
+        from . import think as think_rec
+        think_rec.RECORD_TURNS = True          # the notes' text and the checks on Enter, per row
     if args.think_ahead and args.frame_lang == "it":
         state.frame.seed_en = []
     server = make_server(state, "127.0.0.1", args.proxy_port)
@@ -375,10 +378,15 @@ def main(argv: list[str] | None = None) -> int:
                        {"conversation_id": conversation_id, "model": args.model,
                         "messages": on_body["messages"]})
         time.sleep(args.settle)
+        state.last_turn = {}
         on_ttft, on_text, on_finish = _chat_ttft("127.0.0.1", args.proxy_port,
                                                  dict(on_body, conversation_id=conversation_id),
                                                  max_tokens=args.max_tokens, cache_prompt=cache_on, timing=on_t)
-        return {"off_ttft": off_ttft, "on_ttft": on_ttft,
+        # What the proxy saw on Enter (think.RECORD_TURNS): the notes' text, the check, the branches
+        turn = {k: v for k, v in (state.last_turn or {}).items()
+                if k in ("notes_text", "verify_p_yes", "verified_dropped", "branch_answers", "branches_agreed",
+                         "fallback", "branch_notes")}
+        return {**turn, "off_ttft": off_ttft, "on_ttft": on_ttft,
                 "off_answer_s": off_t.get("answer"), "on_answer_s": on_t.get("answer"),
                 "on_notes": state.counts["thought_ahead"] > noted,    # the answer started from notes
                 "identical": off_text == on_text,

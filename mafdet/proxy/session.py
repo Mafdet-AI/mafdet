@@ -137,6 +137,7 @@ class DraftSession:
         self.drafted_at = 0.0
         self.history: list[dict] | None = None
         self.thinker = None                    # a think.Thinker when thinking ahead is on (--think-ahead)
+        self.branches: list = []               # (Thinker, engine) of the other branches (think.BRANCHES > 1)
         self.rendered_with: tuple = (None, None)   # the template options and tools the draft was rendered with
         self.chat_draft: tuple | None = None   # (messages, template options, tools) to send, when by_chat
 
@@ -191,6 +192,8 @@ class DraftSession:
             self._schedule(0.02 if grew >= self.min_new else self.debounce_ms / 1000.0)
         if self.thinker is not None:
             self.thinker.poke()
+        for t, _ in self.branches:
+            t.poke()
         return len(ids)
 
     def _schedule(self, delay: float) -> None:
@@ -279,6 +282,8 @@ class DraftSession:
                 self._schedule(0.02)
         if self.thinker is not None:
             self.thinker.poke()
+        for t, _ in self.branches:
+            t.poke()
 
     def begin_generation(self) -> None:
         """Commit from this session: drop its pending draft and take the slot."""
@@ -306,6 +311,11 @@ class DraftSession:
             out["thinking"] = {"active": self.thinker.active, "reasoned": self.thinker.reasoned,
                                "finished": self.thinker.finished, "looped": self.thinker.looped,
                                "dropped": self.thinker.dropped}
+            if self.thinker.verified_dropped or self.thinker.last_verify is not None:
+                out["thinking"].update(verified_dropped=self.thinker.verified_dropped,
+                                       last_verify=self.thinker.last_verify)
+            if self.branches:
+                out["thinking"]["branches"] = 1 + len(self.branches)
         out.update(self.auditor.stats())
         out["last_warm_age_s"] = round(time.time() - self.warmed_at, 1) if self.warmed_at else None
         return out

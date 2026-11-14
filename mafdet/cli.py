@@ -390,6 +390,9 @@ def _proxy_args(p):
     p.add_argument("--think-ahead", action="store_true",
                    help="the model reasons about the message while you type (Qwen3 with thinking on): a much "
                         "shorter wait, but not exact, the answer can differ from one without it")
+    # Measurement only (think.BRANCHES): k reasonings ahead on k slots, compared on Enter; llama-server gets k-1
+    # more slots and a pool scaled to them.
+    p.add_argument("--think-branches", type=int, default=1, help=argparse.SUPPRESS)
     p.add_argument("--reprobe", action="store_true", help="probe the engine again instead of the saved profile")
     p.add_argument("--llama-args", default="",
                    help='extra llama-server options, with an equals sign: --llama-args="-ub 256"')

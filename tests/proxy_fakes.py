@@ -125,9 +125,19 @@ class FakeEngine:
             words.append(f"fact{self.generated}")
         return {"tokens": self.tokenize(" ".join(words)), "text": " ".join(words), "stop_type": "limit", "timings": {}}
 
+    # VERIFY_PROBE: the next token's probabilities the fake gives ({token: p}); BRANCHES: an answer per slot
+    probs_answer = {" yes": 0.9, " no": 0.1}
+    final_by_slot: dict = {}
+
+    def next_token_probs(self, ids, *, n_probs=20):
+        self.probe_prompts = getattr(self, "probe_prompts", [])
+        self.probe_prompts.append(list(ids))
+        return dict(self.probs_answer)
+
     def stream(self, ids, *, n_predict, sampling=None):
         self.streamed = list(ids)
-        pieces = self.final_text.replace("</think>", " </think> ").split()
+        final = self.final_by_slot.get(getattr(self, "slot", 0), self.final_text)
+        pieces = final.replace("</think>", " </think> ").split()
         for i, word in enumerate(pieces):
             yield {"text": word + " ", "tokens": self.tokenize(word), "stop": False}
         yield {"text": "", "tokens": [], "stop": True, "stop_type": "eos", "timings": {"prompt_n": 1}}

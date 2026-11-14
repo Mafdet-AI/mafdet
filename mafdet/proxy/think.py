@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import re
 import threading
 import time
@@ -92,6 +93,21 @@ SENTENCE_RX = re.compile(r"(?<=[.!?])\s+")
 DROP_CONCLUSIONS = False    # on Enter, take out of the notes the lines that state an answer
 CONCLUSION_RX = re.compile(r"(?i)(the (final )?answer is|final answer|so the answer|\\boxed|"
                            r"(so|therefore|thus),? (each|the total|the result)[^.]* (is|pays|are|=) ?\d)")
+# Validation on Enter (2026-11-14): the notes are a speculation on a message that was not finished; instead of
+# making them less wrong, check them and answer from scratch when the check fails.
+# VERIFY_PROBE: one token asked of the model itself, after the notes and before SENT; P(yes) under
+# VERIFY_THRESHOLD drops the notes (the request goes through as it is, as after a loop).
+VERIFY_PROBE = False
+VERIFY_THRESHOLD = 0.5
+VERIFY_TEXT = ("\n\nCheck: the material above was written while the message was being typed. Is every conclusion "
+               "in it still right for the complete message? Answer yes or no: ")
+VERIFY_N_PROBS = 20          # top tokens asked for; yes/no mass is read among them
+# BRANCHES: k independent reasonings ahead, one per engine slot, sampled with different seeds; on Enter the k
+# answers from their notes are compared (the final number, else the whole answer): unanimous -> that answer,
+# otherwise the request goes through from scratch. 1 = off.
+BRANCHES = 1
+RECORD_TURNS = False         # keep the notes' text and the checks of the last turn in ProxyState.last_turn (bench)
+NUMBER_RX = re.compile(r"-?\d+(?:[.,]\d+)?")
 LANG_WAIT_WORDS = 8         # the reasoning waits for the message's language up to this many words
 LOOP_REPEATS = 3
 LOOP_MIN_CHARS = 8
@@ -200,6 +216,8 @@ class Thinker:
         self.stopped = False
         self.dropped = 0                       # turns whose notes were dropped for looping
         self.conclusions_dropped = 0           # lines stating an answer taken out on Enter (DROP_CONCLUSIONS)
+        self.verified_dropped = 0              # turns whose notes the check on Enter dropped (VERIFY_PROBE)
+        self.last_verify: float | None = None  # P(yes) of the last check
         self._clear()
         threading.Thread(target=self._loop, daemon=True).start()
 
@@ -294,6 +312,8 @@ class Thinker:
             if s.cache.generating or self.stopped:
                 return False
             sampling = dict(THINK_SAMPLING, stop=list(BRIDGE_STOPS)) if STOP_BRIDGES else THINK_SAMPLING
+            if BRANCHES > 1:                   # branches must not write the same notes: a seed of their own
+                sampling = dict(sampling, seed=random.randrange(1, 2 ** 31))
             res = s.engine.generate(ids, n_predict=THINK_CHUNK, sampling=sampling,
                                     logit_bias=self.frame.bias(), abort=s.cache.abort)
             s.cache.set(ids + list(res.get("tokens") or []))
@@ -360,6 +380,112 @@ class Thinker:
             return notes
         self.conclusions_dropped += len(lines) - len(kept)
         return notes[:start] + list(self.frame.tokenize("\n".join(kept)) or [])
+
+
+# ---- validation on Enter ---------------------------------------------------------------------
+def notes_core(notes: list[int], frame: Frame) -> list[int]:
+    """The notes as take() returns them, without SENT at the end."""
+    n = len(frame.sent)
+    return notes[:len(notes) - n] if n and notes[-n:] == frame.sent else list(notes)
+
+
+def verify(engine, prompt: list[int], notes: list[int], frame: Frame) -> float | None:
+    """P(yes) that the notes still hold for the complete message, asked of the model in one token after the
+    notes (the final bridge included) and VERIFY_TEXT; None when the engine cannot tell (no probabilities).
+    A request of its own on the conversation's slot: its prompt shares prompt + notes with the answer's, so
+    the answer that follows reuses that prefix and never sees the probe."""
+    probs = getattr(engine, "next_token_probs", None)
+    if probs is None:
+        return None
+    probe = frame.tokenize(VERIFY_TEXT) or []
+    try:
+        top = probs(prompt + notes_core(notes, frame) + probe, n_probs=VERIFY_N_PROBS)
+    except Exception:
+        return None
+    yes = sum(p for t, p in top.items() if t.strip().lower() == "yes")
+    no = sum(p for t, p in top.items() if t.strip().lower() == "no")
+    return yes / (yes + no) if yes + no > 0 else None
+
+
+def final_answer(text: str) -> str:
+    """What two answers are compared on: the last number (commas and a trailing .0 left out), else the
+    whole answer, lowercased, spaces collapsed."""
+    found = NUMBER_RX.findall(text or "")
+    if found:
+        n = found[-1].replace(",", "")
+        return n[:-2] if n.endswith(".0") else n
+    return " ".join((text or "").lower().split())
+
+
+def answer_text(chunks: list[dict]) -> str:
+    return "".join((c["choices"][0]["delta"].get("content") or "") for c in chunks if c.get("choices"))
+
+
+class _BranchCache:
+    """A branch's view of the shared cache: a lock of its own (its chunks run on its own slot, in parallel
+    with the conversation's), while Enter (abort, generating) is the conversation's."""
+
+    def __init__(self, main):
+        self.main = main
+        self.warm_lock = threading.Lock()
+
+    @property
+    def generating(self) -> bool:
+        return self.main.generating
+
+    @property
+    def abort(self):
+        return self.main.abort
+
+    def set(self, ids, **kw):
+        pass                                   # the conversation's slot is untouched
+
+
+class BranchView:
+    """What a branch's Thinker needs of the session: the same draft, its own engine slot and lock."""
+
+    def __init__(self, sess, engine):
+        self._sess = sess
+        self.engine = engine
+        self.cache = _BranchCache(sess.cache)
+
+    @property
+    def lock(self):
+        return self._sess.lock
+
+    @property
+    def latest(self):
+        return self._sess.latest
+
+    @property
+    def latest_text(self):
+        return self._sess.latest_text
+
+
+def branch_engine(engine, slot: int):
+    """The same engine on another slot (llama-server's id_slot)."""
+    import copy
+    e = copy.copy(engine)
+    e.slot = slot
+    return e
+
+
+def run_branches(jobs: list[tuple], frame: Frame, body: dict) -> list[list[dict]]:
+    """Each (engine, prompt, notes) answered at once on its own slot; the chunks of each, in order. Buffered:
+    the caller compares the answers before any is sent."""
+    out: list[list[dict]] = [[] for _ in jobs]
+
+    def one(i, engine, prompt, notes):
+        try:
+            out[i] = list(answer(engine, prompt, notes, frame, body))
+        except Exception:
+            out[i] = []
+    threads = [threading.Thread(target=one, args=(i, *job), daemon=True) for i, job in enumerate(jobs)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    return out
 
 
 def _sampling(body: dict) -> dict:

@@ -171,6 +171,29 @@ class LlamaEngine:
         status, data, _ = self._call("/detokenize", {"tokens": ids})
         return data.get("content", "") if status == 200 else ""
 
+    def next_token_probs(self, ids: list[int], *, n_probs: int = 20) -> dict[str, float]:
+        """The probabilities of the most likely next tokens after `ids` ({token text: p}), from one token
+        generated greedily with n_probs. Reads both of llama-server's formats: `top_logprobs` (logprob) in
+        recent builds, `probs` (prob, tok_str) in older ones."""
+        import math
+        body = {"prompt": ids, "id_slot": self.slot, "cache_prompt": True, "n_predict": 1, "temperature": 0.0,
+                "n_probs": n_probs}
+        status, data, raw = self._call("/completion", body)
+        if status != 200:
+            raise OSError(f"/completion answered {status}: {raw[:200].decode(errors='replace')}")
+        first = (data.get("completion_probabilities") or [{}])[0]
+        out: dict[str, float] = {}
+        for t in first.get("top_logprobs") or []:
+            tok = t.get("token", "")
+            out[tok] = out.get(tok, 0.0) + math.exp(t.get("logprob", -1e9))
+        for t in first.get("top_probs") or []:              # with post_sampling_probs
+            tok = t.get("token", "")
+            out[tok] = out.get(tok, 0.0) + float(t.get("prob", 0.0))
+        for t in first.get("probs") or []:
+            tok = t.get("tok_str", t.get("token", ""))
+            out[tok] = out.get(tok, 0.0) + float(t.get("prob", 0.0))
+        return out
+
     def generate(self, ids: list[int], *, n_predict: int, sampling: dict | None = None,
                  logit_bias: list | None = None, abort=None) -> dict:
         """Up to n_predict tokens after `ids`: {"tokens", "text", "stop_type", "timings", "aborted"}.

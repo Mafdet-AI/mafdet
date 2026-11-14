@@ -55,11 +55,16 @@ def start_engine(args):
     path, alias, model_args = resolve_model(args.model)
     device = pick_device(args.device)
     extra = model_args + ("--alias", alias) + tuple(args.llama_args.split())
-    print(f"Starting llama-server: {alias} on the {'GPU' if device == 'cuda' else 'CPU'}, 2 slots sharing "
-          f"{args.ctx} tokens, port {args.engine_port}", file=sys.stderr, flush=True)
+    # think.BRANCHES > 1 (--think-branches): one more slot per extra branch, after the conversation's and the
+    # side slot, and the shared pool grown by half a --ctx each (a branch holds the prompt and its notes)
+    branches = max(1, getattr(args, "think_branches", 1) or 1)
+    n_slots = 2 + branches - 1
+    ctx = args.ctx + (branches - 1) * (args.ctx // 2)
+    print(f"Starting llama-server: {alias} on the {'GPU' if device == 'cuda' else 'CPU'}, {n_slots} slots sharing "
+          f"{ctx} tokens, port {args.engine_port}", file=sys.stderr, flush=True)
     # LlamaServer always passes --cache-ram 0 (no idle slot cleared) and, with a pool, -kvu.
-    server = LlamaServer(path, device, ctx=args.ctx, n_slots=2, port=args.engine_port, extra_args=extra,
-                         log_name="proxy-server", pool=args.ctx)
+    server = LlamaServer(path, device, ctx=ctx, n_slots=n_slots, port=args.engine_port, extra_args=extra,
+                         log_name="proxy-server", pool=ctx)
     return server, alias
 
 
@@ -143,6 +148,11 @@ def serve(url: str, model: str, *, host: str = "127.0.0.1", port: int = PROXY_PO
         lines.append(f"  warning      reading ahead is off on this engine ({why}): the requests pass through")
     if think_ahead and state.frame is None and not exact:
         lines.append(f"  warning      --think-ahead: {state.no_think_reason}: reading ahead only")
+    if getattr(state, "no_branch_reason", ""):
+        lines.append(f"  warning      branches: {state.no_branch_reason}: one reasoning ahead")
+    elif getattr(state, "branch_slots", None):
+        lines.append(f"  branches     {1 + len(state.branch_slots)} reasonings ahead, compared on Enter "
+                     f"(slots 0 and {', '.join(map(str, state.branch_slots))})")
     if state.side_slot is None and not exact and not caps.shared_cache and profile.tier != "T-1":
         hint = ONE_CACHE_HINT.get(getattr(engine, "flavor", ""), "give the engine a second slot, if it has the option")
         lines.append(f"  warning      one cache: a front end's titles and follow-ups will evict the conversation ({hint})")
@@ -158,6 +168,10 @@ def serve(url: str, model: str, *, host: str = "127.0.0.1", port: int = PROXY_PO
 
 def run(args) -> int:
     """`mafdet proxy`."""
+    branches = max(1, getattr(args, "think_branches", 1) or 1)
+    if branches > 1:
+        from . import think
+        think.BRANCHES = branches
     if args.url:
         return serve(args.url, args.model, host=args.host, port=args.port, cors=args.cors, exact=args.exact,
                      reprobe=args.reprobe, think_ahead=args.think_ahead, engine_name=getattr(args, "engine", "auto"),

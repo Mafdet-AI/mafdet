@@ -84,6 +84,17 @@ class ProxyState:
                             self.no_think_reason = "the frame does not tokenize on this model"
                 except Exception as exc:
                     self.no_think_reason = f"the engine did not answer ({exc})"
+        # Branches (think.BRANCHES > 1): the other reasonings ahead on slots of their own, after the side slot.
+        self.branch_slots: list[int] = []
+        self.no_branch_reason = ""
+        if self.frame is not None and think.BRANCHES > 1:
+            base = 2 if self.side_slot is not None else 1
+            need = base + think.BRANCHES - 1
+            if self.slots >= need:
+                self.branch_slots = list(range(base, need))
+            else:
+                self.no_branch_reason = f"{think.BRANCHES} branches need {need} slots, the engine has {self.slots}"
+        self.last_turn: dict = {}               # the last turn's notes and checks (think.RECORD_TURNS: the bench)
 
     def thinking(self) -> bool:
         """Think ahead now?  Not when the front end turned the model's thinking off."""
@@ -146,6 +157,10 @@ class ProxyState:
                     sess.tier = "T-1"
                 elif self.frame is not None:
                     sess.thinker = think.Thinker(sess, self.frame, enabled=self.thinking)
+                    for slot in self.branch_slots:
+                        eng = think.branch_engine(self.engine, slot)
+                        sess.branches.append((think.Thinker(think.BranchView(sess, eng), self.frame,
+                                                            enabled=self.thinking), eng))
                 if conversation_id != "new" and self.unclaimed is not None:
                     # The first draft from a chat the proxy has not seen, right after a
                     # new chat was answered: that chat's id, now that the front end has one.
@@ -189,6 +204,8 @@ class ProxyState:
         history = list(messages) + [{"role": "assistant", "content": answer}]
         if sess.thinker is not None:
             sess.thinker.reset()                   # a new turn: new notes
+        for t, _ in sess.branches:
+            t.reset()
         if sess.conversation_id == "new":
             self.unclaimed = (history, time.time())
             sess.history = None
@@ -247,13 +264,16 @@ class ProxyState:
         }
 
     # ---- what the last requests looked like, for /proxy -------------------------------------
-    def record(self, kind: str, first_ms: float | None, timings: dict) -> None:
+    def record(self, kind: str, first_ms: float | None, timings: dict, extra: dict | None = None) -> None:
         """One request on Enter: how long to its first token, and what the engine still read."""
         read, reused = timings.get("prompt_n"), timings.get("cache_n")
-        self.recent.append({"at": time.strftime("%H:%M:%S"), "kind": kind,
-                            "first_token_ms": None if first_ms is None else round(first_ms),
-                            "read_on_enter": read, "already_read": reused,
-                            "read_ms": None if timings.get("prompt_ms") is None else round(timings["prompt_ms"])})
+        row = {"at": time.strftime("%H:%M:%S"), "kind": kind,
+               "first_token_ms": None if first_ms is None else round(first_ms),
+               "read_on_enter": read, "already_read": reused,
+               "read_ms": None if timings.get("prompt_ms") is None else round(timings["prompt_ms"])}
+        if extra:
+            row.update(extra)                     # the checks on Enter (verify_p_yes, branches_agreed, fallback)
+        self.recent.append(row)
 
     def summary(self) -> dict:
         rows = [r for r in self.recent if r["kind"] != "side"]
@@ -497,6 +517,51 @@ class Handler(BaseHTTPRequestHandler):
         self._json(200, {"conversation_id": conversation_id, "tier": sess.tier,
                          "draft_tokens": tokens, "cached_tokens": len(sess.cached)})
 
+    def _validate(self, sess, thinker, final_text: str, prompt, notes, body: dict, turn: dict):
+        """The checks on Enter of the notes about to be answered from (both off by default): the model's
+        one-token verdict (think.VERIFY_PROBE) and the agreement of independent branches (think.BRANCHES).
+        Returns (notes or None: from scratch, the agreed answer's chunks or None). `turn` gets what was seen."""
+        state = self.state
+        if think.RECORD_TURNS and notes:
+            try:
+                turn["notes_text"] = state.engine.detokenize(think.notes_core(notes, state.frame))
+            except Exception:
+                pass
+        chosen = None
+        if notes and think.VERIFY_PROBE:
+            p_yes = think.verify(state.engine, prompt, notes, state.frame)
+            thinker.last_verify = p_yes
+            turn["verify_p_yes"] = p_yes
+            if p_yes is not None and p_yes < think.VERIFY_THRESHOLD:
+                thinker.verified_dropped += 1
+                turn["verified_dropped"] = True
+                notes = None
+        if notes and sess is not None and sess.branches:
+            others = [(t.take(final_text), eng) for t, eng in sess.branches]
+            if think.RECORD_TURNS:
+                try:
+                    turn["branch_notes"] = [state.engine.detokenize(think.notes_core(n, state.frame)) if n else ""
+                                            for n, _ in others]
+                except Exception:
+                    pass
+            if any(not n for n, _ in others):
+                turn["fallback"] = "a branch has no notes"
+                notes = None
+            else:
+                results = think.run_branches([(state.engine, prompt, notes)] + [(eng, prompt, n) for n, eng in others],
+                                             state.frame, body)
+                answers = [think.final_answer(think.answer_text(r)) for r in results]
+                agreed = all(results) and len(set(answers)) == 1
+                turn["branch_answers"], turn["branches_agreed"] = answers, agreed
+                if agreed:
+                    chosen = results[0]
+                else:
+                    turn["fallback"] = "the branches disagree"
+                    notes = None
+        if thinker is not None:
+            state.last_turn = turn
+        return notes, chosen
+
     def _chat(self) -> None:
         try:
             body = self._body()
@@ -532,7 +597,8 @@ class Handler(BaseHTTPRequestHandler):
                     draft_with = sess.rendered_with
             state.begin_generation()
         # Thinking ahead: the notes written while the user typed, if the request leaves thinking on.
-        notes = prompt = None
+        notes = prompt = chosen = None
+        turn: dict = {}
         if not side and thinker is not None and think.thinking_on(body.get("chat_template_kwargs")):
             final_text = _text_of(messages)
             notes = thinker.take(final_text)
@@ -545,13 +611,15 @@ class Handler(BaseHTTPRequestHandler):
                                                                      body.get("tools"))
                 if not prompt:
                     notes = None
+            notes, chosen = self._validate(sess, thinker, final_text, prompt, notes, body, turn)
         ok = False
         seen: list[bytes] = []
         try:
             if notes:
                 state.counts["thought_ahead"] += 1
                 ok = True
-                events = think.answer(state.engine, prompt, notes, state.frame, body)
+                # chosen: the branches' agreed answer, already written (buffered while they were compared)
+                events = chosen if chosen is not None else think.answer(state.engine, prompt, notes, state.frame, body)
                 if not stream:
                     raw = json.dumps(think.collect(events)).encode()
                     seen.append(raw)
@@ -611,7 +679,8 @@ class Handler(BaseHTTPRequestHandler):
                 if not stream and not first:
                     first.append(time.perf_counter())   # a whole answer: its first text is all of it
                 kind = "side" if side else ("thought ahead" if notes else ("matched" if sess else "unmatched"))
-                state.record(kind, (first[0] - t0) * 1000 if first else None, _timings_of(seen, stream))
+                state.record(kind, (first[0] - t0) * 1000 if first else None, _timings_of(seen, stream),
+                             {k: turn[k] for k in ("verify_p_yes", "branches_agreed", "fallback") if k in turn})
             if not side:
                 if ok and not state.exact and sess is not None:
                     state.remember(sess, messages, _answer_of(seen, stream))
