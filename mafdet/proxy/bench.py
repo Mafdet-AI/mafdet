@@ -210,6 +210,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--prompts", type=int, default=24, help="typed prompts (max 24)")
     ap.add_argument("--first", type=int, default=0,
                     help="start at this problem (0-23), to split a long run into parts")
+    ap.add_argument("--frame-lang", default="auto", choices=["auto", "it"],
+                    help="with --think-ahead: the example line by the message's language (auto), or always the "
+                         "Italian one measured in the app (it), to compare the two")
     ap.add_argument("--think-ahead", action="store_true",
                     help="the ON runs through a proxy that reasons while the message is typed (implies "
                          "--thinking): the answers are then checked against the right ones, OFF and ON")
@@ -254,6 +257,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.think_ahead and state.frame is None:
         print(f"--think-ahead: {state.no_think_reason}", file=sys.stderr)
         return 2
+    if args.think_ahead and args.frame_lang == "it":
+        state.frame.seed_en = []
     server = make_server(state, "127.0.0.1", args.proxy_port)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     print(f"proxy up on 127.0.0.1:{args.proxy_port}, tier {profile.tier} "
@@ -321,11 +326,13 @@ def main(argv: list[str] | None = None) -> int:
                         "messages": on_body["messages"]})
         time.sleep(args.settle)
         on_t: dict = {}
+        noted = state.counts["thought_ahead"]
         on_ttft, on_text, on_finish = _chat_ttft("127.0.0.1", args.proxy_port,
                                                  dict(on_body, conversation_id=conversation_id),
                                                  max_tokens=args.max_tokens, cache_prompt=cache_on, timing=on_t)
         return {"off_ttft": off_ttft, "on_ttft": on_ttft,
                 "off_answer_s": off_t.get("answer"), "on_answer_s": on_t.get("answer"),
+                "on_notes": state.counts["thought_ahead"] > noted,    # the answer started from notes
                 "identical": off_text == on_text,
                 "same_answer": _answer(off_text) == _answer(on_text),
                 "off_finish": off_finish, "on_finish": on_finish,
@@ -402,6 +409,7 @@ def main(argv: list[str] | None = None) -> int:
                "engine": f"{profile.name} {profile.version}".strip(),
                "profile": profile.to_dict(), "typing_cps": args.typing_cps,
                "thinking": args.thinking, "think_ahead": args.think_ahead, "first": first,
+               "frame_lang": args.frame_lang,
                "max_tokens": args.max_tokens, "model": args.model, "url": args.url,
                "when": time.strftime("%Y-%m-%d %H:%M:%S")}
 
