@@ -269,7 +269,7 @@ wait; they stay here as the record of where each one stopped.
          on the branch yet; this block merges into origin's LOG with one mechanical conflict (it goes before
          the "Phase 3" bullet).
        - **Windows Defender, since 2026-11-13 23:53 on this machine:** the walk tests' fake `b.exe` (the bytes
-         `MZ  a fake program for the walk, b.exe`, written to the pytest temp folder) is flagged
+         `MZ\x90\x00 a fake program for the walk, b.exe`, written to the pytest temp folder) is flagged
          `Trojan:Win32/Bearfoos.A!ml` and cannot be read back: `OSError: [Errno 22]` in `book.sha256`, 3 to 6
          failures in `tests/test_agent_walk.py`, `test_the_first_pass_sends_byte_identical_requests` among
          them. A false positive on a test file; the benchmark's runs (real binaries under `E:\mafdet-tools`)
@@ -568,6 +568,37 @@ wait; they stay here as the record of where each one stopped.
      restarts, VRAM given back), and whether thinking ahead comes back after the return.
 
 ## Done and measured
+
+- **2026-11-14 · Plan A1: the answers of `mafdet proxy --think-ahead` checked; a loop guard; the proxy ready
+  for 0.6.0 (A3).** `mafdet/proxy/bench.py --think-ahead` (new: the ON run through a proxy that reasons ahead,
+  thinking on, every answer checked against `EXPECTED`; `--first` splits a run), Qwen3-4B Q4_K_M, RTX 2060,
+  `mafdet proxy --model qwen3-4b` as the engine (8078), 12 characters a second, `--max-tokens 3072`, four parts
+  of 6. Problems 5 ("17 are returned, how many sold?": 83 is as fair as 66, both configs say 83) and 19 (64
+  sweets, 8 children, 3 left over) have no single answer: 22 judged.
+  - Run 1 (`proxy_think_answers_4b_2060.json`): OFF 22/22, ON 21/22. Lost: problem 4 (120), notes that went
+    round in circles on half the message: "So the answer is: 18" nine times, one per bridge, then 18 given.
+  - The guard (`think.looping`): the model's own reasoning (bridges left out) repeating a line of 8+ characters
+    3 times stops the reasoning and Enter drops the notes (the request goes through from scratch, `dropped` in
+    the session's stats); `active` is then False, so plain read-ahead goes on. On run 1's texts it would have
+    fired on 4, 9, 14 (and 18 by the reviewer's reconstruction), three of them answered right: about one turn
+    in six loses thinking ahead to save one answer. Threshold not tuned: one run.
+  - Run 2 with the guard (`proxy_think_answers_4b_2060_guard.json`): OFF 22/22, ON 21/22; 4 of 24 messages
+    went without notes (0, 7, 20, 22). Lost: problem 6, a misreading after notes on "What does each pay"
+    (24 + 9 = 33 for 27), no loop.
+  - **So: 21/22 against 22/22 twice, a different problem each time.** The app's Italian runs lost none
+    (24/24 on every machine). Seen in the notes: the frame's Italian example ("mass of the Moon") copied into
+    English problems, and premature "the answer is" lines on half a question. Next if wanted: the frame's
+    example line in the message's language (LOG "Next" 3 had it for the Mac), measured with this bench.
+  - Also on the way (A3): the user script served by the proxy at `/proxy/open-webui.user.js` (PROXY and
+    `@match` from the request's Host and `--cors`, Tampermonkey's update URLs; Host checked before it reaches
+    the script), the setup box on `/proxy`, the guide and help updated, the package checked in clean venvs
+    (wheel and sdist carry the page and the script; `twine check` passes). Release 0.6.0 prepared, not published
+    (`docs/release-0.6.0.md`). An independent review found no failing test (331 passed) and the fixes above:
+    `active` after a loop, the ambiguous problem 5, the script's `@version` (0.2.0; Tampermonkey updates only
+    to a higher one), the agent's "5.5 s without" (3.5-5.5 s in the LOG), the LOG's NUL byte (git took it for
+    binary and kept CRLF; now `\x00` as text, LF).
+  - Open WebUI tried on the 2060 with 16 GB: Claude Code's own memory guard stopped Open WebUI and the proxy
+    while idle; the guide now says what memory Open WebUI takes. The owner's own trial is still to do.
 
 - **2026-11-14 · The second pass chosen: `--revise` hides the first name; the walk without thinking by default;
   the run without the program's summary read.** `revise-nodraft-noprog-nothink` (finished 2026-11-14 00:01 on

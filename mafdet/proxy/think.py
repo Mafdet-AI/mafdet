@@ -123,7 +123,8 @@ class Thinker:
     @property
     def active(self) -> bool:
         """Reasoning on this draft (then plain read-ahead would only evict the notes from the cache)."""
-        return self.enabled() and len(self.session.latest_text.split()) >= THINK_MIN_WORDS
+        # after a loop the notes are dropped on Enter: plain read-ahead goes on with the rest of the message
+        return self.enabled() and not self.looped and len(self.session.latest_text.split()) >= THINK_MIN_WORDS
 
     def poke(self):
         self.wake.set()

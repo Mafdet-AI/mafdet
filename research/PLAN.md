@@ -13,7 +13,8 @@ is new, and it is what we finish, show and get used. Everything else either serv
 
 ## Track A: finish thinking ahead (weeks 1-2, first)
 
-- **A1. Check the answers.** `mafdet proxy --think-ahead` was measured on speed only ("answers not checked
+- **A1. Check the answers.** *(2026-11-14: proxy done, 21/22 with against 22/22 without, twice, and a loop
+  guard; problem 19 on the 14B still to read.)* `mafdet proxy --think-ahead` was measured on speed only ("answers not checked
   yet", PROXY.md). Check that its answers are as right as without it, on the same 24 problems and the Open
   WebUI conversations. Also read problem 19 on the 2060's 14B (LOG "Next" 0): a limit of thinking ahead
   on slow models, or noise?

@@ -277,8 +277,7 @@ def user_script(base: str, origins: list[str]) -> str:
     Tampermonkey's update URLs pointing back here."""
     text = USER_SCRIPT.read_text(encoding="utf-8")
     default = "const PROXY = 'http://127.0.0.1:8077';"
-    assert text.count(default) == 1
-    text = text.replace(default, f"const PROXY = '{base}';")
+    text = text.replace(default, f"const PROXY = '{base}';")     # a copy edited by hand keeps its own
     head, sep, body = text.partition("// ==/UserScript==")
     extra = [f"// @match        {o}/*" for o in origins if o != "*" and f"@match        {o}/*" not in head]
     extra += [f"// @updateURL    {base}{USER_SCRIPT_ROUTE}", f"// @downloadURL  {base}{USER_SCRIPT_ROUTE}"]

@@ -22,7 +22,8 @@ Memory: Open WebUI itself takes a few GB of RAM (it also loads models of its own
 llama-server. On a 16 GB PC close the heavy apps first; with less, run Open WebUI on another machine or in
 Docker elsewhere and point it at the proxy (`--host 0.0.0.0`).
 
-`mafdet proxy` comes with MAFDET 0.5.0 and later (`mafdet --version` says which you have):
+`mafdet proxy` comes with MAFDET 0.5.0 and later, the one-click user script and the setup page with 0.6.0
+(`mafdet --version` says which you have):
 
 ```bash
 pipx install mafdet           # or pipx upgrade mafdet; Windows with python.org's Python: pip install -U mafdet
@@ -67,7 +68,8 @@ It sends what you type to the proxy (Open WebUI itself stays untouched).
    Developer mode switch, top right, on older versions).
 2. Open `http://127.0.0.1:8077/proxy/open-webui.user.js` (the status page has a button for it):
    Tampermonkey shows the script, press Install. The proxy serves it already pointed at itself and at
-   the addresses it accepts (`--cors`), and Tampermonkey updates it from there.
+   the addresses it accepts (`--cors`). Tampermonkey checks that link for a newer version of the script;
+   if you start the proxy on another port or with other `--cors`, install it again from the link.
 3. Open Open WebUI at `http://localhost:8080`.
 
 ## 5. Check that it works

@@ -79,8 +79,9 @@ PROBLEMS = [
 ]
 
 # The right answer of each problem, to tell whether thinking ahead (`--think-ahead`) keeps the answers
-# right; None where the problem has no single answer (64 sweets for 8 children with 3 left over).
-EXPECTED = ["11", "11:15", "69", "46", "120", "66", "27", "60", "42", "58", "68", "170", "79", "117", "186",
+# right; None where the problem has no single answer (64 sweets for 8 children with 3 left over; "17 are
+# returned, how many sold?", where 83 is as fair a reading as 66).
+EXPECTED = ["11", "11:15", "69", "46", "120", None, "27", "60", "42", "58", "68", "170", "79", "117", "186",
             "57", "79", "51", "1800", None, "132", "105", "30", "24"]
 assert len(EXPECTED) == len(PROBLEMS)
 
@@ -209,7 +210,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="the ON runs through a proxy that reasons while the message is typed (implies "
                          "--thinking): the answers are then checked against the right ones, OFF and ON")
     ap.add_argument("--typing-cps", type=float, default=12.0, help="characters per second")
-    ap.add_argument("--max-tokens", type=int, default=96)
+    ap.add_argument("--max-tokens", type=int, default=0,
+                    help="longest answer (default: 96, or 3072 with --thinking/--think-ahead, where the "
+                         "reasoning comes first)")
     ap.add_argument("--proxy-port", type=int, default=8077)
     ap.add_argument("--long", type=int, default=0, help="also bench N pasted long prompts")
     ap.add_argument("--settle", type=float, default=0.35, help="pause before committing (a human's last key)")
@@ -225,6 +228,8 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     if args.think_ahead:
         args.thinking = True
+    if not args.max_tokens:
+        args.max_tokens = 3072 if args.thinking else 96
 
     host, _, port_s = args.url.replace("http://", "").partition(":")
     engine_host, engine_port = host, int(port_s or 8080)

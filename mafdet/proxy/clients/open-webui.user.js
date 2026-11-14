@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MAFDET drafts for Open WebUI
 // @namespace    https://github.com/Mafdet-AI/mafdet
-// @version      0.1.0
+// @version      0.2.0
 // @description  Sends what you are typing in Open WebUI to the MAFDET proxy, so it reads ahead before Enter.
 // @match        http://localhost:8080/*
 // @match        http://127.0.0.1:8080/*

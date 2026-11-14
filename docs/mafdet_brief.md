@@ -76,7 +76,7 @@ repeat it: go on another way,
 
 ## 6. Do not say
 - That cloud providers or Claude were used for real. They are "not yet tried with a key on a real task" (README 209).
-- That a second pass improves names at the top of the tree (main and the like). `--revise` names the leaves and the runtime functions better; `--refine` changed nothing (measured 2026-11-13, LOG).
+- That a second pass improves names at the top of the tree (main and the like). `--revise` names the leaves and the runtime functions better; `--refine` renamed 11% of the functions with no measurable gain (measured 2026-11-13, LOG).
 - That the model running commands, background jobs or the web were tested with a real model. They were tested only with a scripted model (README 213).
 - That the model installs tools by itself in real use. Not tried, and neither were Ghidra or Linux/macOS installs (LOG 351-353).
 - That the walk names functions accurately. One reader judged 23 functions: 10 right, 8 vague, 5 wrong, with main misnamed. The README calls this "not a measurement".

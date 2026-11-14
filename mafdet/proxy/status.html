@@ -46,7 +46,8 @@
     <h2>Set up Open WebUI (once)</h2>
     <ol>
       <li>In Open WebUI: <i>Admin Settings › Connections › OpenAI API</i>, add the URL <code id="v1">http://127.0.0.1:8077/v1</code>
-        with any key (<code>none</code>), and choose the model it lists.</li>
+        with any key (<code>none</code>), and choose the model it lists. Open WebUI in Docker: the same with
+        <code>host.docker.internal</code> in place of 127.0.0.1 (and <code>mafdet proxy --host 0.0.0.0</code>).</li>
       <li>Install <a href="https://www.tampermonkey.net/" target="_blank" rel="noopener">Tampermonkey</a> in this browser
         (in Chrome: <i>chrome://extensions › Tampermonkey › Details</i>, turn on <i>Allow user scripts</i>), then
         <a class="button" href="/proxy/open-webui.user.js">Install the user script</a></li>

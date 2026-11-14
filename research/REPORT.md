@@ -227,7 +227,15 @@ built-in tools (~5.8k tokens) with every request. The proxy sends those side req
 keeps the conversation in the first, and reads the message while it is typed: through it every turn had 1
 token left to read on Enter. With `--think-ahead` the turn was faster in 20 of 22 turns.
 
-Answer accuracy with --think-ahead in the proxy: being measured (A1).
+**Answer accuracy with `--think-ahead` (plan item A1, 2026-11-14).** `mafdet/proxy/bench.py --think-ahead`,
+Qwen3-4B, RTX 2060, the bench's 24 English word problems typed at 12 characters a second, thinking on, the
+answer checked against the right one (two problems with no single answer left out, 22 judged): **21 of 22
+right with thinking ahead, 22 of 22 without, in each of two runs.** In the first run the lost answer came from
+notes that went round in circles on half the message ("So the answer is: 18" nine times, then 18 for 120);
+since then a line repeated three times stops the reasoning and Enter drops the notes (it happened in 4 of 24
+messages of the second run, which then went without thinking ahead). In the second run the lost answer was a
+misreading (the whole tip added to each friend's share: 33 for 27). The notes also copy the frame's Italian
+example line ("mass of the Moon") into English problems.
 
 ### 4.2 Ollama
 
@@ -283,8 +291,9 @@ read_file"). Measuring it on a set of agent requests is the next step (plan item
 - **Single runs and small sets.** Two runs of the same 24 problems on the same machine differed by about 1 s
   in mean wait (3.2 s and 4.17 s on the 2060's 4B); the 14B runs use 6 problems. The tables give orders of
   magnitude, not precise effects.
-- **Answers in the proxy.** `--think-ahead` in the proxy has been measured for speed; whether its answers
-  stay right is being checked (plan item A1).
+- **Answers in the proxy.** With `--think-ahead` the 4B lost one answer in 22 on English problems in each of
+  two runs (section 4.1), where the app's Italian runs lost none; the frame's example line is Italian and is
+  copied into English notes. A frame per language is the next thing to try.
 - **Exactness.** Reading ahead can change a greedy answer's wording, and rarely a number, through llama.cpp's
   batching (`--exact` avoids it); thinking ahead is not exact by design.
 
@@ -326,6 +335,10 @@ port 8078), then
 
     python -m mafdet.proxy.bench --url http://127.0.0.1:8078 --model qwen3-4b --prompts 24 \
         --typing-cps 12 --long 4 --proxy-port 8079
+
+**Thinking ahead's answers in the proxy (section 4.1)**, about 25 minutes, in four parts:
+
+    python -m mafdet.proxy.bench --url http://127.0.0.1:8078 --model qwen3-4b --think-ahead --first 0 --prompts 6 --proxy-port 8079 --json-out part0.json      # then --first 6, 12, 18
 
 **Open WebUI (section 4.1):** `mafdet proxy --model qwen3-4b`, Open WebUI with two connections (one through
 the proxy, one straight to llama-server), then, with Open WebUI's Python:

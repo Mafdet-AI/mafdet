@@ -475,7 +475,7 @@ def pinned(walk_args: list[str], tree: Path) -> list[str]:
     args = list(walk_args)
     if '"--think"' in cli and not {"--think", "--no-think"} & set(args):
         args.append("--think")
-    if ('"--revise-draft"' in cli and "--revise" in args
+    if ('"--revise-draft"' in cli and any(a.startswith("--revise") for a in args)
             and not {"--revise-draft", "--revise-no-draft"} & set(args)):
         args.append("--revise-draft")
     return args
