@@ -44,6 +44,11 @@ THINK_MIN_WORDS = 3          # no reasoning on the first couple of words
 THINK_CHUNK = 32             # tokens per chunk: short, so it follows the text as it is typed
 BRIDGE_EVERY = 64            # new reasoning tokens before an edit earns a bridge
 THINK_CAP = 1024             # longest reasoning written ahead
+# A reasoning ahead that loops (Qwen3-4B, 2026-11-14: "So the answer is: 18" nine times on half a word
+# problem, then 18 given as the answer to the whole one) is worse than none: from the LOOP_REPEATS-th time
+# the same line of LOOP_MIN_CHARS or more comes back, the reasoning stops and Enter drops the notes.
+LOOP_REPEATS = 3
+LOOP_MIN_CHARS = 8
 SAMPLING_KEYS = ("temperature", "top_p", "top_k", "min_p", "presence_penalty", "frequency_penalty",
                  "repeat_penalty", "seed")
 
@@ -72,6 +77,19 @@ class Frame:
         return bool(self.seed and self.sent and self.think_end is not None)
 
 
+def looping(text: str) -> bool:
+    """Does the model's own reasoning (bridges left out) repeat one line LOOP_REPEATS times?"""
+    seen: dict[str, int] = {}
+    for line in text.splitlines():
+        key = " ".join(line.split()).strip(" -*:.").lower()
+        if len(key) < LOOP_MIN_CHARS:
+            continue
+        seen[key] = seen.get(key, 0) + 1
+        if seen[key] >= LOOP_REPEATS:
+            return True
+    return False
+
+
 def thinking_on(template_kwargs: dict | None) -> bool:
     return (template_kwargs or {}).get("enable_thinking", True) is not False
 
@@ -84,6 +102,7 @@ class Thinker:
         self.lock = threading.Lock()
         self.wake = threading.Event()
         self.stopped = False
+        self.dropped = 0                       # turns whose notes were dropped for looping
         self._clear()
         threading.Thread(target=self._loop, daemon=True).start()
 
@@ -93,6 +112,8 @@ class Thinker:
         self.bridge_text = ""                  # up to where the bridges named the new words
         self.fresh = 0                         # reasoning tokens since the last bridge
         self.finished = False                  # the model closed its reasoning (</think>)
+        self.written = ""                      # the model's own reasoning as text, a line break per bridge
+        self.looped = False                    # it went round in circles: stop, and drop the notes on Enter
 
     def reset(self):
         """A new turn: no notes."""
@@ -155,7 +176,10 @@ class Thinker:
                 bridge = self._bridge(text, force=self.finished)
                 if bridge:
                     self.notes += bridge
+                    self.written += "\n"
                     self.fresh, self.finished = 0, False
+            if self.looped:
+                return False                   # going round in circles: no more reasoning this turn
             if self.finished and text == self.notes_text:
                 return False                   # done reasoning on this text: wait for more typing
             if self.reasoned >= THINK_CAP:
@@ -178,10 +202,15 @@ class Thinker:
             if self.notes_text and ids[len(prompt):] != self.notes:
                 return False                   # reset or bridged meanwhile: the chunk is stale
             end = self.frame.think_end
+            words = str(res.get("text") or "")
             if end in tokens:
                 tokens = tokens[:tokens.index(end)]
+                words = words.split("</think>", 1)[0]
                 self.finished = True
             self.notes += tokens
+            self.written += words
+            if looping(self.written):
+                self.looped = True
             self.fresh += len(tokens)
             self.notes_text = text
         return True
@@ -193,6 +222,9 @@ class Thinker:
         with self.lock:
             if self.reasoned < 1:
                 return None
+            if self.looped:
+                self.dropped += 1
+                return None                    # the request goes through as it is, from scratch
             notes = list(self.notes)
             if final_text.rstrip() != self.notes_text.rstrip():
                 saved = self.bridge_text

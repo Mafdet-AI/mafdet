@@ -215,3 +215,28 @@ def test_an_engine_without_raw_completion_keeps_reading_ahead_only():
     assert "raw completion" in state.no_think_reason
     assert state.session("c1").thinker is None
     assert state.session("c1").tier == "T1"                 # reading ahead still on
+
+
+def test_a_looping_reasoning_is_stopped_and_its_notes_dropped_on_enter():
+    """The same line again and again (Qwen3-4B on half a word problem, 2026-11-14): no more chunks, and on
+    Enter the request goes through as it is instead of answering from the loop."""
+    assert think.looping("- 18 p\nSo the answer is:\n18\nx\nSo the answer is:\n18\nSo the answer is:")
+    assert not think.looping("So the answer is:\n18\n18\n18\nfact one\nfact two")   # short lines don't count
+    assert not think.looping("- Luca: 25 euros\n- 3 notebooks: 12 euros\n- pen: 2 euros, left 11")
+    server, port, state, engine = start()
+    try:
+        post(port, "/v1/drafts", {"conversation_id": "c1", "text": TEXT})
+        sess = state.session("c1")
+        assert wait_until(lambda: sess.thinker.reasoned >= 8)
+        with sess.thinker.lock:
+            sess.thinker.written += "\nSo the answer is: 18\nSo the answer is: 18\nSo the answer is: 18"
+            sess.thinker.looped = think.looping(sess.thinker.written)
+        assert sess.thinker.looped
+        status, raw = post(port, "/v1/chat/completions", {"model": "fake-model", "conversation_id": "c1",
+                                                           "stream": True,
+                                                           "messages": [SYSTEM, {"role": "user", "content": TEXT}]})
+        assert status == 200
+        assert state.counts["thought_ahead"] == 0 and sess.thinker.dropped == 1
+        assert state.stats()["sessions"][0]["thinking"]["dropped"] == 1
+    finally:
+        server.shutdown()

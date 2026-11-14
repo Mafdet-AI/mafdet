@@ -304,7 +304,8 @@ class DraftSession:
         }
         if self.thinker is not None:
             out["thinking"] = {"active": self.thinker.active, "reasoned": self.thinker.reasoned,
-                               "finished": self.thinker.finished}
+                               "finished": self.thinker.finished, "looped": self.thinker.looped,
+                               "dropped": self.thinker.dropped}
         out.update(self.auditor.stats())
         out["last_warm_age_s"] = round(time.time() - self.warmed_at, 1) if self.warmed_at else None
         return out
