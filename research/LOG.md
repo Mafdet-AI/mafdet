@@ -59,7 +59,7 @@ first (track A), the agent only through thinking ahead (track B). Items below th
 wait; they stay here as the record of where each one stopped.
 
 0. **IQ4_XS where the 14B does not fit, and the estimate fixed: done (2026-10-30, below).** Left from it:
-   - **Problem 19 on the 2060's 14B** (below): wrong with reasoning ahead in 2 of 2 runs (one per quantization),
+   - **Problem 19: done 2026-11-14, 3/3 right with and without ("Done and measured").** Was: wrong with reasoning ahead in 2 of 2 runs (one per quantization),
      right without it in 2 of 2, right with it on the 4070 SUPER and the M2 Pro. Rows keep only the answer's tail:
      save the reasoning of that problem and read where the numbers that are not in the text (38 motorbikes,
      84 wheels) come from, before calling it a limit of reasoning ahead on slow models.
@@ -568,6 +568,16 @@ wait; they stay here as the record of where each one stopped.
      restarts, VRAM given back), and whether thinking ahead comes back after the return.
 
 ## Done and measured
+
+- **2026-11-14 · Problem 19 on the 2060's 14B again: 3/3 right with reasoning ahead, 3/3 without (plan A1
+  closed).** `research/problem19.py` (keeps the notes as they stand on Enter and the whole reasoning, unlike
+  thinking_ahead.py's tail), Qwen3-14B IQ4_XS (unsloth), RTX 2060, the app's defaults, `--max-tokens 1800`, a
+  warm-up, the same typist (`problem19_14b_2060.json`). With: right in 144, 142 and 278 s (typing included);
+  without: right in 260, 199 and 211 s. The notes on Enter are short (the frame, then "auto: car, moto:
+  motorcycle", one paraphrase): at ~5 tok/s the 14B writes little while a 90-character problem is typed. **The
+  two wrong runs of 2026-10-27 (2 of 2) were not seen again in 3: noise of a sampled reasoning on a slow model,
+  not a limit of reasoning ahead.** Their wrong numbers (38 motorbikes, "x + y = 60") came from the reasoning
+  after Enter, which the old rows did not keep.
 
 - **2026-11-14 · Plan B1: thinking ahead in the agent, measured on 13 requests; a steady typist was never
   read ahead (fixed).** `research/agent_ahead.py` (built by a fork, tested on fakes): 13 agent requests that

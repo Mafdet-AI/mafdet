@@ -292,10 +292,9 @@ of 26 each). Two passes of the same code differ about as much as the effect: a d
   and speculative decoding therefore do not help there; the 14B also writes only about 160 tokens before
   Enter in a 30 s message, against about 200 left after Enter.
 - **Problem 19 on the 2060's 14B.** "30 vehicles, 100 wheels, how many motorbikes" (answer 10) was wrong
-  with reasoning ahead in 2 of 2 runs on the RTX 2060's 14B (one per quantization), with numbers that are not
-  in the text, and right without it twice; it is right with reasoning ahead on the 4070 SUPER, the 3060 and
-  the M2 Pro. Whether it is a limit of reasoning ahead on slow models or noise is open: the reasoning of
-  that problem has not been saved and read yet.
+  with reasoning ahead in 2 of 2 runs on the RTX 2060's 14B in October. Run again on 2026-11-14 with the whole
+  reasoning kept (`research/problem19.py`): right 3 of 3 with reasoning ahead and 3 of 3 without. The
+  October misses look like the noise of a sampled reasoning on a slow model, not a limit of the method.
 - **Single runs and small sets.** Two runs of the same 24 problems on the same machine differed by about 1 s
   in mean wait (3.2 s and 4.17 s on the 2060's 4B); the 14B runs use 6 problems. The tables give orders of
   magnitude, not precise effects.
