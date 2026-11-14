@@ -1017,7 +1017,10 @@ def test_the_revise_options_of_the_command(tmp_path, mafdet_home, monkeypatch, c
         kw = seen[-1]
         assert (kw["revise"], kw["revise_depth"], kw["revise_skip_high"], kw["revise_program"],
                 kw["revise_callers"]) == want, extra
-        assert kw["revise_draft"] is True
+        assert kw["revise_draft"] is False                     # the first name hidden: the default since 2026-11-14
+        assert kw["think"] is False                            # and no thinking, unless --think
+    assert agent.run(build_parser().parse_args(base + ["--revise-draft", "--think"])) == 0  # implies --revise
+    assert seen[-1]["revise"] is True and seen[-1]["revise_draft"] is True and seen[-1]["think"] is True
     assert agent.run(build_parser().parse_args(base + ["--revise-no-draft"])) == 0     # implies --revise
     assert seen[-1]["revise"] is True and seen[-1]["revise_draft"] is False
     assert not seen[-1]["revise_bottom_up"] and not seen[-1]["revise_call_lines"]
@@ -1034,15 +1037,16 @@ def test_the_revise_options_of_the_command(tmp_path, mafdet_home, monkeypatch, c
         agent.run(build_parser().parse_args(["agent", "--revise-no-draft"]))
     with pytest.raises(SystemExit, match="--revise is a second pass of a walk"):
         agent.run(build_parser().parse_args(["agent", "--revise"]))
+    with pytest.raises(SystemExit, match="--revise is a second pass of a walk"):
+        agent.run(build_parser().parse_args(["agent", "--revise-draft"]))
     with pytest.raises(SystemExit):
         build_parser().parse_args(["agent", "--help"])
     help_text = capsys.readouterr().out
     assert re.search(r"^  --revise-depth N", help_text, re.M)                     # an option's line
-    for hidden in ("--revise-skip-high", "--revise-no-program", "--revise-no-callers"):   # not listed as options...
+    for hidden in ("--revise-skip-high", "--revise-no-program", "--revise-no-callers", "--revise-draft",
+                   "--revise-no-draft", "--refine"):                                 # switches for measuring only
         assert not re.search(rf"^  {hidden}", help_text, re.M)
-    sub = next(a for a in build_parser()._subparsers._group_actions[0].choices["agent"]._actions
-               if "--revise" in a.option_strings)
-    assert all(h in sub.help for h in ("--revise-skip-high", "--revise-no-program", "--revise-no-callers"))  # ...named
+    assert re.search(r"^  --think ", help_text, re.M) and re.search(r"^  --no-think ", help_text, re.M)
 
 
 def test_an_engine_gone_leaves_functions_pending_and_stops_the_walk(tmp_path):

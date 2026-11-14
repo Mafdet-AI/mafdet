@@ -452,7 +452,8 @@ def test_second_runner_on_a_copied_home(tmp_path, monkeypatch, capsys):
                     "--pass-args=--revise --revise-no-callers", "--repeat", "2", "--out", str(out)]) == 0
     assert len(calls) == 2
     cmd, cwd, env = calls[0]
-    assert cmd[-3:] == ["--no-think", "--revise", "--revise-no-callers"]     # the base's options, then the pass's
+    assert cmd[-4:] == ["--no-think", "--revise", "--revise-no-callers",       # the base's options, then the pass's,
+                        "--revise-draft"]                                      # then --revise's old default spelled out
     assert cmd[cmd.index("--ctx") + 1] == "8192" and cmd[cmd.index("--model") + 1] == "m"
     assert cwd == str(wb.ROOT) and env["PYTHONPATH"].startswith(str(wb.ROOT))
     assert wb.json.loads((src_book / "book.json").read_text()) == base         # the base home is not written
@@ -628,3 +629,18 @@ def test_calibrate_with_the_names_only_judge(tmp_path, capsys):
     # The default is as before: the judge with the summary, all labelled names.
     assert wb.main(["calibrate", str(tmp_path / "r.json"), "--labels", str(tmp_path / "l.json")]) == 0
     assert capsys.readouterr().out.startswith("r x#1: n 5")
+
+
+def test_pinned_spells_out_the_old_defaults(tmp_path):
+    """Since 2026-11-14 the walk goes without thinking and --revise hides the first name: a recorded walk_args
+    gets the old defaults spelled out, but only for a tree whose command line knows those switches."""
+    new, old = tmp_path / "new", tmp_path / "old"
+    (new / "mafdet").mkdir(parents=True)
+    (old / "mafdet").mkdir(parents=True)
+    (new / "mafdet" / "cli.py").write_text('p.add_argument("--think")\np.add_argument("--revise-draft")\n', encoding="utf-8")
+    (old / "mafdet" / "cli.py").write_text('p.add_argument("--no-think")\n', encoding="utf-8")
+    assert wb.pinned([], new) == ["--think"]
+    assert wb.pinned(["--revise"], new) == ["--revise", "--think", "--revise-draft"]
+    assert wb.pinned(["--revise", "--revise-no-draft", "--no-think"], new) == ["--revise", "--revise-no-draft", "--no-think"]
+    assert wb.pinned(["--refine"], new) == ["--refine", "--think"]
+    assert wb.pinned(["--revise"], old) == ["--revise"]

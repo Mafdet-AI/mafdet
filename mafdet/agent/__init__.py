@@ -328,12 +328,15 @@ def run(args) -> int:
     if getattr(args, "kit", False) or getattr(args, "install", ""):
         from .kit import run_cli
         return run_cli(args)
+    if getattr(args, "think", True) is None:        # neither --think nor --no-think: the walk goes without
+        args.think = not getattr(args, "walk", "")
     if getattr(args, "walk", ""):                   # unattended, no interface: walk.py
         from .walk import run as walk
         return walk(args)
     if getattr(args, "revise", False) or getattr(args, "revise_depth", None) is not None or any(
             getattr(args, k, False) for k in ("revise_skip_high", "revise_no_program", "revise_no_callers",
-                                              "revise_no_draft", "revise_bottom_up", "revise_call_lines")):
+                                              "revise_no_draft", "revise_draft", "revise_bottom_up",
+                                              "revise_call_lines")):
         raise SystemExit("--revise is a second pass of a walk: --walk <binary> --mcp <server> --revise")
     from .loop import Agent
     from .permissions import Permissions

@@ -467,6 +467,20 @@ def start_engine(model: str, ctx: int, port: int):
     return engine, alias
 
 
+def pinned(walk_args: list[str], tree: Path) -> list[str]:
+    """`walk_args` as they meant before 2026-11-14, when the walk's defaults changed (no thinking; --revise
+    without the first name): the old defaults spelled out, for a tree whose command line knows the switches,
+    so a result's recorded walk_args keep reproducing what they measured."""
+    cli = (tree / "mafdet" / "cli.py").read_text(encoding="utf-8")
+    args = list(walk_args)
+    if '"--think"' in cli and not {"--think", "--no-think"} & set(args):
+        args.append("--think")
+    if ('"--revise-draft"' in cli and "--revise" in args
+            and not {"--revise-draft", "--revise-no-draft"} & set(args)):
+        args.append("--revise-draft")
+    return args
+
+
 def walk_once(binary: Path, folder: Path, url: str, alias: str, ctx: int, walk_args: list[str], server: str) -> dict:
     """`mafdet agent --walk` in a fresh MAFDET_HOME under `folder`; returns its book and what it printed."""
     home = folder / "home"
@@ -475,7 +489,7 @@ def walk_once(binary: Path, folder: Path, url: str, alias: str, ctx: int, walk_a
     real_home = Path(os.environ.get("MAFDET_HOME") or Path.home() / ".mafdet")
     shutil.copy(real_home / "mcp.json", home / "mcp.json")
     cmd = [sys.executable, "-m", "mafdet", "agent", "--walk", str(binary), "--mcp", server, "--url", url,
-           "--model", alias, "--ctx", str(ctx)] + walk_args
+           "--model", alias, "--ctx", str(ctx)] + pinned(walk_args, Path(__file__).resolve().parent.parent)
     env = {**os.environ, "MAFDET_HOME": str(home), "PYTHONIOENCODING": "utf-8", "NO_COLOR": "1"}
     t0 = time.monotonic()
     with open(folder / "walk.log", "w", encoding="utf-8") as log:
@@ -1334,7 +1348,7 @@ def walk_second(binary: Path, src: Path, folder: Path, url: str, alias: str, ctx
     home = folder / "home"
     shutil.copytree(src / "home", home)
     cmd = [sys.executable, "-m", "mafdet", "agent", "--walk", str(binary), "--mcp", server, "--url", url,
-           "--model", alias, "--ctx", str(ctx)] + walk_args
+           "--model", alias, "--ctx", str(ctx)] + pinned(walk_args, tree)
     t0 = time.monotonic()
     with open(folder / "walk.log", "w", encoding="utf-8") as log:
         log.write(" ".join(cmd) + "\n")

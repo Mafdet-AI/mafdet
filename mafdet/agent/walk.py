@@ -50,8 +50,12 @@ what is below it (main became `validate_config_and_initialize` in where.exe, 202
      correction travels upward as the mistakes did; `--revise-call-lines` (an experiment) shows each caller
      with up to CALL_LINES lines of its code that call the function, as upstream's --refine does.
 
---refine and --revise are two designs of the second pass, kept side by side until measured; a run
-takes one of them.
+Measured on 2026-11-13 (research/LOG.md): shown its first name, a second reading gives it back (--refine kept
+89% with thinking, --revise 100% without), and --refine's paragraph, written after its pass, invented suspicion
+("obfuscation", "hidden functionality") on Microsoft's own tools. With the draft hidden the leaves and the runtime
+functions are named better, twice, and without the program's summary that gain goes and the top is named worse.
+So the command line's --revise hides the draft (--revise-draft, hidden, shows it; Walk's own default still shows
+it, for the tests); --refine stays, hidden, to reproduce its measurements; a run takes one of the two.
 """
 from __future__ import annotations
 
@@ -1237,7 +1241,7 @@ def run(args) -> int:
     resolve(args)                               # a provider in the cloud: --list-models exits here
     if getattr(args, "refine", False) and (getattr(args, "revise", False) or getattr(args, "revise_depth", None) is not None
                                            or any(getattr(args, k, False) for k in ("revise_skip_high", "revise_no_program",
-                                                                                    "revise_no_callers", "revise_no_draft",
+                                                                                    "revise_no_callers", "revise_no_draft", "revise_draft",
                                                                                     "revise_bottom_up", "revise_call_lines"))):
         raise SystemExit("--refine and --revise are two designs of the second pass: one of them per run.")
     binary = Path(args.walk).expanduser().resolve()
@@ -1275,13 +1279,14 @@ def run(args) -> int:
                     # any --revise-* option implies --revise
                     revise=bool(getattr(args, "revise", False) or getattr(args, "revise_depth", None) is not None
                                 or any(getattr(args, k, False) for k in ("revise_skip_high", "revise_no_program",
-                                                                         "revise_no_callers", "revise_no_draft",
+                                                                         "revise_no_callers", "revise_no_draft", "revise_draft",
                                                                          "revise_bottom_up", "revise_call_lines"))),
                     revise_depth=getattr(args, "revise_depth", None),
                     revise_skip_high=bool(getattr(args, "revise_skip_high", False)),
                     revise_program=not getattr(args, "revise_no_program", False),
                     revise_callers=not getattr(args, "revise_no_callers", False),
-                    revise_draft=not getattr(args, "revise_no_draft", False),
+                    # the first name hidden unless --revise-draft: shown it, the model gives it back (2026-11-13)
+                    revise_draft=bool(getattr(args, "revise_draft", False)) and not getattr(args, "revise_no_draft", False),
                     revise_bottom_up=bool(getattr(args, "revise_bottom_up", False)),
                     revise_call_lines=bool(getattr(args, "revise_call_lines", False)))
         result = walk.run(binary)

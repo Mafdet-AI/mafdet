@@ -96,7 +96,7 @@ COMMANDS = [
              "mafdet agent --mcp rea --profile native-static", 'mafdet agent -p "what does main.c do?"',
              "mafdet agent --resume last", "mafdet agent --model qwen3-14b --mcp rea --profile native-static --web --save",
              "mafdet agent --walk C:\\samples\\crackme.exe --mcp rea --max-functions 50",
-             "mafdet agent --walk C:\\samples\\crackme.exe --mcp pyghidra --refine",
+             "mafdet agent --walk C:\\samples\\crackme.exe --mcp pyghidra --revise",
              "mafdet agent --mcp rea --book C:\\samples\\crackme.exe"),
             "use", common=False),
     Command("hunt", "the hunt", "simulate people typing and measure the wait after sending",
@@ -430,7 +430,11 @@ def _agent_args(p):
                    help="longest tool output the model reads, in characters; the rest stays on disk "
                         "(default: %(default)s)")
     p.add_argument("--temperature", type=float, default=0.6, help="default: %(default)s")
-    p.add_argument("--no-think", dest="think", action="store_false", help="no reasoning before each step")
+    p.add_argument("--no-think", dest="think", action="store_false", default=None,
+                   help="no reasoning before each step (the default of --walk, which names as well without it in a "
+                        "sixth of the time)")
+    p.add_argument("--think", dest="think", action="store_true", default=None,
+                   help="reasoning before each step (the default, except for --walk)")
     p.add_argument("--system", default="", metavar="FILE", help="a text file added to the system prompt")
     p.add_argument("--resume", default="", metavar="ID",
                    help="go on with a session of ~/.mafdet/sessions (its id, or `last`)")
@@ -450,31 +454,27 @@ def _agent_args(p):
                         "opening the binary included (default: none)")
     p.add_argument("--retry-failed", action="store_true",
                    help="with --walk: try again the functions the model failed on, with the pending ones (not "
-                        "those skipped for having no pseudo-code); with --revise or --refine, those its second reading "
+                        "those skipped for having no pseudo-code); with --revise, those its second reading "
                         "failed on too")
     p.add_argument("--revise", action="store_true",
                    help="with --walk: once every function is named, a second pass from the roots down: a "
-                        "summary of the program first, then each function again with its callers, the program "
-                        "and its first name as a draft to keep unless wrong (about as long as the first pass). "
-                        "The first names stay in the book beside the new ones; a book already walked only does "
-                        "what is left of it. For measuring: --revise-skip-high leaves out the functions named "
-                        "with high confidence, --revise-no-program and --revise-no-callers leave that piece out "
-                        "of the prompt")
+                        "summary of the program first, then each function named again from its code, its callers "
+                        "and the program, without its first name (shown it, the model gives it back). About as "
+                        "long as the first pass. The first names stay in the book beside the new ones; a book "
+                        "already walked only does what is left of it")
     p.add_argument("--revise-depth", type=int, default=None, metavar="N",
                    help="with --walk: --revise, only for the functions within N calls of a root (0: the roots "
                         "only); the rest keep their first names")
     p.add_argument("--revise-skip-high", action="store_true", help=argparse.SUPPRESS)
     p.add_argument("--revise-no-program", action="store_true", help=argparse.SUPPRESS)
     p.add_argument("--revise-no-callers", action="store_true", help=argparse.SUPPRESS)
-    p.add_argument("--revise-no-draft", action="store_true", help=argparse.SUPPRESS)
+    p.add_argument("--revise-no-draft", action="store_true", help=argparse.SUPPRESS)      # the default now
+    p.add_argument("--revise-draft", action="store_true", help=argparse.SUPPRESS)         # the first name shown
     p.add_argument("--revise-bottom-up", action="store_true", help=argparse.SUPPRESS)
     p.add_argument("--revise-call-lines", action="store_true", help=argparse.SUPPRESS)
-    p.add_argument("--refine", action="store_true",
-                   help="with --walk: once every function is named, read again from the top down those that call "
-                        "others, now with their callers and the lines that call them, keeping or changing each name; "
-                        "then a paragraph on the whole program at the top of book.md. Rerunning goes on where it "
-                        "stopped. Another design of the second pass than --revise, until they are measured: one "
-                        "of the two per run")
+    # The other design of the second pass, kept to reproduce its measurements (2026-11-13): it keeps 89-100% of
+    # the first names and its paragraph on the program invents suspicion; --revise is the second pass.
+    p.add_argument("--refine", action="store_true", help=argparse.SUPPRESS)
     p.add_argument("--kit", action="store_true",
                    help="list MAFDET's catalog of tools the agent can install (need_tool), and what is installed")
     p.add_argument("--install", default="", metavar="ID",

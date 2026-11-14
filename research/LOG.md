@@ -215,7 +215,12 @@ costs 2.4 decoding steps. To speed up the 14B, take work away from the CPU.
      shows 60.
    - **IN PROGRESS, stopped 2026-11-12 18:35 with the work half done: the walk benchmark, then the second
      pass. Resume here.** Nothing of it is committed; nothing below is in "Done and measured" yet.
-     - ***State 2026-11-14 00:15, read this first: stopped at the user's request; main merged and pushed.***
+     - ***2026-11-14, decided with the user: `--revise` without the draft is the second pass, the walk goes
+       without thinking*** ("Done and measured", 2026-11-14). `noprog` read: the program's summary is what
+       carries the gain, not the "ui/config" mistake. `--refine` is hidden, kept to reproduce its numbers.
+       Still not run: `nocallers`, the whole pipeline without thinking, the chooser, thinking in the no-draft
+       pass. Next: to be discussed with the user.
+     - ***State 2026-11-14 00:15: stopped at the user's request; main merged and pushed.***
        The user asked to stop measuring (five hours in, the PC busy) and only to merge and push. Done: the
        stuck GitHub Desktop merge aborted, `main` fast-forwarded to `a8d68c9` (origin/main `6cbc87e` with
        `--refine` and `--revise` and its hidden switches side by side, one of the two per run; resolution and
@@ -559,6 +564,23 @@ costs 2.4 decoding steps. To speed up the 14B, take work away from the CPU.
      restarts, VRAM given back), and whether thinking ahead comes back after the return.
 
 ## Done and measured
+
+- **2026-11-14 · The second pass chosen: `--revise` hides the first name; the walk without thinking by default;
+  the run without the program's summary read.** `revise-nodraft-noprog-nothink` (finished 2026-11-14 00:01 on
+  the 4070 SUPER, read on the 2060 with `walk_bench.py compare`, no GPU; names-only judge not run): pass 2 minus
+  pass 1 judge +0.019 (-0.014..+0.053), F1 -0.003; leaves judge +0.083 and runtime +0.115 still up, the
+  program's own functions -0.010, top judge -0.039. Against the two full no-draft runs: judge -0.048 and
+  -0.057 (both intervals exclude 0, above the ~0.04 yardstick), top -0.125 both times (-0.20..-0.055), F1 flat
+  (-0.012, -0.004). where.exe: the "ui/config" family 46 of 86 without the summary against 38-39 with it, and
+  `wmain` back to `initialize_ui_configuration` (`process_file_search` with it). **The program's summary is not
+  the carrier of the first pass's mistake: it is what pulls the top out of it, and the whole gain of the
+  no-draft pass outside the leaves and the runtime.** Decided with the user: on the command line `--revise`
+  is now the no-draft pass (`--revise-draft`, hidden, shows the first name; `Walk`'s own default still shows
+  it, for the tests and to keep the request hashes); `--refine` hidden (`argparse.SUPPRESS`), kept to
+  reproduce its measurements; `--walk` without thinking unless `--think` (the agent's sessions still think by
+  default: `--think`/`--no-think` default None, resolved in `agent.run`). `walk_bench.py` spells the old
+  defaults out (`pinned`: `--think`, and `--revise-draft` after a bare `--revise`) for a tree that knows the
+  switches, so a recorded walk_args still means what it measured. READMEs and the brief updated.
 
 - **2026-11-12 · Thinking ahead in the agent (phase 3, the typing part) and the tool suggested while the
   request is written; a first real run with Qwen3-4B on the RTX 2060.** `ahead.py`: the proxy's Thinker and

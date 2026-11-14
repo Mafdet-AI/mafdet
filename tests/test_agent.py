@@ -345,7 +345,7 @@ def test_cli_knows_the_agent():
     from mafdet.cli import build_parser
     args = build_parser().parse_args(["agent", "--mcp", "rea", "--mcp", "ghidra", "--profile", "native-static",
                                       "-p", "hello", "--approve", "edits"])
-    assert args.mcp == ["rea", "ghidra"] and args.think is True and args.ctx == 0
+    assert args.mcp == ["rea", "ghidra"] and args.think is None and args.ctx == 0     # None: agent.run decides (the walk without)
 
 
 def test_the_context_follows_the_vram(monkeypatch, tmp_path):
