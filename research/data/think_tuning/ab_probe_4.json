@@ -1,0 +1,199 @@
+{
+ "summary": {
+  "typed": {
+   "n": 6,
+   "off_mean_ms": NaN,
+   "on_mean_ms": 228.0,
+   "off_median_ms": NaN,
+   "on_median_ms": 245.0,
+   "identical": 0,
+   "same_answer": 0,
+   "on_slower": 0,
+   "judged": 0,
+   "off_right": 0,
+   "on_right": 0,
+   "cut": 0
+  },
+  "long": {},
+  "engine_stability": [
+   {
+    "cold_vs_cold_identical": true,
+    "cold_vs_warm_identical": false,
+    "cold_vs_warm_same_answer": true
+   },
+   {
+    "cold_vs_cold_identical": true,
+    "cold_vs_warm_identical": false,
+    "cold_vs_warm_same_answer": true
+   }
+  ],
+  "cold_forced": true,
+  "unique_tag": false,
+  "audit": {
+   "warms": 18,
+   "mismatches": 1,
+   "estimates": 0,
+   "unknown": 0
+  },
+  "engine": "llama.cpp b11747-f711c8f30",
+  "profile": {
+   "name": "llama.cpp",
+   "url": "http://127.0.0.1:8078",
+   "model": "qwen3-4b",
+   "caps": {
+    "prefix_caching": true,
+    "spelling": "n_predict0",
+    "reuse_channel": "timings",
+    "edit_branches": true,
+    "tokenize": true,
+    "render": true,
+    "shared_cache": false,
+    "reuse_slack": 0,
+    "tokenizer_agrees": true,
+    "raw_ids": true
+   },
+   "probed_at": 1794650276.8907425,
+   "latencies": {
+    "base_ms": 39.47310001240112,
+    "branch_ms": 29.841599985957146,
+    "probe_ms": 1028.3974999911152
+   },
+   "version": "b11747-f711c8f30",
+   "format": 2,
+   "tier": "T1"
+  },
+  "typing_cps": 12.0,
+  "thinking": true,
+  "think_ahead": true,
+  "first": 0,
+  "frame_lang": "auto",
+  "set_think": [
+   "VERIFY_PROBE=true",
+   "VERIFY_THRESHOLD=0.0"
+  ],
+  "max_tokens": 3072,
+  "model": "qwen3-4b",
+  "url": "http://127.0.0.1:8078",
+  "when": "2026-11-14 16:45:38"
+ },
+ "rows": {
+  "typed": [
+   {
+    "notes_text": "<think>\nThe user is still typing. I will not wonder what they will ask, nor remark that the text is unfinished. While I wait, I collect material for the answer: for each key term, name or number already written, one line with what it is and the facts I know about it, or a partial result. For example, from \"Quanto pesa la Luna rispetto alla\" I would write \"- Luna (the Moon): mass 7.35e22 kg, radius 1,737 km\".\n\n- 72 euro: total amount to be split\n\n- New words \"Three friends split a 72 euro bill\": 3 friends share 72 euros equally\n\nSo the answer is 24 euros per friend (72 divided by 3). Each friend pays 24 euros.\n\n- New words \"equally and\": 3 friends split 72 euros equally\n\nSo the answer is 24 euros per friend (72 divided by 3). Each friend pays 24 euros.\n\n- New words \"leave a 9\": leave a 9 euro tip\n\nSo the total amount is 72 + 9 = \n- New words \"leave a 9\": 9 euro tip added to the bill\n\nSo the total amount is 72 + 9 = 81 euros. Then, 3 friends split 81 euros equally.\n\nSo each friend pays 81 divided by 3 = 27 euros.\n\nThe answer is 27 euros per friend.\n\n- New words \"euro tip. What\": 9 euro tip added to the bill\n\nSo the total amount is 72 + 9 = 81 euros. Then, 3 friends split 81 euros equally.\n\nSo each friend pays 81 divided by 3 = 27 euros.\n\nThe answer is 27 euros per friend.\n\n- New words \"does each pay?\": 3 friends split",
+    "verify_p_yes": 0.8835873235046082,
+    "off_ttft": NaN,
+    "on_ttft": 0.09890840000025491,
+    "off_answer_s": null,
+    "on_answer_s": 1.22291419999965,
+    "on_notes": true,
+    "identical": false,
+    "same_answer": false,
+    "off_finish": "skipped",
+    "on_finish": "stop",
+    "off_right": null,
+    "on_right": true,
+    "expected": "27",
+    "off_text": "",
+    "on_text": "- 72 euro: total amount to be split\n\n- New words \"Three friends split a 72 euro bill\": 3 friends share 72 euros equally\n\nSo the answer is 24 euros per friend (72 divided by 3). Each friend pays 24 euros.\n\n- New words \"equally and\": 3 friends split 72 euros equally\n\nSo the answer is 24 euros per friend (72 divided by 3). Each friend pays 24 euros.\n\n- New words \"leave a 9\": leave a 9 euro tip\n\nSo the total amount is 72 + 9 = \n- New words \"leave a 9\": 9 euro tip added to the bill\n\nSo the total amount is 72 + 9 = 81 euros. Then, 3 friends split 81 euros equally.\n\nSo each friend pays 81 divided by 3 = 27 euros.\n\nThe answer is 27 euros per friend.\n\n- New words \"euro tip. What\": 9 euro tip added to the bill\n\nSo the total amount is 72 + 9 = 81 euros. Then, 3 friends split 81 euros equally.\n\nSo each friend pays 81 divided by 3 = 27 euros.\n\nThe answer is 27 euros per friend.\n\n- New words \"does each pay?\": 3 friends splitThree friends split a 72 euro bill equally and leave a 9 euro tip. What does each pay?\n\nSo the total amount is 72 + 9 = 81 euros. Then, 3 friends split 81 euros equally.\n\nSo each friend pays 81 divided by 3 = 27 euros.\n\nThe answer is 27.\n\n\n27",
+    "problem": 6
+   },
+   {
+    "notes_text": "<think>\nThe user is still typing. I will not wonder what they will ask, nor remark that the text is unfinished. While I wait, I collect material for the answer: for each key term, name or number already written, one line with what it is and the facts I know about it, or a partial result. For example, from \"Quanto pesa la Luna rispetto alla\" I would write \"- Luna (the Moon): mass 7.35e22 kg, radius 1,737 km\".\n\n- 72 euro: total amount to be split\n\n- New words \"Three friends split a 72 euro bill\": 72 is the total amount, three friends are splitting it equally. So each friend gets 72 divided by 3. The result is 24.\n\nSo the answer is 24.\n\n- New words \"equally and\": 72 is the total amount, three friends are splitting it equally. So each friend gets 72 divided by 3. The result is 24.\n\nSo the answer is 24.\n\n- \"leave a 9\": this might refer to leaving a tip or some additional amount. If the 7\n- New words \"leave a 9\": 9 euros is the tip left. So the total amount including the tip is 72 + 9 = 81. Then, three friends split this total equally. Each friend pays 81 divided by 3. The result is 27.\n\nSo the answer is 27.\n\n- New words \"euro tip. What\": 9 euros is the tip. So the total amount including the tip is 72 + 9 = 81. Then, three friends split this total equally. Each friend pays 81 divided by 3. The result is 27.\n\nSo the answer is 27.\n\n- New words \"does each pay?\": 9",
+    "verify_p_yes": 0.8596120670420195,
+    "off_ttft": NaN,
+    "on_ttft": 0.15526950000003126,
+    "off_answer_s": null,
+    "on_answer_s": 1.3253119999999399,
+    "on_notes": true,
+    "identical": false,
+    "same_answer": false,
+    "off_finish": "skipped",
+    "on_finish": "stop",
+    "off_right": null,
+    "on_right": true,
+    "expected": "27",
+    "off_text": "",
+    "on_text": "- 72 euro: total amount to be split\n\n- New words \"Three friends split a 72 euro bill\": 72 is the total amount, three friends are splitting it equally. So each friend gets 72 divided by 3. The result is 24.\n\nSo the answer is 24.\n\n- New words \"equally and\": 72 is the total amount, three friends are splitting it equally. So each friend gets 72 divided by 3. The result is 24.\n\nSo the answer is 24.\n\n- \"leave a 9\": this might refer to leaving a tip or some additional amount. If the 7\n- New words \"leave a 9\": 9 euros is the tip left. So the total amount including the tip is 72 + 9 = 81. Then, three friends split this total equally. Each friend pays 81 divided by 3. The result is 27.\n\nSo the answer is 27.\n\n- New words \"euro tip. What\": 9 euros is the tip. So the total amount including the tip is 72 + 9 = 81. Then, three friends split this total equally. Each friend pays 81 divided by 3. The result is 27.\n\nSo the answer is 27.\n\n- New words \"does each pay?\": 9Three friends split a 72 euro bill equally and leave a 9 euro tip. What does each pay?\n\nThe total amount is 72 euros for the bill plus 9 euros for the tip, which equals 81 euros. Dividing this total by three friends gives 81 divided by 3, which is 27.\n\nSo the answer is 27.\n\n\n27",
+    "problem": 6
+   },
+   {
+    "notes_text": "<think>\nThe user is still typing. I will not wonder what they will ask, nor remark that the text is unfinished. While I wait, I collect material for the answer: for each key term, name or number already written, one line with what it is and the facts I know about it, or a partial result. For example, from \"Quanto pesa la Luna rispetto alla\" I would write \"- Luna (the Moon): mass 7.35e22 kg, radius 1,737 km\".\n\n- 72 euro bill: total amount to be split among three friends. The final number is 72.\n\n- New words \"Three friends split a 72 euro bill\": 72 is the total amount to be split equally among three friends.\n\n- \"equal\" implies that each friend pays an equal share of the 72 euros.\n\n- To find out how much each friend pays, divide 72 by 3.\n\n- 72 divided by 3 equals 24.\n\n\n- New words \"equally and\": 72 is the total amount to be split among three friends equally.\n\n- \"leave\" implies that after splitting the bill, there's nothing left over. So 72 is the total amount to be split equally among three friends, and there is no remainder.\n\n- \"9 euro\" is a new word, but\n- New words \"leave a 9 euro\": 9 is the amount left after splitting the bill. So the total amount to be split is 72 euros, and after splitting, 9 euros are left as a tip.\n\n- \"tip\" is an additional amount given to someone, usually a service provider, in addition to the main payment.\n\n- The problem says\n- New words \"tip. What does\": 9 is the amount left as a tip. So the total amount to be split is 72 euros, and after splitting, 9 euros are left as a tip.\n\n- \"each pay\" implies that each friend pays an\n- New words \"each pay?\": ",
+    "verify_p_yes": 0.7769423441055172,
+    "off_ttft": NaN,
+    "on_ttft": 0.34566410000024916,
+    "off_answer_s": null,
+    "on_answer_s": 3.297850699999799,
+    "on_notes": true,
+    "identical": false,
+    "same_answer": false,
+    "off_finish": "skipped",
+    "on_finish": "stop",
+    "off_right": null,
+    "on_right": true,
+    "expected": "27",
+    "off_text": "",
+    "on_text": "- 72 euro bill: total amount to be split among three friends. The final number is 72.\n\n- New words \"Three friends split a 72 euro bill\": 72 is the total amount to be split equally among three friends.\n\n- \"equal\" implies that each friend pays an equal share of the 72 euros.\n\n- To find out how much each friend pays, divide 72 by 3.\n\n- 72 divided by 3 equals 24.\n\n\n- New words \"equally and\": 72 is the total amount to be split among three friends equally.\n\n- \"leave\" implies that after splitting the bill, there's nothing left over. So 72 is the total amount to be split equally among three friends, and there is no remainder.\n\n- \"9 euro\" is a new word, but\n- New words \"leave a 9 euro\": 9 is the amount left after splitting the bill. So the total amount to be split is 72 euros, and after splitting, 9 euros are left as a tip.\n\n- \"tip\" is an additional amount given to someone, usually a service provider, in addition to the main payment.\n\n- The problem says\n- New words \"tip. What does\": 9 is the amount left as a tip. So the total amount to be split is 72 euros, and after splitting, 9 euros are left as a tip.\n\n- \"each pay\" implies that each friend pays an\n- New words \"each pay?\": Three friends split a 72 euro bill equally and leave a 9 euro tip. What does each pay?\n\nFirst, we need to find out how much each friend pays for the bill. The total amount of the bill is 72 euros, and it's split equally among three friends. So, we divide 72 by 3.\n\n72 divided by 3 equals 24. So, each friend pays 24 euros for the bill.\n\nNext, we need to consider the tip. The friends leave a 9 euro tip. Since they split the bill equally, they should also split the tip equally. So, we divide 9 by 3.\n\n9 divided by 3 equals 3. So, each friend pays 3 euros for the tip.\n\nFinally, we add the amount paid for the bill and the tip together to find out how much each friend pays in total.\n\n24 + 3 = 27\n\nTherefore, each friend pays 27 euros.\n\n\n27",
+    "problem": 6
+   },
+   {
+    "notes_text": "<think>\nThe user is still typing. I will not wonder what they will ask, nor remark that the text is unfinished. While I wait, I collect material for the answer: for each key term, name or number already written, one line with what it is and the facts I know about it, or a partial result. For example, from \"Quanto pesa la Luna rispetto alla\" I would write \"- Luna (the Moon): mass 7.35e22 kg, radius 1,737 km\".\n\n- 72 euro: total amount to be split\n\n- New words \"Three friends split a 72 euro bill\": 3 people, 72 euros total\n\n- Three friends: 3 people sharing the bill\n\n- Split: divide the total amount equally among the three friends\n\nSo, the calculation is 72 divided by 3. The result is 24.\n\nI can write that as the answer.\n\n- New words \"equally and\": 72 euro bill split equally among three friends\n\n- \"leave\" might mean they leave the restaurant or something, but it's not relevant to the calculation. The key number is 72 euros.\n\nSo, the answer is 24 euros per person.\n\n- New words \"leave a 9 euro\": 9 euro tip added to the total bill. So the total becomes 72 + 9 = 81 euros. Then split equally among three friends: 81 / 3 = 27 euros per person.\n\nWait, but the original problem says \"split a 72 euro bill equally and leave\n- New words \"tip. What\": 9 euro tip added to the total bill. So total is 72 + 9 = 81. Split equally among three friends: 81 / 3 = 27 euros per person.\n\nSo, the answer is 27 euros per person.\n\n- New words \"does each pay?\": 2",
+    "verify_p_yes": 0.828265475740242,
+    "off_ttft": NaN,
+    "on_ttft": 0.2752030999999988,
+    "off_answer_s": null,
+    "on_answer_s": 1.573257900000499,
+    "on_notes": true,
+    "identical": false,
+    "same_answer": false,
+    "off_finish": "skipped",
+    "on_finish": "stop",
+    "off_right": null,
+    "on_right": true,
+    "expected": "27",
+    "off_text": "",
+    "on_text": "- 72 euro: total amount to be split\n\n- New words \"Three friends split a 72 euro bill\": 3 people, 72 euros total\n\n- Three friends: 3 people sharing the bill\n\n- Split: divide the total amount equally among the three friends\n\nSo, the calculation is 72 divided by 3. The result is 24.\n\nI can write that as the answer.\n\n- New words \"equally and\": 72 euro bill split equally among three friends\n\n- \"leave\" might mean they leave the restaurant or something, but it's not relevant to the calculation. The key number is 72 euros.\n\nSo, the answer is 24 euros per person.\n\n- New words \"leave a 9 euro\": 9 euro tip added to the total bill. So the total becomes 72 + 9 = 81 euros. Then split equally among three friends: 81 / 3 = 27 euros per person.\n\nWait, but the original problem says \"split a 72 euro bill equally and leave\n- New words \"tip. What\": 9 euro tip added to the total bill. So total is 72 + 9 = 81. Split equally among three friends: 81 / 3 = 27 euros per person.\n\nSo, the answer is 27 euros per person.\n\n- New words \"does each pay?\": 2Three friends split a 72 euro bill equally and leave a 9 euro tip. What does each pay?\n\nFirst, calculate the total amount to be split: 72 euros for the bill plus 9 euros for the tip = 81 euros.\n\nThen, divide this total equally among the three friends: 81 / 3 = 27 euros per person.\n\nSo, each friend pays 27 euros.\n\n\n27",
+    "problem": 6
+   },
+   {
+    "notes_text": "<think>\nThe user is still typing. I will not wonder what they will ask, nor remark that the text is unfinished. While I wait, I collect material for the answer: for each key term, name or number already written, one line with what it is and the facts I know about it, or a partial result. For example, from \"Quanto pesa la Luna rispetto alla\" I would write \"- Luna (the Moon): mass 7.35e22 kg, radius 1,737 km\".\n\n- 72 euro bill: total amount to be split among three friends\n\n- New words \"Three friends split a 72 euro bill\": 72 is the total amount, three friends are splitting it equally. The question is likely asking for the amount each friend pays. So, the calculation would be 72 divided by 3. The answer is 24 euros per friend.\n\n- New words \"equally and\": 72 is split equally among three friends. The result is 24 euros each.\n\n- \"leave\" is a verb that suggests they might be leaving something behind, but in the context of splitting a bill, it's more likely referring to the total amount being 72 euros. So the answer is 2\n- New words \"leave a 9 euro\": 9 euros is left as a tip. The total amount is 72 euros, and 9 euros is left as a tip. The question is likely asking for the total amount each friend pays. So, the calculation would be (72 + 9) divided by 3. The answer is 27\n- New words \"tip. What\": 9 euros is left as a tip. The question is likely asking for the total amount each friend pays. So, the calculation would be (72 + 9) divided by 3. The answer is 27\n\n- New words \"does each pay?\": 9",
+    "verify_p_yes": 0.6972284513007431,
+    "off_ttft": NaN,
+    "on_ttft": 0.22850279999966006,
+    "off_answer_s": null,
+    "on_answer_s": 1.4248779999998078,
+    "on_notes": true,
+    "identical": false,
+    "same_answer": false,
+    "off_finish": "skipped",
+    "on_finish": "stop",
+    "off_right": null,
+    "on_right": true,
+    "expected": "27",
+    "off_text": "",
+    "on_text": "- 72 euro bill: total amount to be split among three friends\n\n- New words \"Three friends split a 72 euro bill\": 72 is the total amount, three friends are splitting it equally. The question is likely asking for the amount each friend pays. So, the calculation would be 72 divided by 3. The answer is 24 euros per friend.\n\n- New words \"equally and\": 72 is split equally among three friends. The result is 24 euros each.\n\n- \"leave\" is a verb that suggests they might be leaving something behind, but in the context of splitting a bill, it's more likely referring to the total amount being 72 euros. So the answer is 2\n- New words \"leave a 9 euro\": 9 euros is left as a tip. The total amount is 72 euros, and 9 euros is left as a tip. The question is likely asking for the total amount each friend pays. So, the calculation would be (72 + 9) divided by 3. The answer is 27\n- New words \"tip. What\": 9 euros is left as a tip. The question is likely asking for the total amount each friend pays. So, the calculation would be (72 + 9) divided by 3. The answer is 27\n\n- New words \"does each pay?\": 9Three friends split a 72 euro bill equally and leave a 9 euro tip. What does each pay?\n\nThe total amount is 72 euros, and they leave a 9 euro tip. So the total amount to be split is 72 + 9 = 81 euros. Divided by three friends, each pays 81 / 3 = 27 euros.\n\n\n27",
+    "problem": 6
+   },
+   {
+    "notes_text": "<think>\nThe user is still typing. I will not wonder what they will ask, nor remark that the text is unfinished. While I wait, I collect material for the answer: for each key term, name or number already written, one line with what it is and the facts I know about it, or a partial result. For example, from \"Quanto pesa la Luna rispetto alla\" I would write \"- Luna (the Moon): mass 7.35e22 kg, radius 1,737 km\".\n\n- 72 euro: total amount to be split\n\n- New words \"Three friends split a 72 euro bill\": 3 people share 72 euros equally\n\nSo the answer is 24 euros per person.\n\nWait, but maybe they want to know how much each friend pays? The question is \"split a 72 euro bill equally\", so dividing 72 by 3 gives 24. So each friend pays\n- New words \"equally and\": 3 people share 72 euros equally\n\nSo the answer is 24 euros per person.\n\nWait, but maybe they want to know how much each friend pays? The question is \"split a 72 euro bill equally\", so dividing 72 by 3 gives 24. So each friend pays\n- New words \"leave a 9 euro\": 9 euros is left as tip\n\nSo the total amount is 72 + 9 = 81 euros. Dividing that by 3 friends gives 27 euros per person.\n\nAh, I see. The question is \"split a 72 euro bill equally and leave a 9 euro tip.\"\n- New words \"tip. What\": 9 euros is left as tip\n\nSo the total amount is 72 + 9 = 81 euros. Dividing that by 3 friends gives 27 euros per person.\n\nSo the answer is 27 euros.\n\n- New words \"does each pay?\": 3",
+    "verify_p_yes": 0.8289999390546923,
+    "off_ttft": NaN,
+    "on_ttft": 0.26178359999994427,
+    "off_answer_s": null,
+    "on_answer_s": 1.4459271999994598,
+    "on_notes": true,
+    "identical": false,
+    "same_answer": false,
+    "off_finish": "skipped",
+    "on_finish": "stop",
+    "off_right": null,
+    "on_right": true,
+    "expected": "27",
+    "off_text": "",
+    "on_text": "- 72 euro: total amount to be split\n\n- New words \"Three friends split a 72 euro bill\": 3 people share 72 euros equally\n\nSo the answer is 24 euros per person.\n\nWait, but maybe they want to know how much each friend pays? The question is \"split a 72 euro bill equally\", so dividing 72 by 3 gives 24. So each friend pays\n- New words \"equally and\": 3 people share 72 euros equally\n\nSo the answer is 24 euros per person.\n\nWait, but maybe they want to know how much each friend pays? The question is \"split a 72 euro bill equally\", so dividing 72 by 3 gives 24. So each friend pays\n- New words \"leave a 9 euro\": 9 euros is left as tip\n\nSo the total amount is 72 + 9 = 81 euros. Dividing that by 3 friends gives 27 euros per person.\n\nAh, I see. The question is \"split a 72 euro bill equally and leave a 9 euro tip.\"\n- New words \"tip. What\": 9 euros is left as tip\n\nSo the total amount is 72 + 9 = 81 euros. Dividing that by 3 friends gives 27 euros per person.\n\nSo the answer is 27 euros.\n\n- New words \"does each pay?\": 3Three friends split a 72 euro bill equally and leave a 9 euro tip. What does each pay?\n\nFirst, calculate the total amount: 72 (bill) + 9 (tip) = 81 euros.\n\nThen, divide the total by 3 friends: 81 / 3 = 27 euros per person.\n\nSo the answer is 27.\n\n\n27",
+    "problem": 6
+   }
+  ],
+  "long": [],
+  "exactness": []
+ }
+}

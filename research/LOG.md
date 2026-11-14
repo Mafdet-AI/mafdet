@@ -569,6 +569,33 @@ wait; they stay here as the record of where each one stopped.
 
 ## Done and measured
 
+- **2026-11-14 (night) · Validation instead of prompt tweaks: two branches that must agree; the field test.**
+  Orchestrated with forks: (1) a research fork read the literature (sources in its report, kept in the LOG's
+  words here): speculative decoding (Leviathan et al. 2022) and PredGen (Li & Grover 2025, arXiv:2506.15556,
+  input-time speculation on GSM8K: loose checks cost accuracy on math), StreamingThinker (Tong et al. 2025,
+  arXiv:2510.17238: Qwen3-4B as accurate streaming as batch when the notes only comprehend and a re-check runs
+  after the input), AsyncReasoning (training-free, -4 to -5 points), P(True) at AUROC ~0.6 on GSM8K, sample
+  agreement ~0.9 (Xiong et al. 2023), statistics for small rates (Wilson, Beta posteriors, CMH, SPRT; Bowyer
+  et al. 2025). (2) An offline fork over 370 answers from notes: no text signal is a usable gate (to catch
+  the errors they flag 40-70% of turns); **two independent notes that agree are wrong 1.6% of the time
+  against 9.5%** (896 pairs); estimated k=2 "agree else from scratch" on the 24: 99.65% right, 3.8% fallback.
+  (3) A builder fork: `BRANCHES=k` (k Thinkers on k slots, answers compared on their last number, unanimous
+  → answer from notes, else from scratch), `VERIFY_PROBE` (one token, P(yes)), `--think-branches K` on
+  `mafdet proxy`; then `BRANCH_FRAME="comprehend"` (the other branch only reads, StreamingThinker's split).
+  `research/think_stats.py`: Wilson, P(better), CMH, SPRT, AUROC.
+  - Engine for these runs: `mafdet proxy --think-branches 2 --ctx 12288 --llama-args="-ctk q8_0 -ctv q8_0"`
+    (3 slots, 18k pool, 4.8 GB of 6). Problems 6, 1, 23, 12 each, ON only, the probe logging P(yes) at
+    threshold 0: **k=2: 36/36, agreed 19, fallback 12 (10 disagreements, 2 a branch without notes), wait
+    median 3.74 s (agreed 2.95, fallback 6.63)**; k=1 34/34, 2.10 s; k=2 with the comprehension branch 36/36
+    but 13 turns with an empty branch (it closed its reasoning at once: fixed, `end_ban`/`stop_bridges` on
+    its frame), 4.10 s. The verifier's AUROC could not be computed (no wrong answers).
+  - k=1 at 34/34 (tip 11/11) against 4/7-9/15 before looked like an effect of the probe's extra request;
+    **alternating blocks (4 x 6 each) said no: with the probe 22/24, without 20/23, Fisher p = 0.67.** The tip's
+    error on this engine (q8_0 cache, 3 slots) is ~10-13%, against ~40% on the f16 2-slot engine earlier: an
+    engine difference or chance, not settled. Lesson kept: at these rates only interleaved, repeated runs decide.
+  - Running: k=2 on the full 24 and on the held-out 40 with OFF in the same runs, then the fixed comprehension
+    branch.
+
 - **2026-11-14 (evening) · Tuning thinking ahead's accuracy in the proxy: prompt-level fixes do not converge;
   the next step is validation.** Asked by the owner: thinking ahead must lose no answers. Data in
   `research/data/think_tuning/` (one JSON per run, `mafdet/proxy/bench.py` rows); Qwen3-4B, RTX 2060.
