@@ -75,8 +75,8 @@ COMMANDS = [
     Command("proxy", "the gatekeeper", "reading ahead for Open WebUI and other front ends",
             "Starts llama-server with the model chosen in the app (or --model) and the MAFDET proxy in front "
             "of it: an OpenAI-compatible server at http://127.0.0.1:8077/v1 that reads the message while you "
-            "type, when the front end sends drafts (for Open WebUI: the user script in "
-            "mafdet/proxy/clients). llama-server gets two slots, so the front end's titles and follow-ups do "
+            "type, when the front end sends drafts (for Open WebUI: a user script, installed from "
+            "http://127.0.0.1:8077/proxy, which also guides the setup). llama-server gets two slots, so the front end's titles and follow-ups do "
             "not evict the conversation. With --url it uses an engine already running instead: llama-server, "
             "Ollama, vLLM, SGLang, LM Studio or any OpenAI-compatible server.",
             ("mafdet proxy", "mafdet proxy --model qwen3-8b", "mafdet proxy --host 0.0.0.0",

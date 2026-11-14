@@ -267,6 +267,24 @@ class ProxyState:
 
 
 STATUS_PAGE = Path(__file__).with_name("status.html")   # GET /proxy: is it working, at a glance
+USER_SCRIPT = Path(__file__).with_name("clients") / "open-webui.user.js"
+USER_SCRIPT_ROUTE = "/proxy/open-webui.user.js"         # Tampermonkey offers to install a URL ending in .user.js
+
+
+def user_script(base: str, origins: list[str]) -> str:
+    """The Open WebUI user script as this proxy serves it, ready to install with one click: PROXY set to
+    `base` (where the browser reached the proxy), an @match for each origin the proxy allows (--cors), and
+    Tampermonkey's update URLs pointing back here."""
+    text = USER_SCRIPT.read_text(encoding="utf-8")
+    default = "const PROXY = 'http://127.0.0.1:8077';"
+    assert text.count(default) == 1
+    text = text.replace(default, f"const PROXY = '{base}';")
+    head, sep, body = text.partition("// ==/UserScript==")
+    extra = [f"// @match        {o}/*" for o in origins if o != "*" and f"@match        {o}/*" not in head]
+    extra += [f"// @updateURL    {base}{USER_SCRIPT_ROUTE}", f"// @downloadURL  {base}{USER_SCRIPT_ROUTE}"]
+    return head + "".join(line + "\n" for line in extra) + sep + body
+
+
 SSE_END = bytes([10, 10])                     # the blank line after a server-sent event
 CRLF = bytes([13, 10])
 
@@ -425,6 +443,16 @@ class Handler(BaseHTTPRequestHandler):
             raw = STATUS_PAGE.read_bytes()
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+        elif self.path.split("?")[0] == USER_SCRIPT_ROUTE:
+            host = self.headers.get("Host") or ""
+            if not re.fullmatch(r"[\w.\-]+(:\d+)?|\[[0-9a-fA-F:.]+\](:\d+)?", host):    # it goes into a script
+                host = "127.0.0.1:%d" % self.server.server_address[1]
+            raw = user_script(f"http://{host}", self.state.cors).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/javascript; charset=utf-8")
             self.send_header("Content-Length", str(len(raw)))
             self.end_headers()
             self.wfile.write(raw)

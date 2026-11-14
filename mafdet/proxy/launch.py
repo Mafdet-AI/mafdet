@@ -28,7 +28,6 @@ from .server import ProxyState, make_server
 ENGINE_PORT = 8078          # fixed, so the saved profile and last request are found again next time
 PROXY_PORT = 8077
 OPEN_WEBUI = "http://localhost:8080,http://127.0.0.1:8080"
-USER_SCRIPT = Path(__file__).with_name("clients") / "open-webui.user.js"
 
 
 def resolve_model(spec: str) -> tuple[str, str, tuple[str, ...]]:
@@ -136,7 +135,7 @@ def serve(url: str, model: str, *, host: str = "127.0.0.1", port: int = PROXY_PO
         f"  front end    OpenAI API base URL http://{shown}:{port}/v1"
         + ("   (Open WebUI in Docker: http://host.docker.internal:%d/v1)" % port if host == "0.0.0.0" else ""),
         f"  drafts       {', '.join(origins) if origins else 'no web page allowed (--cors)'}",
-        f"  user script  {USER_SCRIPT}",
+        f"  user script  http://{shown}:{port}/proxy/open-webui.user.js   (open it with Tampermonkey to install)",
         f"  status       http://{shown}:{port}/proxy",
     ]
     if profile.tier == "T-1" and not exact:

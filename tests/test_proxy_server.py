@@ -206,7 +206,7 @@ def wait_until(predicate, timeout=2.0):
 def test_the_status_page_and_the_request_log(proxy):
     port, state, _ = proxy
     status, ctype, raw = call(port, "/proxy", method="GET")
-    assert status == 200 and "html" in ctype and b"MAFDET" in raw
+    assert status == 200 and "html" in ctype and b"MAFDET" in raw and b"/proxy/open-webui.user.js" in raw
     call(port, "/v1/drafts", {"conversation_id": "c1", "messages": MESSAGES})
     call(port, "/v1/chat/completions", {"model": "fake-model", "messages": MESSAGES, "stream": True})
     assert wait_until(lambda: len(state.recent) == 1)
@@ -214,3 +214,31 @@ def test_the_status_page_and_the_request_log(proxy):
     assert stats["recent"][0]["kind"] == "matched"
     assert stats["recent"][0]["first_token_ms"] is not None
     assert stats["summary"]["requests"] == 1
+
+
+def test_the_user_script_is_served_ready_to_install(proxy):
+    """GET /proxy/open-webui.user.js: the script with PROXY set to where the browser reached the proxy, an
+    @match per allowed origin, and update URLs back here (Tampermonkey installs a URL ending in .user.js)."""
+    port, state, _ = proxy
+    state.cors = ["http://localhost:8080", "http://192.168.1.5:3000", "*"]
+    status, ctype, raw = call(port, "/proxy/open-webui.user.js")
+    text = raw.decode("utf-8")
+    assert status == 200 and "javascript" in ctype
+    base = f"http://127.0.0.1:{port}"
+    assert f"const PROXY = '{base}';" in text and "8077'" not in text
+    assert text.count("@match        http://localhost:8080/*") == 1           # already there, not repeated
+    assert "@match        http://192.168.1.5:3000/*" in text and "@match        */*" not in text
+    assert f"@updateURL    {base}/proxy/open-webui.user.js" in text
+    head = text.split("// ==/UserScript==")[0]
+    assert "@downloadURL" in head and text.count("// ==/UserScript==") == 1
+
+
+def test_a_strange_host_header_does_not_reach_the_script(proxy):
+    port, _, _ = proxy
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+    conn.putrequest("GET", "/proxy/open-webui.user.js", skip_host=True)
+    conn.putheader("Host", "evil';alert(1);//")
+    conn.endheaders()
+    text = conn.getresponse().read().decode("utf-8")
+    conn.close()
+    assert "alert" not in text and f"const PROXY = 'http://127.0.0.1:{port}';" in text

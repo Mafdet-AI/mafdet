@@ -13,10 +13,10 @@ docker compose up -d
 - The first start downloads the model (~2.5 GB) into the `models` volume; the proxy waits for
   llama-server before it starts (`docker compose logs -f mafdet`).
 
-Then install the user script in the browser, as in
-[Open WebUI + MAFDET in 5 minutes](../mafdet/proxy/clients/README.md), step 4: it already matches
-`http://localhost:3000` and sends the drafts to `http://127.0.0.1:8077`, the port the compose file
-publishes.
+Then install the user script in the browser: with Tampermonkey in place, open
+http://localhost:8077/proxy/open-webui.user.js and press Install (as in
+[Open WebUI + MAFDET in 5 minutes](../mafdet/proxy/clients/README.md), step 4). It already matches
+`http://localhost:3000` and sends the drafts to the port the compose file publishes.
 
 ## Choices
 

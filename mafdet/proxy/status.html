@@ -29,6 +29,12 @@
   td.num, th.num { text-align: right; }
   .muted { color: var(--muted); }
   a { color: var(--accent); }
+  .setup { border: 1px solid var(--accent); border-radius: 10px; padding: 4px 16px 8px; margin: 0 0 24px; }
+  .setup ol { padding-left: 20px; } .setup li { margin: 6px 0; }
+  code { font: 13px ui-monospace, Consolas, monospace; background: color-mix(in srgb, var(--fg) 8%, transparent);
+         padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+  .button { display: inline-block; background: var(--accent); color: #fff; text-decoration: none; font-weight: 600;
+            padding: 4px 12px; border-radius: 6px; margin-left: 4px; }
 </style>
 </head>
 <body>
@@ -36,6 +42,17 @@
   <h1><span>MAFDET</span> proxy</h1>
   <p class="sub" id="what">connecting…</p>
   <span class="state off" id="state">no answer from the proxy</span>
+  <section class="setup" id="setup">
+    <h2>Set up Open WebUI (once)</h2>
+    <ol>
+      <li>In Open WebUI: <i>Admin Settings › Connections › OpenAI API</i>, add the URL <code id="v1">http://127.0.0.1:8077/v1</code>
+        with any key (<code>none</code>), and choose the model it lists.</li>
+      <li>Install <a href="https://www.tampermonkey.net/" target="_blank" rel="noopener">Tampermonkey</a> in this browser
+        (in Chrome: <i>chrome://extensions › Tampermonkey › Details</i>, turn on <i>Allow user scripts</i>), then
+        <a class="button" href="/proxy/open-webui.user.js">Install the user script</a></li>
+      <li>Open Open WebUI and type a message without sending it: it appears under <i>Conversations</i> below, and this box goes away.</li>
+    </ol>
+  </section>
   <div class="tiles">
     <div class="tile"><small>messages on Enter</small><b id="n">–</b><small id="kinds"></small></div>
     <div class="tile"><small>first token after Enter, median</small><b id="first">–</b><small>reasoning included, last 200 messages</small></div>
@@ -62,6 +79,7 @@
     if (!items.length) return;
     tbody.replaceChildren(...items.map((it) => { const tr = document.createElement('tr'); tr.append(...make(it)); return tr; }));
   }
+  $('v1').textContent = location.origin + '/v1';
   async function refresh() {
     try {
       const s = await (await fetch('/proxy/stats', { cache: 'no-store' })).json();
@@ -79,6 +97,7 @@
       $('side').textContent = s.slots.side == null ? (c.shared ? 'not needed' : 'off') : (r.side || 0);
       rows($('recent'), (s.recent || []).slice().reverse(), (x) => [cell(x.at), cell(x.kind), cell(ms(x.first_token_ms), 1),
         cell(x.read_on_enter ?? '–', 1), cell(x.already_read ?? '–', 1)]);
+      $('setup').hidden = (s.sessions || []).length > 0;
       rows($('sessions'), s.sessions || [], (x) => [cell(x.conversation_id), cell(x.warms, 1), cell(x.mismatches, 1),
         cell(x.thinking ? x.thinking.reasoned + ' tokens' : '–', 1)]);
     } catch (e) {

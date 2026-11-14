@@ -38,7 +38,8 @@ mafdet proxy --model qwen3-4b
 
 It starts llama-server with the options reading ahead needs (two slots sharing one 16k-token cache,
 nothing cleared behind its back) and the proxy at `http://127.0.0.1:8077/v1`. It prints the address,
-where the user script is and where to see that it works. Without `--model` it uses the model chosen
+the user script's link and where to see that it works: `http://127.0.0.1:8077/proxy`, a page that also
+walks you through steps 3 and 4. Without `--model` it uses the model chosen
 in the MAFDET app. Ctrl+C stops both.
 
 Open WebUI in Docker: `mafdet proxy --host 0.0.0.0`, and use `http://host.docker.internal:8077/v1`
@@ -60,8 +61,9 @@ It sends what you type to the proxy (Open WebUI itself stays untouched).
 1. Install [Tampermonkey](https://www.tampermonkey.net/) (or Violentmonkey) in the browser. In Chrome,
    open `chrome://extensions`, Tampermonkey's Details, and turn on "Allow user scripts" (or the
    Developer mode switch, top right, on older versions).
-2. Tampermonkey's icon > "Create a new script": replace everything with the content of
-   `open-webui.user.js` (the path `mafdet proxy` prints), and save (Ctrl+S).
+2. Open `http://127.0.0.1:8077/proxy/open-webui.user.js` (the status page has a button for it):
+   Tampermonkey shows the script, press Install. The proxy serves it already pointed at itself and at
+   the addresses it accepts (`--cors`), and Tampermonkey updates it from there.
 3. Open Open WebUI at `http://localhost:8080`.
 
 ## 5. Check that it works
