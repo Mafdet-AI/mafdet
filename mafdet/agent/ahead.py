@@ -75,6 +75,7 @@ class Ahead:
         self.ctx = ctx
         self.frame = think.Frame(engine)
         self.frame.seed = engine.tokenize(SEED) or []
+        self.frame.seed_en = []                     # the agent's frame has no example line to translate
         self.frame.sent = engine.tokenize(SENT) or []
         if not self.frame.usable:
             raise ValueError("the model's tokenizer does not give the frame's tokens")

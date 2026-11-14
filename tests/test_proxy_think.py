@@ -58,7 +58,8 @@ def test_the_model_reasons_while_the_user_types():
         sess = state.session("c1")
         assert wait_until(lambda: sess.thinker.reasoned >= 8)
         notes = sess.thinker.notes
-        assert notes[:len(state.frame.seed)] == state.frame.seed        # the frame opens the reasoning
+        seed = state.frame.seed_en                                      # an English message: the English example
+        assert notes[:len(seed)] == seed and seed != state.frame.seed   # the frame opens the reasoning
         # each chunk runs on the draft's prompt followed by the notes so far
         assert engine.gen_prompts[0][:len(sess.latest)] == sess.latest
     finally:
@@ -238,5 +239,29 @@ def test_a_looping_reasoning_is_stopped_and_its_notes_dropped_on_enter():
         assert status == 200
         assert state.counts["thought_ahead"] == 0 and sess.thinker.dropped == 1
         assert state.stats()["sessions"][0]["thinking"]["dropped"] == 1
+    finally:
+        server.shutdown()
+
+
+def test_the_example_line_follows_the_message_language_and_waits_until_it_is_known():
+    """The frame's example line is Italian (as measured in the app); an English message gets it in English
+    (A1, 2026-11-14: the 4B copied "mass of the Moon" into English notes). No reasoning before a word tells
+    the language, up to LANG_WAIT_WORDS words."""
+    assert think.language("how many apples are left") == "en"
+    assert think.language("Luca ha 25 euro, compra 3 quaderni") == "it"
+    assert think.language("Marta reads 18 pages") is None
+    server, port, state, engine = start()
+    try:
+        post(port, "/v1/drafts", {"conversation_id": "c1", "text": "Marta reads 18 pages"})
+        sess = state.session("c1")
+        time.sleep(0.4)
+        assert sess.thinker.reasoned == 0                                # the language is not known yet
+        post(port, "/v1/drafts", {"conversation_id": "c1", "text": "Marta reads 18 pages a day for 6 days"})
+        assert wait_until(lambda: sess.thinker.reasoned >= 4)
+        assert sess.thinker.notes[:len(state.frame.seed_en)] == state.frame.seed_en
+        post(port, "/v1/drafts", {"conversation_id": "c2", "text": "Luca ha 25 euro e compra tre quaderni"})
+        s2 = state.session("c2")
+        assert wait_until(lambda: s2.thinker.reasoned >= 4)
+        assert s2.thinker.notes[:len(state.frame.seed)] == state.frame.seed
     finally:
         server.shutdown()

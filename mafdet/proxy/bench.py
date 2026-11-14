@@ -95,8 +95,10 @@ RESET = "Reply with OK."
 # HTTP helpers (http.client, like the rest of the project)
 # --------------------------------------------------------------------------------------
 def _chat_ttft(host: str, port: int, body: dict, *, max_tokens: int, timeout: float = 600.0,
-               cache_prompt: bool | None = True):
+               cache_prompt: bool | None = True, timing: dict | None = None):
     """Send a streaming chat request, return (seconds to first token, full text, finish_reason).
+    `timing`, when given, gets "answer": the seconds to the first token of the answer itself (after the
+    reasoning; the wait a person has with a reasoning model).
 
     `cache_prompt` None leaves the field out: it is llama-server's own, and another engine would
     either ignore it or refuse the request."""
@@ -138,6 +140,8 @@ def _chat_ttft(host: str, port: int, body: dict, *, max_tokens: int, timeout: fl
             # of either kind is when the wait after Enter ends.
             if (piece or think) and first is None:
                 first = time.perf_counter() - t0
+            if piece.strip() and timing is not None and "answer" not in timing:
+                timing["answer"] = time.perf_counter() - t0
             text.append(think)
             text.append(piece)
             finish = ((chunk.get("choices") or [{}])[0].get("finish_reason") or "") or finish
@@ -303,8 +307,9 @@ def main(argv: list[str] | None = None) -> int:
             typing = max(0, posts - 1) * 4 / max(args.typing_cps, 0.1)
         time.sleep(typing + args.settle)
         # OFF: straight at the engine.
+        off_t: dict = {}
         off_ttft, off_text, off_finish = _chat_ttft(engine_host, engine_port, off_body,
-                                                   max_tokens=args.max_tokens, cache_prompt=cache_on)
+                                                   max_tokens=args.max_tokens, cache_prompt=cache_on, timing=off_t)
         reset()
         # ON: drafts first (typed, or one paste), then commit through the proxy.
         typed_text = on_body["messages"][-1]["content"]
@@ -315,10 +320,12 @@ def main(argv: list[str] | None = None) -> int:
                        {"conversation_id": conversation_id, "model": args.model,
                         "messages": on_body["messages"]})
         time.sleep(args.settle)
+        on_t: dict = {}
         on_ttft, on_text, on_finish = _chat_ttft("127.0.0.1", args.proxy_port,
                                                  dict(on_body, conversation_id=conversation_id),
-                                                 max_tokens=args.max_tokens, cache_prompt=cache_on)
+                                                 max_tokens=args.max_tokens, cache_prompt=cache_on, timing=on_t)
         return {"off_ttft": off_ttft, "on_ttft": on_ttft,
+                "off_answer_s": off_t.get("answer"), "on_answer_s": on_t.get("answer"),
                 "identical": off_text == on_text,
                 "same_answer": _answer(off_text) == _answer(on_text),
                 "off_finish": off_finish, "on_finish": on_finish,
@@ -333,7 +340,8 @@ def main(argv: list[str] | None = None) -> int:
         results["typed"].append(row)
         print(f"[typed {i+1}/{len(typed)}, problem {first + i}] OFF {row['off_ttft']*1000:.0f} ms  "
               f"ON {row['on_ttft']*1000:.0f} ms  identical={row['identical']}  "
-              f"right OFF {row['off_right']} ON {row['on_right']}", file=sys.stderr)
+              f"right OFF {row['off_right']} ON {row['on_right']}  answer after "
+              f"{row['off_answer_s'] or float('nan'):.1f} / {row['on_answer_s'] or float('nan'):.1f} s", file=sys.stderr)
 
     for i in range(args.long):
         # ~2k tokens (100 x an 80-char sentence) and ~4k tokens (200 x), plus the question:

@@ -31,7 +31,19 @@ SEED = ("<think>\nThe user is still typing. I will not wonder what they will ask
         "written, one line with what it is and the facts I know about it, or a partial result. For example, from "
         "\"Quanto pesa la Luna rispetto alla\" I would write \"- Luna (the Moon): mass 7.35e22 kg, radius "
         "1,737 km\".\n\n- ")
-BRIDGE = "\n- New words \"{new}\": "
+# The same frame with its example line in English, for a message in English. With the Italian line the 4B
+# copied "mass of the Moon" into the notes of English word problems (A1, 2026-11-14); in the app, measured on
+# Italian messages, the Italian line stays.
+SEED_EN = SEED.replace("\"Quanto pesa la Luna rispetto alla\" I would write \"- Luna (the Moon): mass 7.35e22 kg",
+                       "\"How much does the Moon weigh compared to\" I would write \"- Moon: mass 7.35e22 kg")
+assert SEED_EN != SEED
+# A message is taken as English when it has more of these words than of the Italian ones; a tie keeps the
+# frame as measured (Italian). Words that are both (a, in, e...) are in neither list.
+EN_WORDS = frozenset("the of and is are to for with how many much what does do has have was were each "
+                     "if then there their they this that from by at his her its it you your".split())
+IT_WORDS = frozenset("il lo la gli le un una di che è per con non sono ci quanti quante quanto ha del della "
+                     "dei delle al alla allo ai nel nella si se poi come cosa sua suo loro questo questa".split())
+BRIDGE ="\n- New words \"{new}\": "
 BRIDGE_EDIT = "\n- The text was edited, so: "
 BRIDGE_NEW_CHARS = 300
 BRIDGE_MIN_WORDS = 2
@@ -47,6 +59,7 @@ THINK_CAP = 1024             # longest reasoning written ahead
 # A reasoning ahead that loops (Qwen3-4B, 2026-11-14: "So the answer is: 18" nine times on half a word
 # problem, then 18 given as the answer to the whole one) is worse than none: from the LOOP_REPEATS-th time
 # the same line of LOOP_MIN_CHARS or more comes back, the reasoning stops and Enter drops the notes.
+LANG_WAIT_WORDS = 8          # the reasoning waits for the message's language up to this many words
 LOOP_REPEATS = 3
 LOOP_MIN_CHARS = 8
 SAMPLING_KEYS = ("temperature", "top_p", "top_k", "min_p", "presence_penalty", "frequency_penalty",
@@ -59,6 +72,7 @@ class Frame:
     def __init__(self, engine):
         tok = engine.tokenize
         self.seed = tok(SEED) or []
+        self.seed_en = tok(SEED_EN) or []          # a frame of its own (the agent's) sets this to []
         self.sent = tok(SENT) or []
         self.bridge_edit = tok(BRIDGE_EDIT) or []
         end = tok("</think>") or []
@@ -75,6 +89,28 @@ class Frame:
     @property
     def usable(self) -> bool:
         return bool(self.seed and self.sent and self.think_end is not None)
+
+    def seed_for(self, text: str) -> list[int]:
+        """The frame's opening for this message: the English example line for an English one."""
+        return self.seed_en if self.seed_en and english(text) else self.seed
+
+    def seed_len(self, notes: list[int]) -> int:
+        """How long the opening of these notes is (either variant)."""
+        for seed in (self.seed, self.seed_en):
+            if seed and notes[:len(seed)] == seed:
+                return len(seed)
+        return len(self.seed)
+
+
+def language(text: str) -> str | None:
+    """"en" or "it" by the words above, None while it cannot tell (no such word yet, or as many of each)."""
+    words = [w.strip(".,;:?!\"'()").lower() for w in text.split()]
+    en, it = sum(w in EN_WORDS for w in words), sum(w in IT_WORDS for w in words)
+    return "en" if en > it else "it" if it > en else None
+
+
+def english(text: str) -> bool:
+    return language(text) == "en"
 
 
 def looping(text: str) -> bool:
@@ -131,7 +167,7 @@ class Thinker:
 
     @property
     def reasoned(self) -> int:
-        return max(0, len(self.notes) - len(self.frame.seed))
+        return max(0, len(self.notes) - self.frame.seed_len(self.notes)) if self.notes else 0
 
     # ---- while the user types -----------------------------------------------------------
     def _loop(self):
@@ -171,8 +207,11 @@ class Thinker:
         with self.lock:
             if self.notes and len(os.path.commonprefix([text, self.notes_text])) < len(self.notes_text) // 2:
                 self._clear()                  # the message was mostly rewritten: old notes would mislead
+            if (not self.notes and self.frame.seed_en and language(text) is None
+                    and len(text.split()) < LANG_WAIT_WORDS):
+                return False                   # which example line? wait for a word that tells the language
             if not self.notes:
-                self.notes, self.notes_text, self.bridge_text = list(self.frame.seed), text, ""
+                self.notes, self.notes_text, self.bridge_text = list(self.frame.seed_for(text)), text, ""
             elif text != self.notes_text and (self.finished or self.fresh >= BRIDGE_EVERY):
                 bridge = self._bridge(text, force=self.finished)
                 if bridge:
@@ -296,7 +335,7 @@ def answer(engine, prompt: list[int], notes: list[int], frame: Frame, body: dict
                 "choices": [{"index": 0, "delta": delta, "finish_reason": finish}], **extra}
 
     yield chunk({"role": "assistant", "content": None})
-    seen = engine.detokenize(notes[len(frame.seed):len(notes) - len(frame.sent)])
+    seen = engine.detokenize(notes[frame.seed_len(notes):len(notes) - len(frame.sent)])
     if seen.strip():
         yield chunk({"reasoning_content": "- " + seen.lstrip()})
     limit = body.get("max_completion_tokens") or body.get("max_tokens") or -1
