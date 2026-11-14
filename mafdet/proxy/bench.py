@@ -94,6 +94,11 @@ RESET = "Reply with OK."
 # --------------------------------------------------------------------------------------
 # HTTP helpers (http.client, like the rest of the project)
 # --------------------------------------------------------------------------------------
+# The sampling of the requests themselves (OFF and ON alike): greedy by default, so OFF gives the same answer
+# every time; --temperature samples them as a chat does (Qwen3's thinking-mode recommendation).
+REQUEST_SAMPLING: dict = {"temperature": 0.0, "top_p": 1.0}
+
+
 def _chat_ttft(host: str, port: int, body: dict, *, max_tokens: int, timeout: float = 600.0,
                cache_prompt: bool | None = True, timing: dict | None = None):
     """Send a streaming chat request, return (seconds to first token, full text, finish_reason).
@@ -102,7 +107,7 @@ def _chat_ttft(host: str, port: int, body: dict, *, max_tokens: int, timeout: fl
 
     `cache_prompt` None leaves the field out: it is llama-server's own, and another engine would
     either ignore it or refuse the request."""
-    payload = dict(body, stream=True, max_tokens=max_tokens, temperature=0.0, top_p=1.0)
+    payload = dict(body, stream=True, max_tokens=max_tokens, **REQUEST_SAMPLING)
     if cache_prompt is not None:
         payload["cache_prompt"] = cache_prompt
     conn = http.client.HTTPConnection(host, port, timeout=timeout)
@@ -215,6 +220,10 @@ def main(argv: list[str] | None = None) -> int:
                          "'THINK_SAMPLING={\"temperature\": 0.3}' or 'SENT=\"...\"' (tuning without editing the code)")
     ap.add_argument("--only", default="", help="these problems only, e.g. 6,23 (indices of the set)")
     ap.add_argument("--repeat", type=int, default=1, help="each problem this many times (a rate, not one sample)")
+    ap.add_argument("--temperature", type=float, default=0.0,
+                    help="sample the requests, OFF and ON, at this temperature (top_p 0.95, top_k 20) instead of "
+                         "greedy: a chat's own variance, to compare with what the notes add")
+    ap.add_argument("--skip-on", action="store_true", help="no ON run: OFF only (e.g. its rate when sampled)")
     ap.add_argument("--skip-off", action="store_true",
                     help="no OFF run (greedy straight at the engine: the same answer every time), ON only")
     ap.add_argument("--problems-file", default="",
@@ -242,6 +251,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="leave the model's thinking on (default: ask the template to skip it, "
                          "so the first token is the first word of the answer)")
     args = ap.parse_args(argv)
+    if args.temperature > 0:
+        REQUEST_SAMPLING.clear()
+        REQUEST_SAMPLING.update(temperature=args.temperature, top_p=0.95, top_k=20)
     if args.think_ahead:
         args.thinking = True
     if not args.max_tokens:
@@ -348,6 +360,14 @@ def main(argv: list[str] | None = None) -> int:
             reset()
         # ON: drafts first (typed, or one paste), then commit through the proxy.
         typed_text = on_body["messages"][-1]["content"]
+        on_t: dict = {}
+        noted = state.counts["thought_ahead"]
+        if args.skip_on:
+            return {"off_ttft": off_ttft, "on_ttft": float("nan"), "off_answer_s": off_t.get("answer"),
+                    "on_answer_s": None, "on_notes": False, "identical": False, "same_answer": False,
+                    "off_finish": off_finish, "on_finish": "skipped",
+                    "off_right": _right(off_text, expected) if off_finish not in ("length", "skipped") else None,
+                    "on_right": None, "expected": expected, "off_text": off_text, "on_text": ""}
         if typed_mode:
             _type("127.0.0.1", args.proxy_port, conversation_id, args.model, typed_text, args.typing_cps)
         else:
@@ -355,8 +375,6 @@ def main(argv: list[str] | None = None) -> int:
                        {"conversation_id": conversation_id, "model": args.model,
                         "messages": on_body["messages"]})
         time.sleep(args.settle)
-        on_t: dict = {}
-        noted = state.counts["thought_ahead"]
         on_ttft, on_text, on_finish = _chat_ttft("127.0.0.1", args.proxy_port,
                                                  dict(on_body, conversation_id=conversation_id),
                                                  max_tokens=args.max_tokens, cache_prompt=cache_on, timing=on_t)
