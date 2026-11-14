@@ -333,6 +333,9 @@ def _strike_args(p):
                    help="reasoning allowed after Enter, in tokens: past it the reasoning is closed and the model "
                         "answers with what it has, instead of thinking on until the token limit cuts it with no "
                         "answer (default: %(default)s, no limit)")
+    # The proxy's switches against conclusions on an unfinished question, for a measurement in the app
+    # (mafdet/watch.py, apply_switches): "QUESTION_STOP,END_BAN,STOP_BRIDGES,ANSWER_BIAS=-8,FORCE_BRIDGE=0".
+    p.add_argument("--ahead-switches", default="", help=argparse.SUPPRESS)
     p.add_argument("--keep-reasoning", action="store_true",
                    help="keep the reasoning of past turns in the conversation (by default only messages and "
                         "answers stay, as in the model's chat template, and the context lasts more turns)")

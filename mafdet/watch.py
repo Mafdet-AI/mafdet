@@ -88,6 +88,59 @@ AHEAD_CHUNK = 128                   # tokens per request written ahead; the next
 THINK_CHUNK = 32                    # the same while reasoning: short, so it follows the text as it is typed
 BRIDGE_EVERY = 64                   # new reasoning tokens before an edit earns a bridge
 
+# Switches against conclusions written on a question not finished yet, the same as the proxy's
+# (mafdet/proxy/think.py, measured there on 2026-11-14), all off: with them off the app behaves as before.
+# Turned on for a measurement with `mafdet strike --ahead-switches "QUESTION_STOP,END_BAN,..."`.
+END_BAN = False                     # the model may not close its reasoning (</think>) while reasoning ahead
+ANSWER_WORDS = (" answer", "Answer", " final", "Final", " boxed", " Therefore")
+ANSWER_BIAS = 0.0                   # a logit bias on those words while reasoning ahead (0: off)
+STOP_BRIDGES = False                # stop a chunk where the model starts a bridge line of its own, or the template
+BRIDGE_STOPS = ["\n- New words", "\n- The text was edited",
+                "<|im_end|>", "<|endoftext|>", "<tool_call>", "<tool_response>", "\nHuman:", "\nUser:"]
+FORCE_BRIDGE = True                 # after the reasoning ended, bridge on the next new word (False: 2 words)
+QUESTION_STOP = False               # no reasoning ahead once the question begins after some setup
+QUESTION_WORDS = frozenset("what how which who whom whose when where why quanto quanti quante quanta quale quali "
+                           "cosa come chi dove quando perché perche".split())
+SENTENCE_RX = re.compile(r"(?<=[.!?])\s+")
+SWITCHES = ("END_BAN", "ANSWER_BIAS", "STOP_BRIDGES", "FORCE_BRIDGE", "QUESTION_STOP")
+
+
+def question_started(text: str) -> bool:
+    """Has the question begun after some setup? (the proxy's think.question_started)"""
+    parts = [p for p in SENTENCE_RX.split(text.strip()) if p.strip()]
+    if len(parts) < 2:
+        return False
+    last = parts[-1].strip().lower()
+    first = last.split()[0].strip(",;:") if last.split() else ""
+    return first in QUESTION_WORDS or text.rstrip().endswith("?")
+
+
+def apply_switches(spec: str, reset: bool = False) -> dict:
+    """"QUESTION_STOP,END_BAN,ANSWER_BIAS=-8,FORCE_BRIDGE=0" into the module's switches; returns what was set.
+    A name alone turns a switch on; a value is read as the switch's type (0/1/true/false for the flags).
+    `reset`: every switch back to its default first (one process may run several configurations)."""
+    if reset:
+        globals().update(SWITCH_DEFAULTS)
+    out = {}
+    for item in (x.strip() for x in (spec or "").split(",")):
+        if not item:
+            continue
+        name, has, value = item.partition("=")
+        name = name.strip().upper()
+        if name not in SWITCHES:
+            raise SystemExit(f"--ahead-switches: no switch {name} (one of {', '.join(SWITCHES)})")
+        current = globals()[name]
+        if isinstance(current, bool):
+            new = (value.strip().lower() in ("1", "true", "yes", "on")) if has else True
+        else:
+            new = float(value) if has else -8.0
+        globals()[name] = new
+        out[name] = new
+    return out
+
+
+SWITCH_DEFAULTS = {name: globals()[name] for name in SWITCHES}
+
 # --branches (experimental): guessed endings. The reasoning left after Enter is mostly about the end of
 # the message, the question, which arrives last. So the model also guesses how the user will finish the
 # message, and on a slot of its own (beside the session's) reasons on the guess, through to the answer,
@@ -186,6 +239,7 @@ class Stream:
         # A branch (--branches) runs on a slot of its own, beside the session's: no lock, no cache to follow.
         self.slot, self.sampling = slot, sampling
         self.tokens: list[int] = []
+        self.text_out = ""                         # the text of the tokens (to cut at a stop string)
         self.info: dict = {}                       # the last event: stop_type, timings, tokens_cached
         self.done = self.cancelled = False
         self.cond = threading.Condition()
@@ -217,6 +271,7 @@ class Stream:
                         d = json.loads(line[6:])
                         with self.cond:
                             self.tokens += d.get("tokens") or []
+                            self.text_out += d.get("content") or ""
                             if d.get("stop"):
                                 self.info = d
                             self.cond.notify_all()
@@ -358,7 +413,12 @@ class Session:
         self.last_bridge: list[int] = []
         self.fmt = "frame"                         # how the notes are framed; "trained": the trained gatherer's steps
         self.awaiting = False                      # trained gatherer: new words given, their lines not finished yet
-        self.chunk_t = 0.0                         # when the last chunk written ahead started or ended
+        # STOP_BRIDGES: the text a chunk stopped on (a bridge line of the model's own, or the template's
+        # markers): no more chunks on it, a bridge first when the text changes. None: not stopped.
+        self.finished_text: str | None = None
+        if role == "main":
+            apply_switches(getattr(args, "ahead_switches", ""), reset=True)
+        self.chunk_t = 0.0                        # when the last chunk written ahead started or ended
         self.busy = self.generating = False
         self.stop = threading.Event()
         self._loader = threading.Thread(target=self._load, daemon=True)
@@ -409,6 +469,7 @@ class Session:
             # Single-token spellings only: biasing the first piece of a longer word would hit other words too.
             meta = {t[0] for w in META_WORDS for v in (w, " " + w) for t in [encode(self.tok, v)] if len(t) == 1}
             self.meta_bias = [[t, META_BIAS] for t in sorted(meta)] if META_BIAS else []
+            self.answer_ids = sorted({t[0] for w in ANSWER_WORDS for t in [encode(self.tok, w)] if len(t) == 1})
             # How far the cache can run past the stable text after a read at a pause.
             self.tail_slack = len(encode(self.tok, tpl.suffix)) + self.holdback + 2
             self.history = list(self.start_ids)
@@ -532,6 +593,7 @@ class Session:
 
     def next_turn(self):
         self.notes, self.answer_ahead, self.notes_fresh, self.notes_text = [], [], 0, ""
+        self.finished_text = None
         self.generating = False
         if self.state == "ready":
             self._retarget()
@@ -565,12 +627,27 @@ class Session:
         room = self.args.ctx - len(prompt) - 8
         if room < 32:
             return
-        if self.think and not self.answer_ahead:
+        reasoning = self.think and not self.answer_ahead
+        if reasoning and self.fmt != "trained" and (
+                (QUESTION_STOP and question_started(text)) or self.finished_text is not None):
+            return                                 # the question is being typed, or stopped here: wait
+        if reasoning:
             chunk = min(THINK_CHUNK, self.think_cap - len(self.notes)) if not self._paused() else THINK_CHUNK
         else:
             chunk = min(AHEAD_CHUNK, self.ahead - len(self.answer_ahead))
-        bias = self.meta_bias if self.think and not self.answer_ahead else None
-        self.spec = Stream(self, prompt, max(1, min(chunk, room)), text, bias)
+        bias = self.meta_bias if reasoning else None
+        sampling = None
+        if reasoning and self.fmt != "trained":
+            if ANSWER_BIAS:
+                bias = list(bias or []) + [[t, ANSWER_BIAS] for t in getattr(self, "answer_ids", [])]
+            if END_BAN:
+                bias = list(bias or []) + [[self.think_end, -100.0]]
+            if STOP_BRIDGES:
+                sampling = {**self.sampling, "stop": list(BRIDGE_STOPS)}
+        if sampling is None:
+            self.spec = Stream(self, prompt, max(1, min(chunk, room)), text, bias)
+        else:
+            self.spec = Stream(self, prompt, max(1, min(chunk, room)), text, bias, sampling=sampling)
         self.chunk_t = time.perf_counter()
 
     def _take_spec(self, spec: Stream) -> bool:
@@ -604,20 +681,33 @@ class Session:
             self.awaiting = self.awaiting and not finished
             self.notes_text = spec.text
             return
+        stopped = False
         if self.think and not self.answer_ahead:
             cut = tokens.index(self.think_end) if self.think_end in tokens else len(tokens)
             thought, answer = tokens[:cut], tokens[cut:]
+            if STOP_BRIDGES and spec.info.get("stop_type") == "word":
+                # stopped at a bridge line of the model's own, or at the template's markers: keep the text
+                # before it, as tokens, and wait for more typing as when the reasoning ends
+                kept = getattr(spec, "text_out", "")
+                with self.tok_lock:
+                    thought = self._encode(self.tok, kept) if kept.strip() else []
+                answer, stopped = [], True
         else:
             thought, answer = [], tokens
         if thought:
             self.notes = self.notes + thought
             self.notes_fresh += len(thought)
         if changed:
-            had_answer = bool(answer or self.answer_ahead)
+            had_answer = bool(answer or self.answer_ahead) or stopped
             self.answer_ahead = []
-            self._bridge(1 if had_answer else bridge_after)
+            if had_answer:
+                self._bridge(1, min_words=not FORCE_BRIDGE)
+            else:
+                self._bridge(bridge_after)
         else:
             self.answer_ahead = self.answer_ahead + answer
+            if stopped:
+                self.finished_text = spec.text
         self.notes_text = spec.text
 
     def _new_words(self) -> tuple[str, int]:
@@ -632,7 +722,7 @@ class Session:
             new = new[:max(new.rfind(" "), 0)]
         return new.strip(), start + len(new)
 
-    def _bridge(self, after: int = 1):
+    def _bridge(self, after: int = 1, min_words: bool | None = None):
         """A bridge after the notes: what the user typed since the last one, for the model to work on."""
         if self.notes_fresh < after and self.fmt != "trained":
             return
@@ -642,7 +732,8 @@ class Session:
             bridge = bridge.lstrip("\n")           # the first step follows the frame directly, as in training
         if self.fmt == "trained" and not new:
             return                                 # the trained gatherer works on new words only
-        if "{new}" in bridge and new and len(new.split()) < BRIDGE_MIN_WORDS and after > 1:
+        if "{new}" in bridge and new and len(new.split()) < BRIDGE_MIN_WORDS and (
+                after > 1 if min_words is None else min_words):
             return                                 # a word or two: wait for more before a bridge
         with self.tok_lock:
             if "{new}" in bridge and new:
@@ -672,7 +763,8 @@ class Session:
         if self.fmt == "trained":
             return not self.notes or self.awaiting  # a step at a time: new words, then its lines
         if self.think and not self.answer_ahead:
-            return self._paused() or len(self.notes) + extra < self.think_cap
+            # END_BAN: the model cannot close its reasoning, so a pause would not end it either: the cap holds
+            return (self._paused() and not END_BAN) or len(self.notes) + extra < self.think_cap
         return len(self.answer_ahead) + extra < self.ahead
 
     def _notes_stale(self) -> bool:
@@ -734,13 +826,19 @@ class Session:
                     self._retarget()
                     continue
             if self.notes_text and self.text.rstrip() != self.notes_text.rstrip():
+                if self.finished_text is not None:  # STOP_BRIDGES stopped on the old text: a bridge first
+                    self.finished_text = None
+                    self._bridge(1, min_words=not FORCE_BRIDGE)
+                    self._retarget()
+                    continue
                 if self.answer_ahead:              # written for a text that has changed since
                     self.answer_ahead = []
-                    self._bridge()
+                    self._bridge(min_words=not FORCE_BRIDGE)
                     self._retarget()
                     continue
                 if self._notes_stale():
                     self.notes, self.notes_text, self.notes_fresh = [], "", 0
+                    self.finished_text = None
                     self._retarget()
                     continue
             paused = time.perf_counter() - self.text_t >= self.debounce
@@ -988,6 +1086,7 @@ class Session:
             yield from self._answer(text, t_enter, spec)
         finally:
             self.notes, self.answer_ahead, self.notes_fresh, self.notes_text = [], [], 0, ""
+            self.finished_text = None
             if self.gatherer is not None:
                 self.gatherer.next_turn()
                 self._g_notes = self.gatherer.notes
@@ -1162,6 +1261,7 @@ class Session:
                 if self.state == "ready":
                     self.history = list(self.start_ids)
                     self.notes, self.answer_ahead, self.notes_fresh, self.notes_text = [], [], 0, ""
+                    self.finished_text = None
                     if self.gatherer is not None:
                         self.gatherer.take_notes("")
                         self.gatherer.next_turn()
