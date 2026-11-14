@@ -113,7 +113,7 @@ ANSWER_RX = re.compile(r"\d{1,2}:\d{2}|-?\d+(?:[.,]\d+)?")
 LANG_WAIT_WORDS = 8         # the reasoning waits for the message's language up to this many words
 # A branch that looped stayed without notes for the rest of the turn, and the turn went from scratch (11 of 40
 # held-out turns with BRANCHES=2, 2026-11-14): with LOOP_RESTART it starts over instead, LOOP_RESTARTS_MAX times.
-LOOP_RESTART = False
+LOOP_RESTART = True          # only with BRANCHES > 1: a restarted branch is still checked against the other
 LOOP_RESTARTS_MAX = 2
 LOOP_REPEATS = 3
 LOOP_MIN_CHARS = 8
@@ -353,7 +353,7 @@ class Thinker:
             self.notes += tokens
             self.written += words
             if looping(self.written):
-                if LOOP_RESTART and self.restarts < LOOP_RESTARTS_MAX:
+                if LOOP_RESTART and BRANCHES > 1 and self.restarts < LOOP_RESTARTS_MAX:
                     self.restarts += 1         # start over on the text as it is now, instead of staying dead
                     self._clear()
                     return True

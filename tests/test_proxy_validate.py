@@ -223,6 +223,7 @@ def test_a_looping_thinker_starts_over_with_loop_restart(monkeypatch):
     """LOOP_RESTART: a loop clears the notes and the reasoning starts over (at most LOOP_RESTARTS_MAX times
     a turn), instead of leaving the branch without notes for the rest of the turn."""
     monkeypatch.setattr(think, "LOOP_RESTART", True)
+    monkeypatch.setattr(think, "BRANCHES", 2)                              # restarts only where branches check
     monkeypatch.setattr(think, "looping", lambda text: True)              # every chunk "loops"
     server, port, state, engine = start()
     try:
@@ -235,3 +236,24 @@ def test_a_looping_thinker_starts_over_with_loop_restart(monkeypatch):
         assert th.restarts == 0 and not th.looped
     finally:
         server.shutdown()
+
+
+def test_one_branch_does_not_restart_and_think_ahead_means_two(monkeypatch):
+    """Without a second branch to check it, a looping reasoning is dropped as before (no restart); and
+    `mafdet proxy --think-ahead` means two branches unless --think-branches says otherwise."""
+    from mafdet.cli import build_parser
+    from mafdet.proxy.launch import think_branches
+    monkeypatch.setattr(think, "BRANCHES", 1)
+    monkeypatch.setattr(think, "looping", lambda text: True)
+    server, port, state, engine = start()
+    try:
+        post(port, "/v1/drafts", {"conversation_id": "c1", "text": TEXT})
+        th = state.session("c1").thinker
+        assert wait_until(lambda: th.looped, timeout=5.0) and th.restarts == 0
+    finally:
+        server.shutdown()
+    parse = build_parser().parse_args
+    assert think_branches(parse(["proxy", "--think-ahead"])) == 2
+    assert think_branches(parse(["proxy", "--think-ahead", "--think-branches", "1"])) == 1
+    assert think_branches(parse(["proxy"])) == 1
+    assert think_branches(parse(["proxy", "--think-ahead", "--exact"])) == 1

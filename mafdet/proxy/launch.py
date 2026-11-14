@@ -57,7 +57,10 @@ def start_engine(args):
     extra = model_args + ("--alias", alias) + tuple(args.llama_args.split())
     # think.BRANCHES > 1 (--think-branches): one more slot per extra branch, after the conversation's and the
     # side slot, and the shared pool grown by half a --ctx each (a branch holds the prompt and its notes)
-    branches = max(1, getattr(args, "think_branches", 1) or 1)
+    branches = think_branches(args)
+    if branches > 1 and "-ctk" not in extra and "--cache-type-k" not in extra:
+        # the branches' pool in a q8_0 cache, as measured (2026-11-14: 3 slots, 18k, 4.8 GB of the 2060's 6)
+        extra += ("-ctk", "q8_0", "-ctv", "q8_0")
     n_slots = 2 + branches - 1
     ctx = args.ctx + (branches - 1) * (args.ctx // 2)
     print(f"Starting llama-server: {alias} on the {'GPU' if device == 'cuda' else 'CPU'}, {n_slots} slots sharing "
@@ -166,12 +169,21 @@ def serve(url: str, model: str, *, host: str = "127.0.0.1", port: int = PROXY_PO
     return 0
 
 
+def think_branches(args) -> int:
+    """How many reasonings ahead: --think-branches, or 2 with --think-ahead (two that must agree, else the
+    answer is worked out from scratch: as right as without thinking ahead in 2026-11-14's runs, 123 of 124
+    against 124 of 124, the one miss a comparison since fixed), 1 without."""
+    k = getattr(args, "think_branches", 0) or 0
+    if k:
+        return max(1, k)
+    return 2 if getattr(args, "think_ahead", False) and not getattr(args, "exact", False) else 1
+
+
 def run(args) -> int:
     """`mafdet proxy`."""
-    branches = max(1, getattr(args, "think_branches", 1) or 1)
-    if branches > 1:
-        from . import think
-        think.BRANCHES = branches
+    branches = think_branches(args)
+    from . import think
+    think.BRANCHES = branches
     if args.url:
         return serve(args.url, args.model, host=args.host, port=args.port, cors=args.cors, exact=args.exact,
                      reprobe=args.reprobe, think_ahead=args.think_ahead, engine_name=getattr(args, "engine", "auto"),
