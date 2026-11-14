@@ -470,14 +470,35 @@ def branch_engine(engine, slot: int):
     return e
 
 
+# The other branches' frame. "same": the conversation's. "comprehend": they only read while the user types,
+# a line of facts per sentence, no computing, no solving, no guessing the question (as StreamingThinker's
+# comprehension phase, Tong et al. 2025, arXiv:2510.17238), and solve after Enter: less correlated with the
+# conversation's branch, whose notes commit to a reading of the problem (the tip, 2026-11-14).
+BRANCH_FRAME = "same"
+COMPREHEND_SEED = ("<think>\nThe user is still typing. While I wait I only read: for each sentence, one line with "
+                   "the quantities in it and what they belong to. I do not compute, do not solve and do not guess "
+                   "the question; that comes when the message is complete.\n\n- ")
+COMPREHEND_SENT = ("\n\nThe user has now sent the complete message. Now let me work out exactly what it asks and "
+                   "solve it step by step, using the facts above.\n\n")
+
+
+def comprehend_frame(engine) -> Frame:
+    """The frame of a branch that reads without solving (BRANCH_FRAME = "comprehend")."""
+    f = Frame(engine)
+    f.seed = engine.tokenize(COMPREHEND_SEED) or f.seed
+    f.seed_en = []
+    f.sent = engine.tokenize(COMPREHEND_SENT) or f.sent
+    return f
+
+
 def run_branches(jobs: list[tuple], frame: Frame, body: dict) -> list[list[dict]]:
-    """Each (engine, prompt, notes) answered at once on its own slot; the chunks of each, in order. Buffered:
-    the caller compares the answers before any is sent."""
+    """Each (engine, prompt, notes[, frame]) answered at once on its own slot; the chunks of each, in order.
+    Buffered: the caller compares the answers before any is sent."""
     out: list[list[dict]] = [[] for _ in jobs]
 
-    def one(i, engine, prompt, notes):
+    def one(i, engine, prompt, notes, fr=None):
         try:
-            out[i] = list(answer(engine, prompt, notes, frame, body))
+            out[i] = list(answer(engine, prompt, notes, fr or frame, body))
         except Exception:
             out[i] = []
     threads = [threading.Thread(target=one, args=(i, *job), daemon=True) for i, job in enumerate(jobs)]

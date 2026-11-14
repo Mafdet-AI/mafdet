@@ -94,6 +94,12 @@ class ProxyState:
                 self.branch_slots = list(range(base, need))
             else:
                 self.no_branch_reason = f"{think.BRANCHES} branches need {need} slots, the engine has {self.slots}"
+        self.branch_frame = self.frame          # the other branches' frame (think.BRANCH_FRAME)
+        if self.branch_slots and think.BRANCH_FRAME == "comprehend":
+            try:
+                self.branch_frame = think.comprehend_frame(engine)
+            except Exception:
+                pass
         self.last_turn: dict = {}               # the last turn's notes and checks (think.RECORD_TURNS: the bench)
 
     def thinking(self) -> bool:
@@ -159,7 +165,7 @@ class ProxyState:
                     sess.thinker = think.Thinker(sess, self.frame, enabled=self.thinking)
                     for slot in self.branch_slots:
                         eng = think.branch_engine(self.engine, slot)
-                        sess.branches.append((think.Thinker(think.BranchView(sess, eng), self.frame,
+                        sess.branches.append((think.Thinker(think.BranchView(sess, eng), self.branch_frame,
                                                             enabled=self.thinking), eng))
                 if conversation_id != "new" and self.unclaimed is not None:
                     # The first draft from a chat the proxy has not seen, right after a
@@ -540,7 +546,7 @@ class Handler(BaseHTTPRequestHandler):
             others = [(t.take(final_text), eng) for t, eng in sess.branches]
             if think.RECORD_TURNS:
                 try:
-                    turn["branch_notes"] = [state.engine.detokenize(think.notes_core(n, state.frame)) if n else ""
+                    turn["branch_notes"] = [state.engine.detokenize(think.notes_core(n, state.branch_frame)) if n else ""
                                             for n, _ in others]
                 except Exception:
                     pass
@@ -548,7 +554,8 @@ class Handler(BaseHTTPRequestHandler):
                 turn["fallback"] = "a branch has no notes"
                 notes = None
             else:
-                results = think.run_branches([(state.engine, prompt, notes)] + [(eng, prompt, n) for n, eng in others],
+                results = think.run_branches([(state.engine, prompt, notes)]
+                                             + [(eng, prompt, n, state.branch_frame) for n, eng in others],
                                              state.frame, body)
                 answers = [think.final_answer(think.answer_text(r)) for r in results]
                 agreed = all(results) and len(set(answers)) == 1

@@ -185,3 +185,24 @@ def test_final_answer_compares_numbers_then_text():
     assert think.final_answer("It is 51.0") == "51"
     assert think.final_answer("  Paris  is the Capital ") == "paris is the capital"
     assert json.dumps(think.final_answer("")) == '""'
+
+
+def test_a_comprehension_branch_reads_with_its_own_frame(monkeypatch):
+    """BRANCH_FRAME = "comprehend": the other branch opens its notes with the read-only frame and answers after
+    its own SENT; the conversation's branch keeps the usual frame."""
+    monkeypatch.setattr(think, "BRANCHES", 2)
+    monkeypatch.setattr(think, "BRANCH_FRAME", "comprehend")
+    server, port, state, engine = start(think_after=6, n_slots=3)
+    try:
+        assert state.branch_frame is not state.frame
+        assert state.branch_frame.seed == engine.tokenize(think.COMPREHEND_SEED)
+        post(port, "/v1/drafts", {"conversation_id": "c1", "text": TEXT})
+        sess, ready = _branches_ready(state)
+        assert ready
+        thinker, _ = sess.branches[0]
+        assert thinker.notes[:len(state.branch_frame.seed)] == state.branch_frame.seed
+        assert sess.thinker.notes[:len(state.frame.seed_en)] == state.frame.seed_en      # English: its own frame
+        status, raw = post(port, "/v1/chat/completions", REQUEST)
+        assert status == 200 and state.counts["thought_ahead"] == 1
+    finally:
+        server.shutdown()
