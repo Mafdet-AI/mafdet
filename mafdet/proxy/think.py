@@ -66,7 +66,20 @@ END_BAN = False              # the model may not close its reasoning (</think>) 
 ANSWER_WORDS = (" answer", "Answer", " final", "Final", " boxed", " Therefore")
 ANSWER_BIAS = 0.0            # a logit bias on those words while reasoning ahead (0: off)
 STOP_BRIDGES = False         # stop a chunk where the model starts a bridge line of its own ("- New words ...")
-BRIDGE_STOPS = ["\n- New words", "\n- The text was edited"]
+BRIDGE_STOPS = ["\n- New words", "\n- The text was edited",
+                # with END_BAN the 4B looked for another way out and wrote the chat template's own markers
+                # and a made-up next turn into its notes (2026-11-14): a stop there too
+                "<|im_end|>", "<|endoftext|>", "<tool_call>", "<tool_response>", "\nHuman:", "\nUser:"]
+FORCE_BRIDGE = True          # after the reasoning ended, bridge on the next new word (False: wait for 2 words,
+                             # BRIDGE_MIN_WORDS, as for any bridge: no word-by-word bridges)
+# What follows the notes on Enter. "reuse" is the frame measured in the app; "rederive" says the notes were
+# written before the question was complete and asks for the answer worked out again from the whole message
+# (the tip: notes that had decided "the tip is separate" were kept after Enter).
+SENT_MODE = "reuse"
+SENT_REDERIVE = ("\n\nThe user has now sent the complete message. The material above was written before the "
+                 "question was complete, so any conclusion in it may be wrong. Let me reread the whole message, "
+                 "work out exactly what it asks, and solve it step by step, using the numbers above only where "
+                 "they fit.\n\n")
 LANG_WAIT_WORDS = 8          # the reasoning waits for the message's language up to this many words
 LOOP_REPEATS = 3
 LOOP_MIN_CHARS = 8
@@ -81,7 +94,7 @@ class Frame:
         tok = engine.tokenize
         self.seed = tok(SEED) or []
         self.seed_en = tok(SEED_EN) or []          # a frame of its own (the agent's) sets this to []
-        self.sent = tok(SENT) or []
+        self.sent = tok(SENT_REDERIVE if SENT_MODE == "rederive" else SENT) or []
         self.bridge_edit = tok(BRIDGE_EDIT) or []
         end = tok("</think>") or []
         self.think_end = end[0] if len(end) == 1 else None
@@ -236,7 +249,7 @@ class Thinker:
             if not self.notes:
                 self.notes, self.notes_text, self.bridge_text = list(self.frame.seed_for(text)), text, ""
             elif text != self.notes_text and (self.finished or self.fresh >= BRIDGE_EVERY):
-                bridge = self._bridge(text, force=self.finished)
+                bridge = self._bridge(text, force=self.finished and FORCE_BRIDGE)
                 if bridge:
                     self.notes += bridge
                     self.written += "\n"
@@ -261,8 +274,12 @@ class Thinker:
             s.cache.warm_lock.release()
         tokens = list(res.get("tokens") or [])
         if STOP_BRIDGES and res.get("stop_type") == "word":
-            # stopped at a bridge line of the model's own: keep the text before it, as tokens
-            tokens = list(self.frame.tokenize(str(res.get("text") or "")) or []) if str(res.get("text") or "").strip() else []
+            # stopped at a bridge line of the model's own, or at the template's markers: keep the text before
+            # it, as tokens, and wait for more typing as when the reasoning ends
+            kept = str(res.get("text") or "")
+            tokens = list(self.frame.tokenize(kept) or []) if kept.strip() else []
+            with self.lock:
+                self.finished = True
         if not tokens:
             return False
         with self.lock:
