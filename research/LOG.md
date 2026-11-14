@@ -569,6 +569,35 @@ wait; they stay here as the record of where each one stopped.
 
 ## Done and measured
 
+- **2026-11-14 (late night) · The shipping configuration confirmed; the review's fixes; prose answers.**
+  - Final confirmation with `mafdet proxy --model qwen3-4b --think-ahead` (the default: 2 branches, loop
+    restart, branch 0's reasoning streamed live) and OFF in the same runs (`final_*`): held-out 40: **40/40
+    against 40/40, median 3.19 against 6.16 s, faster 39/40**; the 24: **22/22 against 22/22, 3.01 against 5.89
+    s, faster 23/24, no fallback**. OFF was slower than in the afternoon (4.3-4.8 s): the GPU after hours of
+    load; the comparison holds within each run.
+  - An independent review (fresh agent) found the comparator usable only for one-number answers: prose
+    never matches (every chat turn would fall back, about double the wait), stray numbers "agree"; an engine
+    error on both branches passed as an agreed empty answer; LOOP_RESTART and seeds applied with too few slots;
+    branch chunks in flight at Enter not aborted; no cap on a slow branch; a second role chunk on a mid-stream
+    failure; user cache flags overridden; bench and CMH details. Fixed by a fork in a worktree (`b22b74a`,
+    merged, 147 tests): a FINAL value only when clear (\boxed, "answer is", bold or bare last line; numbers
+    whole, times with am/pm), **prose on every branch → not comparable → branch 0 answers as one reasoning
+    would, no fallback**; errors, empty or cut branches and branches past 1.5x branch 0's time (min 3 s) are
+    disagreements; the real branch count gates seeds and restarts; Enter waits for the branches' chunks;
+    `public()` strips internal fields.
+  - Checked live on the merged code: two prose questions answered from branch 0 with no fallback (3.5 and 5.4
+    s in all, the reasoning shown at once); `merged_full_*`: 22/22 against 22/22, median 3.03 against 6.65 s,
+    3 fallbacks (problems 5 and 19 with no single answer, and the tip: branches 33 and 27); `merged_hard`
+    (6, 1, 23 x 6): 18/18, the tip's fallbacks on 33 vs 45: **two wrong, different answers caught and worked
+    out again** — the validation doing its job.
+  - Two hard resets of the PC under sustained GPU load during these runs (15:34, 17:03; nine since 11-10, two
+    BSOD 0xD1 on 11-10): runs were split in blocks of 10 with a minute's pause. The owner checks the machine.
+  - **State: thinking ahead in the proxy loses no answers on the sets measured (Wilson upper bound ~2.5% over
+    ~280 judged two-branch answers) and halves the wait to the answer's first word on Qwen3-4B / RTX 2060.**
+    Not done: the app (watch.py) and the agent with branches; other machines, the 14B and split models
+    (a second sequence costs the CPU there); Open WebUI conversations with branches; prose answers are not
+    validated (branch 0 alone, as one reasoning).
+
 - **2026-11-14 (night, after two hard resets of the PC) · Converged: two reasonings ahead that must agree, as
   right as without thinking ahead, the wait nearly halved; the default of `mafdet proxy --think-ahead`.**
   Same engine as above (3 slots, q8_0 cache), OFF in the same runs; data `research/data/think_tuning/k2*`.
