@@ -265,3 +265,15 @@ def test_the_example_line_follows_the_message_language_and_waits_until_it_is_kno
         assert s2.thinker.notes[:len(state.frame.seed)] == state.frame.seed
     finally:
         server.shutdown()
+
+
+def test_the_switches_against_early_conclusions_shape_the_bias(monkeypatch):
+    """END_BAN forbids </think> while reasoning ahead, ANSWER_BIAS pushes down the answer words; both off by
+    default (as measured before 2026-11-14), each turned on alone by the bench (--set-think)."""
+    frame = think.Frame(FakeEngine())
+    assert frame.bias() == frame.meta_bias
+    monkeypatch.setattr(think, "END_BAN", True)
+    monkeypatch.setattr(think, "ANSWER_BIAS", -4.0)
+    bias = frame.bias()
+    assert [frame.think_end, -100.0] in bias
+    assert all([t, -4.0] in bias for t in frame.answer_ids)

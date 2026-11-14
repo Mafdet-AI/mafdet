@@ -59,6 +59,14 @@ THINK_CAP = 1024             # longest reasoning written ahead
 # A reasoning ahead that loops (Qwen3-4B, 2026-11-14: "So the answer is: 18" nine times on half a word
 # problem, then 18 given as the answer to the whole one) is worse than none: from the LOOP_REPEATS-th time
 # the same line of LOOP_MIN_CHARS or more comes back, the reasoning stops and Enter drops the notes.
+# Against conclusions written on a question not finished yet (2026-11-14: in 31% of the notes "the answer is
+# N" came before the question, and 3 of the 4 lost answers were such a conclusion kept after Enter). Each can
+# be turned on alone (bench --set-think), measured, then made the default:
+END_BAN = False              # the model may not close its reasoning (</think>) while reasoning ahead
+ANSWER_WORDS = (" answer", "Answer", " final", "Final", " boxed", " Therefore")
+ANSWER_BIAS = 0.0            # a logit bias on those words while reasoning ahead (0: off)
+STOP_BRIDGES = False         # stop a chunk where the model starts a bridge line of its own ("- New words ...")
+BRIDGE_STOPS = ["\n- New words", "\n- The text was edited"]
 LANG_WAIT_WORDS = 8          # the reasoning waits for the message's language up to this many words
 LOOP_REPEATS = 3
 LOOP_MIN_CHARS = 8
@@ -84,7 +92,22 @@ class Frame:
                 if len(ids) == 1:
                     meta.add(ids[0])
         self.meta_bias = [[t, META_BIAS] for t in sorted(meta)] if META_BIAS else []
+        answer = set()
+        for w in ANSWER_WORDS:
+            ids = tok(w) or []
+            if len(ids) == 1:
+                answer.add(ids[0])
+        self.answer_ids = sorted(answer)
         self.tokenize = tok
+
+    def bias(self) -> list:
+        """The logit bias of a chunk written ahead, with the switches above as they are now."""
+        out = list(self.meta_bias)
+        if ANSWER_BIAS:
+            out += [[t, ANSWER_BIAS] for t in self.answer_ids]
+        if END_BAN and self.think_end is not None:
+            out.append([self.think_end, -100.0])
+        return out
 
     @property
     def usable(self) -> bool:
@@ -230,12 +253,16 @@ class Thinker:
         try:
             if s.cache.generating or self.stopped:
                 return False
-            res = s.engine.generate(ids, n_predict=THINK_CHUNK, sampling=THINK_SAMPLING,
-                                    logit_bias=self.frame.meta_bias, abort=s.cache.abort)
+            sampling = dict(THINK_SAMPLING, stop=list(BRIDGE_STOPS)) if STOP_BRIDGES else THINK_SAMPLING
+            res = s.engine.generate(ids, n_predict=THINK_CHUNK, sampling=sampling,
+                                    logit_bias=self.frame.bias(), abort=s.cache.abort)
             s.cache.set(ids + list(res.get("tokens") or []))
         finally:
             s.cache.warm_lock.release()
         tokens = list(res.get("tokens") or [])
+        if STOP_BRIDGES and res.get("stop_type") == "word":
+            # stopped at a bridge line of the model's own: keep the text before it, as tokens
+            tokens = list(self.frame.tokenize(str(res.get("text") or "")) or []) if str(res.get("text") or "").strip() else []
         if not tokens:
             return False
         with self.lock:
