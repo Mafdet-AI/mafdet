@@ -108,7 +108,13 @@ VERIFY_N_PROBS = 20          # top tokens asked for; yes/no mass is read among t
 BRANCHES = 1
 RECORD_TURNS = False         # keep the notes' text and the checks of the last turn in ProxyState.last_turn (bench)
 NUMBER_RX = re.compile(r"-?\d+(?:[.,]\d+)?")
+# A time is compared whole: two branches at 21:55 and 22:55 "agreed" on 55 (2026-11-14, held-out problem 27)
+ANSWER_RX = re.compile(r"\d{1,2}:\d{2}|-?\d+(?:[.,]\d+)?")
 LANG_WAIT_WORDS = 8         # the reasoning waits for the message's language up to this many words
+# A branch that looped stayed without notes for the rest of the turn, and the turn went from scratch (11 of 40
+# held-out turns with BRANCHES=2, 2026-11-14): with LOOP_RESTART it starts over instead, LOOP_RESTARTS_MAX times.
+LOOP_RESTART = False
+LOOP_RESTARTS_MAX = 2
 LOOP_REPEATS = 3
 LOOP_MIN_CHARS = 8
 SAMPLING_KEYS = ("temperature", "top_p", "top_k", "min_p", "presence_penalty", "frequency_penalty",
@@ -219,6 +225,7 @@ class Thinker:
         self.stopped = False
         self.dropped = 0                       # turns whose notes were dropped for looping
         self.conclusions_dropped = 0           # lines stating an answer taken out on Enter (DROP_CONCLUSIONS)
+        self.restarts = 0                      # this turn's restarts after a loop (LOOP_RESTART)
         self.verified_dropped = 0              # turns whose notes the check on Enter dropped (VERIFY_PROBE)
         self.last_verify: float | None = None  # P(yes) of the last check
         self._clear()
@@ -237,6 +244,7 @@ class Thinker:
         """A new turn: no notes."""
         with self.lock:
             self._clear()
+            self.restarts = 0
 
     @property
     def active(self) -> bool:
@@ -345,6 +353,10 @@ class Thinker:
             self.notes += tokens
             self.written += words
             if looping(self.written):
+                if LOOP_RESTART and self.restarts < LOOP_RESTARTS_MAX:
+                    self.restarts += 1         # start over on the text as it is now, instead of staying dead
+                    self._clear()
+                    return True
                 self.looped = True
             self.fresh += len(tokens)
             self.notes_text = text
@@ -414,7 +426,7 @@ def verify(engine, prompt: list[int], notes: list[int], frame: Frame) -> float |
 def final_answer(text: str) -> str:
     """What two answers are compared on: the last number (commas and a trailing .0 left out), else the
     whole answer, lowercased, spaces collapsed."""
-    found = NUMBER_RX.findall(text or "")
+    found = ANSWER_RX.findall(text or "")
     if found:
         n = found[-1].replace(",", "")
         return n[:-2] if n.endswith(".0") else n

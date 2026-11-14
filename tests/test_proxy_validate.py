@@ -210,3 +210,28 @@ def test_a_comprehension_branch_reads_with_its_own_frame(monkeypatch):
         assert status == 200 and state.counts["thought_ahead"] == 1
     finally:
         server.shutdown()
+
+
+def test_times_are_compared_whole():
+    """Two branches at 22:55 and 21:55 "agreed" on 55 (held-out problem 27, 2026-11-14)."""
+    assert think.final_answer("So the answer is 22:55.") == "22:55"
+    assert think.final_answer("ends at 21:55") != think.final_answer("ends at 22:55")
+    assert think.final_answer("each pays 27 euros") == "27"
+
+
+def test_a_looping_thinker_starts_over_with_loop_restart(monkeypatch):
+    """LOOP_RESTART: a loop clears the notes and the reasoning starts over (at most LOOP_RESTARTS_MAX times
+    a turn), instead of leaving the branch without notes for the rest of the turn."""
+    monkeypatch.setattr(think, "LOOP_RESTART", True)
+    monkeypatch.setattr(think, "looping", lambda text: True)              # every chunk "loops"
+    server, port, state, engine = start()
+    try:
+        post(port, "/v1/drafts", {"conversation_id": "c1", "text": TEXT})
+        sess = state.session("c1")
+        th = sess.thinker
+        assert wait_until(lambda: th.looped, timeout=5.0)
+        assert th.restarts == think.LOOP_RESTARTS_MAX                      # it started over twice, then gave up
+        th.reset()
+        assert th.restarts == 0 and not th.looped
+    finally:
+        server.shutdown()
