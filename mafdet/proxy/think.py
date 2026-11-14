@@ -511,6 +511,23 @@ def comprehend_frame(engine) -> Frame:
     return f
 
 
+# Streamed with branches: branch 0's reasoning goes out live, its answer is held until every branch is done;
+# on disagreement this line is shown in the reasoning before the answer worked out from scratch.
+DISAGREE_NOTE = ("\n\n(The answers written ahead disagree: working it out again from the whole message.)\n\n")
+
+
+def is_reasoning_chunk(ev: dict) -> bool:
+    """A chunk that can be shown before the branches are compared: the role or reasoning, no answer text, no
+    tool call, no finish, no usage."""
+    if "usage" in ev:
+        return False
+    c = (ev.get("choices") or [{}])[0]
+    if c.get("finish_reason") is not None:
+        return False
+    d = c.get("delta") or {}
+    return d.get("content") is None and not d.get("tool_calls")
+
+
 def run_branches(jobs: list[tuple], frame: Frame, body: dict) -> list[list[dict]]:
     """Each (engine, prompt, notes[, frame]) answered at once on its own slot; the chunks of each, in order.
     Buffered: the caller compares the answers before any is sent."""

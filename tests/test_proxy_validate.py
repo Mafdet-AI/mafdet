@@ -257,3 +257,91 @@ def test_one_branch_does_not_restart_and_think_ahead_means_two(monkeypatch):
     assert think_branches(parse(["proxy", "--think-ahead", "--think-branches", "1"])) == 1
     assert think_branches(parse(["proxy"])) == 1
     assert think_branches(parse(["proxy", "--think-ahead", "--exact"])) == 1
+
+
+def _stream_timed(port, body):
+    """POST a streamed chat and read it event by event: [(seconds since perf_counter epoch, event dict)]."""
+    import http.client
+    import time as _t
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+    conn.request("POST", "/v1/chat/completions", body=json.dumps(body).encode(),
+                 headers={"Content-Type": "application/json"})
+    resp = conn.getresponse()
+    out = []
+    while True:
+        line = resp.readline()
+        if not line:
+            break
+        if line.startswith(b"data: ") and b"[DONE]" not in line:
+            out.append((_t.perf_counter(), json.loads(line[6:])))
+    conn.close()
+    return out
+
+
+def test_streamed_branches_show_the_reasoning_live_and_the_answer_once_they_agree(monkeypatch):
+    """Branch 0's reasoning reaches the client while the other branch is still answering; its answer only
+    after both are done and agree."""
+    monkeypatch.setattr(think, "BRANCHES", 2)
+    server, port, state, engine = start(think_after=6, n_slots=3)
+    monkeypatch.setattr(engine, "stream_delay_by_slot", {2: 0.05})          # the other branch is slower
+    monkeypatch.setattr(engine, "stream_done", {})
+    try:
+        post(port, "/v1/drafts", {"conversation_id": "c1", "text": TEXT})
+        sess, ready = _branches_ready(state)
+        assert ready
+        events = _stream_timed(port, REQUEST)
+        deltas = [(t, e["choices"][0]["delta"], e["choices"][0]["finish_reason"]) for t, e in events]
+        first_reasoning = next(t for t, d, _ in deltas if d.get("reasoning_content"))
+        first_content = next(t for t, d, _ in deltas if d.get("content"))
+        assert first_reasoning < engine.stream_done[2] <= first_content      # live reasoning, held answer
+        assert "".join(d.get("content") or "" for _, d, _ in deltas).strip() == "The answer is 42"
+        assert sum(1 for _, d, _ in deltas if "role" in d) == 1
+        assert sum(1 for _, _, f in deltas if f) == 1 and deltas[-1][2] == "stop"
+        assert len({e["id"] for _, e in events}) == 1
+        assert state.last_turn["branches_agreed"] is True and state.last_turn.get("streamed_reasoning") is True
+        assert state.counts["thought_ahead"] == 1 and engine.chats == 0
+    finally:
+        server.shutdown()
+
+
+def test_streamed_branches_that_disagree_say_so_then_stream_from_scratch(monkeypatch):
+    """Disagreement: branch 0's reasoning stays, a line says the answers disagree, then the from-scratch answer
+    under the same id, with one role and one finish."""
+    monkeypatch.setattr(think, "BRANCHES", 2)
+    server, port, state, engine = start(think_after=6, n_slots=3)
+    monkeypatch.setattr(engine, "final_by_slot", {2: "other reasoning </think> The answer is 7"})
+    try:
+        post(port, "/v1/drafts", {"conversation_id": "c1", "text": TEXT})
+        sess, ready = _branches_ready(state)
+        assert ready
+        events = [e for _, e in _stream_timed(port, REQUEST)]
+        deltas = [e["choices"][0]["delta"] for e in events]
+        reasoning = [d.get("reasoning_content") for d in deltas if d.get("reasoning_content")]
+        note_at = next(i for i, d in enumerate(deltas) if d.get("reasoning_content") == think.DISAGREE_NOTE)
+        assert len(reasoning) >= 2 and reasoning.index(think.DISAGREE_NOTE) > 0       # branch 0's reasoning first
+        content = "".join(d.get("content") or "" for d in deltas)
+        assert content.startswith("echo: ") and "42" not in content                   # the from-scratch answer
+        assert all(not d.get("content") for d in deltas[:note_at])                     # nothing of branch 0's answer
+        assert sum(1 for d in deltas if "role" in d) == 1
+        assert sum(1 for e in events if e["choices"][0]["finish_reason"]) == 1
+        assert len({e["id"] for e in events}) == 1
+        assert engine.chats == 1 and state.last_turn["fallback"] == "the branches disagree"
+        assert state.counts["thought_ahead"] == 0
+    finally:
+        server.shutdown()
+
+
+def test_unstreamed_branches_are_unchanged(monkeypatch):
+    """A request without stream: the branches are compared before anything is sent, one JSON answer."""
+    monkeypatch.setattr(think, "BRANCHES", 2)
+    server, port, state, engine = start(think_after=6, n_slots=3)
+    try:
+        post(port, "/v1/drafts", {"conversation_id": "c1", "text": TEXT})
+        sess, ready = _branches_ready(state)
+        assert ready
+        status, raw = post(port, "/v1/chat/completions", dict(REQUEST, stream=False))
+        msg = json.loads(raw)["choices"][0]["message"]
+        assert status == 200 and msg["content"].strip() == "The answer is 42" and msg.get("reasoning_content")
+        assert "streamed_reasoning" not in state.last_turn and state.last_turn["branches_agreed"] is True
+    finally:
+        server.shutdown()

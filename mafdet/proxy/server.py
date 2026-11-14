@@ -13,6 +13,7 @@ import json
 import re
 import threading
 import time
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -523,10 +524,12 @@ class Handler(BaseHTTPRequestHandler):
         self._json(200, {"conversation_id": conversation_id, "tier": sess.tier,
                          "draft_tokens": tokens, "cached_tokens": len(sess.cached)})
 
-    def _validate(self, sess, thinker, final_text: str, prompt, notes, body: dict, turn: dict):
+    def _validate(self, sess, thinker, final_text: str, prompt, notes, body: dict, turn: dict, live: bool = False):
         """The checks on Enter of the notes about to be answered from (both off by default): the model's
         one-token verdict (think.VERIFY_PROBE) and the agreement of independent branches (think.BRANCHES).
-        Returns (notes or None: from scratch, the agreed answer's chunks or None). `turn` gets what was seen."""
+        Returns (notes or None: from scratch, the agreed answer's chunks or None, the branches' jobs or None).
+        With `live` (a streamed request) the branches are not run here: their jobs come back, for
+        _stream_branches to show branch 0's reasoning while they run. `turn` gets what was seen."""
         state = self.state
         if think.RECORD_TURNS and notes:
             try:
@@ -554,9 +557,13 @@ class Handler(BaseHTTPRequestHandler):
                 turn["fallback"] = "a branch has no notes"
                 notes = None
             else:
-                results = think.run_branches([(state.engine, prompt, notes)]
-                                             + [(eng, prompt, n, state.branch_frame) for n, eng in others],
-                                             state.frame, body)
+                jobs = [(state.engine, prompt, notes)] + [(eng, prompt, n, state.branch_frame) for n, eng in others]
+                if live:
+                    turn["streamed_reasoning"] = True
+                    if thinker is not None:
+                        state.last_turn = turn
+                    return notes, None, jobs
+                results = think.run_branches(jobs, state.frame, body)
                 answers = [think.final_answer(think.answer_text(r)) for r in results]
                 agreed = all(results) and len(set(answers)) == 1
                 turn["branch_answers"], turn["branches_agreed"] = answers, agreed
@@ -567,7 +574,98 @@ class Handler(BaseHTTPRequestHandler):
                     notes = None
         if thinker is not None:
             state.last_turn = turn
-        return notes, chosen
+        return notes, chosen, None
+
+    def _send_event(self, ev: dict, seen: list, first: list) -> None:
+        data = b"data: " + json.dumps(ev).encode() + SSE_END
+        seen.append(data)
+        self.wfile.write(_chunked(data))
+        if not first and _has_text(data):
+            first.append(time.perf_counter())
+
+    def _stream_branches(self, jobs: list[tuple], body: dict, forward: dict, turn: dict, seen: list,
+                         first: list) -> bool:
+        """A streamed answer with branches: branch 0's reasoning goes out as it is written, its answer (content,
+        tool calls, the finish) is held while the other branches answer on their slots; then, if all agree,
+        the held answer is sent; if not, a line says so in the reasoning and the answer worked out from
+        scratch is streamed after it, under the same id. True when they agreed."""
+        state = self.state
+        others: list[list[dict]] = [[] for _ in jobs[1:]]
+
+        def one(i, engine, prompt, notes, fr=None):
+            try:
+                others[i] = list(think.answer(engine, prompt, notes, fr or state.frame, body))
+            except Exception:
+                others[i] = []
+        threads = [threading.Thread(target=one, args=(i, *job), daemon=True) for i, job in enumerate(jobs[1:])]
+        for t in threads:
+            t.start()
+        engine0, prompt0, notes0 = jobs[0][:3]
+        mine: list[dict] = []
+        held: list[dict] = []
+        meta: dict = {}
+        try:
+            for ev in think.answer(engine0, prompt0, notes0, state.frame, body):
+                mine.append(ev)
+                if not meta:
+                    meta = {k: ev.get(k) for k in ("id", "created", "model")}
+                if not held and think.is_reasoning_chunk(ev):
+                    self._send_event(ev, seen, first)
+                else:
+                    held.append(ev)               # from the first answer chunk on, in order
+        except Exception:
+            mine = []
+        for t in threads:
+            t.join()
+        results = [mine] + others
+        answers = [think.final_answer(think.answer_text(r)) for r in results]
+        agreed = all(results) and len(set(answers)) == 1
+        turn["branch_answers"], turn["branches_agreed"] = answers, agreed
+        if agreed:
+            for ev in held:
+                self._send_event(ev, seen, first)
+            return True
+        turn["fallback"] = "the branches disagree"
+        meta = meta or {"id": "chatcmpl-" + uuid.uuid4().hex[:24], "created": int(time.time()),
+                        "model": body.get("model", "")}
+        if not mine:
+            self._send_event({**meta, "object": "chat.completion.chunk",
+                              "choices": [{"index": 0, "delta": {"role": "assistant", "content": None},
+                                           "finish_reason": None}]}, seen, first)
+        self._send_event({**meta, "object": "chat.completion.chunk",
+                          "choices": [{"index": 0, "delta": {"reasoning_content": think.DISAGREE_NOTE},
+                                       "finish_reason": None}]}, seen, first)
+        status, _headers, chunks = state.engine.chat(forward, stream=True)
+        if status >= 400:
+            self._send_event({**meta, "object": "chat.completion.chunk",
+                              "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]}, seen, first)
+            return False
+        buf = b""
+        for piece in chunks:
+            buf += piece or b""
+            *lines, buf = buf.split(b"\n")
+            for line in lines:
+                self._relay_line(line, meta, seen, first)
+        if buf:
+            self._relay_line(buf, meta, seen, first)
+        return False
+
+    def _relay_line(self, line: bytes, meta: dict, seen: list, first: list) -> None:
+        """One SSE line of the engine's from-scratch stream, under the branches' id: no second role."""
+        line = line.strip()
+        if not line.startswith(b"data:"):
+            return
+        payload = line[5:].strip()
+        if not payload or payload == b"[DONE]":
+            return
+        try:
+            ev = json.loads(payload.decode())
+        except (ValueError, UnicodeDecodeError):
+            return
+        ev.update(meta)
+        for c in ev.get("choices") or []:
+            (c.get("delta") or {}).pop("role", None)
+        self._send_event(ev, seen, first)
 
     def _chat(self) -> None:
         try:
@@ -604,7 +702,7 @@ class Handler(BaseHTTPRequestHandler):
                     draft_with = sess.rendered_with
             state.begin_generation()
         # Thinking ahead: the notes written while the user typed, if the request leaves thinking on.
-        notes = prompt = chosen = None
+        notes = prompt = chosen = live_jobs = None
         turn: dict = {}
         if not side and thinker is not None and think.thinking_on(body.get("chat_template_kwargs")):
             final_text = _text_of(messages)
@@ -618,10 +716,26 @@ class Handler(BaseHTTPRequestHandler):
                                                                      body.get("tools"))
                 if not prompt:
                     notes = None
-            notes, chosen = self._validate(sess, thinker, final_text, prompt, notes, body, turn)
+            notes, chosen, live_jobs = self._validate(sess, thinker, final_text, prompt, notes, body, turn,
+                                                      live=stream)
         ok = False
         seen: list[bytes] = []
         try:
+            if notes and live_jobs:
+                # branches, streamed: branch 0's reasoning live, the answer once they agree (or from scratch)
+                ok = True
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("Transfer-Encoding", "chunked")
+                self.end_headers()
+                if self._stream_branches(live_jobs, body, forward, turn, seen, first):
+                    state.counts["thought_ahead"] += 1
+                else:
+                    notes = None                      # answered from scratch: recorded as such
+                done = b"data: [DONE]" + SSE_END
+                self.wfile.write(_chunked(done) + _chunked(b""))
+                return
             if notes:
                 state.counts["thought_ahead"] += 1
                 ok = True

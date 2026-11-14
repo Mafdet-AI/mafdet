@@ -8,6 +8,7 @@ telemetry that lies, and so on.
 from __future__ import annotations
 
 import json
+import time
 
 from mafdet.proxy.engine import WarmResult
 from mafdet.text import common_prefix_len
@@ -134,12 +135,20 @@ class FakeEngine:
         self.probe_prompts.append(list(ids))
         return dict(self.probs_answer)
 
+    stream_delay_by_slot: dict = {}       # seconds per piece on a slot (a slower branch)
+    stream_done: dict = {}                # slot -> when its last answer stream ended (set by the test)
+
     def stream(self, ids, *, n_predict, sampling=None):
         self.streamed = list(ids)
-        final = self.final_by_slot.get(getattr(self, "slot", 0), self.final_text)
+        slot = getattr(self, "slot", 0)
+        final = self.final_by_slot.get(slot, self.final_text)
+        delay = self.stream_delay_by_slot.get(slot, 0.0)
         pieces = final.replace("</think>", " </think> ").split()
         for i, word in enumerate(pieces):
+            if delay:
+                time.sleep(delay)
             yield {"text": word + " ", "tokens": self.tokenize(word), "stop": False}
+        self.stream_done[slot] = time.perf_counter()
         yield {"text": "", "tokens": [], "stop": True, "stop_type": "eos", "timings": {"prompt_n": 1}}
 
     def models(self):
