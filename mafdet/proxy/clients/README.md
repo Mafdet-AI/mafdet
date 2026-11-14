@@ -18,6 +18,10 @@ ahead only: the prompt the model answers is the same.
 
 ## 1. MAFDET and a model
 
+Memory: Open WebUI itself takes a few GB of RAM (it also loads models of its own for documents), on top of
+llama-server. On a 16 GB PC close the heavy apps first; with less, run Open WebUI on another machine or in
+Docker elsewhere and point it at the proxy (`--host 0.0.0.0`).
+
 `mafdet proxy` comes with MAFDET 0.5.0 and later (`mafdet --version` says which you have):
 
 ```bash

@@ -78,6 +78,12 @@ PROBLEMS = [
     "A baker makes 36 loaves, sells 27 and bakes 15 more. How many loaves now?",
 ]
 
+# The right answer of each problem, to tell whether thinking ahead (`--think-ahead`) keeps the answers
+# right; None where the problem has no single answer (64 sweets for 8 children with 3 left over).
+EXPECTED = ["11", "11:15", "69", "46", "120", "66", "27", "60", "42", "58", "68", "170", "79", "117", "186",
+            "57", "79", "51", "1800", None, "132", "105", "30", "24"]
+assert len(EXPECTED) == len(PROBLEMS)
+
 LONG = "The following notes describe every sandbar and channel of the delta in detail. "
 
 # Sent before each run so that OFF and ON start from the same cache (see reset() in main).
@@ -147,6 +153,17 @@ def _answer(text: str) -> str:
     return found[-1] if found else (text or "").strip()
 
 
+def _right(text: str, expected: str | None) -> bool | None:
+    """Whether a reply gives the expected answer (None when the problem has none): a time must appear in the
+    reply's tail, a number must be its last number."""
+    if expected is None:
+        return None
+    if ":" in expected:
+        return expected in (text or "")[-200:]
+    got = _answer(text).replace(",", "")
+    return got == expected or (got.endswith(".0") and got[:-2] == expected) or got == expected + ".00"
+
+
 def _post_json(host: str, port: int, path: str, body: dict, timeout: float = 60.0):
     conn = http.client.HTTPConnection(host, port, timeout=timeout)
     conn.request("POST", path, body=json.dumps(body).encode(),
@@ -186,6 +203,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--engine", default="auto", choices=list(NAMES),
                     help="which engine is at --url (default: %(default)s, asks the server)")
     ap.add_argument("--prompts", type=int, default=24, help="typed prompts (max 24)")
+    ap.add_argument("--first", type=int, default=0,
+                    help="start at this problem (0-23), to split a long run into parts")
+    ap.add_argument("--think-ahead", action="store_true",
+                    help="the ON runs through a proxy that reasons while the message is typed (implies "
+                         "--thinking): the answers are then checked against the right ones, OFF and ON")
     ap.add_argument("--typing-cps", type=float, default=12.0, help="characters per second")
     ap.add_argument("--max-tokens", type=int, default=96)
     ap.add_argument("--proxy-port", type=int, default=8077)
@@ -201,6 +223,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="leave the model's thinking on (default: ask the template to skip it, "
                          "so the first token is the first word of the answer)")
     args = ap.parse_args(argv)
+    if args.think_ahead:
+        args.thinking = True
 
     host, _, port_s = args.url.replace("http://", "").partition(":")
     engine_host, engine_port = host, int(port_s or 8080)
@@ -217,7 +241,10 @@ def main(argv: list[str] | None = None) -> int:
     profile = EngineProfile.load(args.url, args.model) or probe(
         engine, url=args.url, model=args.model, version=str(getattr(engine, "version", "") or ""))
     profile.save()
-    state = ProxyState(engine, profile, args.model)
+    state = ProxyState(engine, profile, args.model, think_ahead=args.think_ahead)
+    if args.think_ahead and state.frame is None:
+        print(f"--think-ahead: {state.no_think_reason}", file=sys.stderr)
+        return 2
     server = make_server(state, "127.0.0.1", args.proxy_port)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     print(f"proxy up on 127.0.0.1:{args.proxy_port}, tier {profile.tier} "
@@ -233,7 +260,8 @@ def main(argv: list[str] | None = None) -> int:
     def tag(text: str) -> str:
         return f"[note {uuid.uuid4().hex[:6]}] {text}" if tagging else text
 
-    typed = PROBLEMS[: max(1, min(args.prompts, len(PROBLEMS)))]
+    first = max(0, min(args.first, len(PROBLEMS) - 1))
+    typed = PROBLEMS[first: first + max(1, min(args.prompts, len(PROBLEMS) - first))]
     results = {"typed": [], "long": [], "exactness": []}
 
     def reset() -> None:
@@ -245,7 +273,7 @@ def main(argv: list[str] | None = None) -> int:
             body.update(think_off)
         _chat_ttft(engine_host, engine_port, body, max_tokens=1, cache_prompt=cache_on)
 
-    def run_one(prompt: str, conversation_id: str, typed_mode: bool) -> dict:
+    def run_one(prompt: str, conversation_id: str, typed_mode: bool, expected: str | None = None) -> dict:
         def message(text: str) -> dict:
             body = {"model": args.model,
                     "messages": [{"role": "system", "content": SYSTEM},
@@ -289,13 +317,18 @@ def main(argv: list[str] | None = None) -> int:
                 "identical": off_text == on_text,
                 "same_answer": _answer(off_text) == _answer(on_text),
                 "off_finish": off_finish, "on_finish": on_finish,
-                "off_text": off_text, "on_text": on_text}
+                "off_right": _right(off_text, expected) if off_finish != "length" else None,
+                "on_right": _right(on_text, expected) if on_finish != "length" else None,
+                "expected": expected, "off_text": off_text, "on_text": on_text}
 
     for i, prompt in enumerate(typed):
-        row = run_one(prompt, f"typed-{i}-{time.time():.0f}", typed_mode=True)
+        row = run_one(prompt, f"typed-{first + i}-{time.time():.0f}", typed_mode=True,
+                      expected=EXPECTED[first + i])
+        row["problem"] = first + i
         results["typed"].append(row)
-        print(f"[typed {i+1}/{len(typed)}] OFF {row['off_ttft']*1000:.0f} ms  "
-              f"ON {row['on_ttft']*1000:.0f} ms  identical={row['identical']}", file=sys.stderr)
+        print(f"[typed {i+1}/{len(typed)}, problem {first + i}] OFF {row['off_ttft']*1000:.0f} ms  "
+              f"ON {row['on_ttft']*1000:.0f} ms  identical={row['identical']}  "
+              f"right OFF {row['off_right']} ON {row['on_right']}", file=sys.stderr)
 
     for i in range(args.long):
         # ~2k tokens (100 x an 80-char sentence) and ~4k tokens (200 x), plus the question:
@@ -319,7 +352,12 @@ def main(argv: list[str] | None = None) -> int:
                 "on_median_ms": round(statistics.median(on), 0),
                 "identical": sum(1 for r in rows if r["identical"]),
                 "same_answer": sum(1 for r in rows if r["same_answer"]),
-                "on_slower": sum(1 for r in rows if r["on_ttft"] > r["off_ttft"])}
+                "on_slower": sum(1 for r in rows if r["on_ttft"] > r["off_ttft"]),
+                # right answers, over the rows where both runs finished and the problem has one answer
+                "judged": sum(1 for r in rows if r.get("off_right") is not None and r.get("on_right") is not None),
+                "off_right": sum(1 for r in rows if r.get("off_right") and r.get("on_right") is not None),
+                "on_right": sum(1 for r in rows if r.get("on_right") and r.get("off_right") is not None),
+                "cut": sum(1 for r in rows if "length" in (r.get("off_finish"), r.get("on_finish")))}
 
     # Control: is the ENGINE itself bit-stable between a cold and a warm prefill?  If it
     # is not, a text difference with the proxy is the engine's chunking, not the proxy.
@@ -350,7 +388,7 @@ def main(argv: list[str] | None = None) -> int:
                "audit": audit,
                "engine": f"{profile.name} {profile.version}".strip(),
                "profile": profile.to_dict(), "typing_cps": args.typing_cps,
-               "thinking": args.thinking,
+               "thinking": args.thinking, "think_ahead": args.think_ahead, "first": first,
                "max_tokens": args.max_tokens, "model": args.model, "url": args.url,
                "when": time.strftime("%Y-%m-%d %H:%M:%S")}
 
@@ -360,7 +398,9 @@ def main(argv: list[str] | None = None) -> int:
     comparable = [r for r in rows if r.get("off_finish") != "length" and r.get("on_finish") != "length"]
     # With a tag the two runs ask different questions, so a different number is the model's, not
     # the proxy's: the counts are still reported, but they cannot fail the run.
-    ok = tagging or all(r["same_answer"] for r in comparable)
+    # Thinking ahead changes the reasoning, so the two runs may answer differently: what counts there is
+    # whether the answers are right, reported, not failed on.
+    ok = tagging or args.think_ahead or all(r["same_answer"] for r in comparable)
     identical = sum(1 for r in rows if r["identical"])
     print(json.dumps(summary, indent=1))
     if len(comparable) < len(rows):
@@ -376,6 +416,10 @@ def main(argv: list[str] | None = None) -> int:
               f"{sum(1 for r in comparable if r['same_answer'])}/{len(comparable)} comparable rows "
               f"agree on the answer; see engine_stability for whether the engine is bit-stable "
               f"across cache states.", file=sys.stderr)
+    if args.think_ahead:
+        t = summary["typed"]
+        print(f"RIGHT ANSWERS (thinking ahead): OFF {t.get('off_right')}/{t.get('judged')}, ON {t.get('on_right')}/"
+              f"{t.get('judged')} (rows cut at max_tokens: {t.get('cut')})", file=sys.stderr)
     if not ok:
         print("ANSWER CHANGED: a final number differs with the proxy.  The proxy never changes "
               "the prompt, but llama.cpp computes a prefix read ahead in other batches, and greedy "
